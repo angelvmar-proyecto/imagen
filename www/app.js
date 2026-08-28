@@ -55,7 +55,6 @@
             tbody.appendChild(tr);
         });
 
-        // Habilitar edición de celdas en Modo Edición
         if (isEditMode) {
             tbody.querySelectorAll('.cell-editable').forEach(cell => {
                 cell.addEventListener('blur', function() {
@@ -69,7 +68,6 @@
             });
         }
 
-        // Asignar listeners a botones de acción (✓ / ✗)
         tbody.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const idx = parseInt(this.getAttribute('data-index'));
@@ -99,7 +97,6 @@
     document.addEventListener('DOMContentLoaded', () => {
         renderTable();
 
-        // 1. Botón Seleccionar Imagen
         const btnCapturar = document.getElementById('btnCapturar');
         if (btnCapturar) {
             btnCapturar.addEventListener('click', () => {
@@ -118,7 +115,6 @@
             });
         }
 
-        // 2. Botón Alternar Lectura / Edición
         const btnToggleEdit = document.getElementById('btnToggleEdit');
         if (btnToggleEdit) {
             btnToggleEdit.addEventListener('click', () => {
@@ -129,7 +125,6 @@
             });
         }
 
-        // 3. Botón Mostrar / Ocultar columna Estatus
         const btnToggleStatus = document.getElementById('btnToggleStatus');
         if (btnToggleStatus) {
             btnToggleStatus.addEventListener('click', () => {
@@ -139,7 +134,6 @@
             });
         }
 
-        // 4. Botón Borrar Rechazados
         const btnPurge = document.getElementById('btnPurge');
         if (btnPurge) {
             btnPurge.addEventListener('click', () => {
@@ -151,7 +145,6 @@
             });
         }
 
-        // 5. Botón Exportar CSV / Excel
         const btnExport = document.getElementById('btnExport');
         if (btnExport) {
             btnExport.addEventListener('click', () => {
