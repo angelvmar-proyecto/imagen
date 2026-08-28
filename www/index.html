@@ -3,24 +3,23 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Control de Invitaciones - Tabla OCR</title>
+  <title>Control de Invitaciones</title>
   <link rel="stylesheet" href="css/style.css">
-  <script src="libs/tesseract.min.js"></script>
   <script src="libs/xlsx.full.min.js"></script>
 </head>
 <body>
 
   <header class="header-bar">
     <h2>Control de Invitaciones</h2>
-    <div class="ocr-status" id="ocrStatus">Listo para recibir imagen</div>
+    <span id="saveState" class="save-state">Guardado</span>
   </header>
 
   <section class="toolbar">
-    <button id="btnCapturar" class="btn btn-primary">📷 Seleccionar / Capturar Foto</button>
+    <button id="btnCapturar" class="btn btn-primary">📷 Seleccionar Imagen</button>
     <button id="btnToggleEdit" class="btn btn-warning" onclick="toggleEditMode()">✏️ Modo: LECTURA</button>
     <button class="btn btn-secondary" onclick="toggleStatusColumn()">👁️ Ocultar/Mostrar Status</button>
-    <button class="btn btn-danger" onclick="purgeDeleted()">🗑️ Borrar Rechazados</button>
-    <button class="btn btn-success" onclick="exportToExcel()">📊 Exportar a Excel</button>
+    <button class="btn btn-danger" onclick="purgeDeleted()">🗑️ Borrar por Status</button>
+    <button class="btn btn-success" onclick="exportToExcel()">📊 Exportar Excel</button>
   </section>
 
   <main class="table-container">
@@ -29,15 +28,15 @@
         <tr>
           <th>ID</th>
           <th id="thStatus" class="col-status">Status (Solo Lectura)</th>
+          <th>Vista Previa</th>
           <th>Nombre / Invitado</th>
           <th>Detalle / Folio</th>
           <th>Acciones</th>
         </tr>
       </thead>
-      <tbody id="tableBody">
-      </tbody>
+      <tbody id="tableBody"></tbody>
     </table>
-    <div id="emptyMsg" class="empty-msg">No hay registros convertidos a celdas.</div>
+    <div id="emptyMsg" class="empty-msg">No hay registros guardados.</div>
   </main>
 
   <script src="js/app.js"></script>

@@ -74,13 +74,15 @@ jobs:
                   super.onCreate(savedInstanceState);
                   handleSendIntent(getIntent());
 
-                  this.bridge.getWebView().setWebViewClient(new WebViewClient() {
-                      @Override
-                      public void onPageFinished(WebView view, String url) {
-                          super.onPageFinished(view, url);
-                          inyectarImagen();
-                      }
-                  });
+                  if (this.bridge != null && this.bridge.getWebView() != null) {
+                      this.bridge.getWebView().setWebViewClient(new WebViewClient() {
+                          @Override
+                          public void onPageFinished(WebView view, String url) {
+                              super.onPageFinished(view, url);
+                              inyectarImagen();
+                          }
+                      });
+                  }
               }
 
               @Override
@@ -137,8 +139,10 @@ jobs:
                   f.write(java_code)
           "
 
-      - name: Force Sync Assets
+      - name: Force Copy Web Assets to Android Assets
         run: |
+          mkdir -p android/app/src/main/assets/public
+          cp -r www/* android/app/src/main/assets/public/
           npx cap copy android
           npx cap sync android
 

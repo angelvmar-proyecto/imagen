@@ -9,50 +9,33 @@ document.getElementById('btnCapturar').addEventListener('click', () => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (evt) => procesarImagenOCR(evt.target.result);
+            reader.onload = (evt) => agregarRegistroDesdeImagen(evt.target.result);
             reader.readAsDataURL(file);
         }
     };
     input.click();
 });
 
-function setStatusMsg(msg) {
-    document.getElementById('ocrStatus').innerText = msg;
-}
-
-async function procesarImagenOCR(base64Data) {
-    setStatusMsg("Escanenado texto (OCR)...");
-    try {
-        const worker = await Tesseract.createWorker('spa');
-        const ret = await worker.recognize(base64Data);
-        await worker.terminate();
-
-        const lineas = ret.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-        
-        if (lineas.length === 0) {
-            lineas.push("Texto no detectado en imagen");
-        }
-
-        lineas.forEach((linea, idx) => {
-            tableData.unshift({
-                id: Date.now() + idx,
-                status: 'Aprobado',
-                nombre: linea,
-                detalle: `Extraído OCR (${new Date().toLocaleTimeString()})`
-            });
-        });
-
-        saveToStorage();
-        renderTable();
-        setStatusMsg("Conversión completada ✔");
-    } catch (err) {
-        setStatusMsg("Error en OCR");
-        console.error(err);
-    }
+function agregarRegistroDesdeImagen(base64Data) {
+    const nuevo = {
+        id: Date.now(),
+        status: 'Aprobado',
+        imagen: base64Data,
+        nombre: 'Nuevo Invitado',
+        detalle: `Recibido (${new Date().toLocaleTimeString()})`
+    };
+    tableData.unshift(nuevo);
+    saveToStorage();
+    renderTable();
 }
 
 function saveToStorage() {
     localStorage.setItem('invitaciones_celdas', JSON.stringify(tableData));
+    const label = document.getElementById('saveState');
+    if (label) {
+        label.innerText = 'Guardando...';
+        setTimeout(() => { label.innerText = 'Guardado ✔'; }, 300);
+    }
 }
 
 function renderTable() {
@@ -75,11 +58,12 @@ function renderTable() {
             <td class="col-status">
                 <span class="status-badge status-${row.status.toLowerCase()}">${row.status}</span>
             </td>
+            <td><img src="${row.imagen || ''}" class="img-thumb" alt="foto" /></td>
             <td ${editAttr} onblur="updateCell(${index}, 'nombre', this.innerText)">${row.nombre}</td>
             <td ${editAttr} onblur="updateCell(${index}, 'detalle', this.innerText)">${row.detalle}</td>
             <td>
-                <button onclick="cambiarEstatus(${index}, 'Aprobado')" style="color:green; border:none; background:none; cursor:pointer;">✓</button>
-                <button onclick="cambiarEstatus(${index}, 'Rechazado')" style="color:red; border:none; background:none; cursor:pointer;">✗</button>
+                <button onclick="cambiarEstatus(${index}, 'Aprobado')" style="color:green; border:none; background:none; cursor:pointer; font-weight:bold;">✓</button>
+                <button onclick="cambiarEstatus(${index}, 'Rechazado')" style="color:red; border:none; background:none; cursor:pointer; font-weight:bold;">✗</button>
             </td>
         `;
         tbody.appendChild(tr);
@@ -107,7 +91,7 @@ function cambiarEstatus(index, nuevoStatus) {
 }
 
 function purgeDeleted() {
-    if (confirm('¿Desea eliminar las filas marcadas como Rechazado?')) {
+    if (confirm('¿Desea eliminar de la lista los registros con estatus Rechazado?')) {
         tableData = tableData.filter(r => r.status !== 'Rechazado');
         saveToStorage();
         renderTable();
@@ -120,7 +104,13 @@ function toggleStatusColumn() {
 }
 
 function exportToExcel() {
-    const worksheet = XLSX.utils.json_to_sheet(tableData);
+    const exportData = tableData.map(r => ({
+        ID: r.id,
+        Status: r.status,
+        Nombre: r.nombre,
+        Detalle: r.detalle
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Invitaciones");
     XLSX.writeFile(workbook, "Control_Invitaciones.xlsx");
@@ -128,7 +118,7 @@ function exportToExcel() {
 
 window.cargarImagenCompartida = function(base64Data) {
     if (base64Data) {
-        procesarImagenOCR(base64Data);
+        agregarRegistroDesdeImagen(base64Data);
     }
 };
 
