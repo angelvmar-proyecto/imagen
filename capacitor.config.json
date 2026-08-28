@@ -2,9 +2,5 @@
   "appId": "com.angelvmar.imagen",
   "appName": "Control Celdas",
   "webDir": "www",
-  "bundledWebRuntime": false,
-  "server": {
-    "androidScheme": "https",
-    "hostname": "localhost"
-  }
+  "bundledWebRuntime": false
 }

@@ -31,7 +31,7 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android || true
 
-      - name: Synchronize Web Assets directly into APK
+      - name: Force Asset Copy to Android Native Directory
         run: |
           npx cap copy android
           npx cap sync android
