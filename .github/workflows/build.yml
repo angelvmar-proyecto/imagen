@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Generate Capacitor Android Platform
+      - name: Generate Capacitor Android Platform & Copy Assets
         run: |
           npx cap add android || true
           npx cap sync android

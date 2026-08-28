@@ -3,8 +3,7 @@
   "appName": "Control Celdas",
   "webDir": "www",
   "server": {
-    "androidScheme": "capacitor",
-    "cleartext": true
+    "androidScheme": "https"
   }
 }
 
