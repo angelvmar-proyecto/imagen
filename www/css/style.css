@@ -1,18 +1,16 @@
-body { font-family: Arial, sans-serif; background: #f4f6f8; margin: 0; padding: 15px; }
-.container { max-width: 500px; margin: 0 auto; }
-.card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 15px; }
-.hidden { display: none; }
-img { width: 100%; border-radius: 6px; margin: 10px 0; }
-.btn { width: 100%; padding: 12px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 5px; }
-.primary { background: #007bff; color: white; }
-.success { background: #28a745; color: white; }
-.danger { background: #dc3545; color: white; }
-.danger-outline { background: transparent; color: #dc3545; border: 1px solid #dc3545; }
-.filter-bar { display: flex; gap: 10px; margin-bottom: 10px; }
-.filter-bar select { flex: 1; padding: 8px; border-radius: 6px; border: 1px solid #ccc; }
-.registro-lista { list-style: none; padding: 0; margin: 0; }
-.registro-item { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; }
-.registro-item img { width: 50px; height: 50px; object-fit: cover; border-radius: 4px; margin: 0; }
-.badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; color: white; }
-.badge.Aprobado { background: #28a745; }
-.badge.Rechazado { background: #dc3545; }
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, sans-serif; }
+body { background: #f4f6f8; padding: 15px; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 15px; background: #fff; padding: 10px; border-radius: 8px; }
+.btn { padding: 8px 14px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-primary { background: #007bff; color: white; }
+.btn-secondary { background: #6c757d; color: white; }
+.btn-danger { background: #dc3545; color: white; }
+.table-container { background: white; border-radius: 8px; overflow-x: auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { border: 1px solid #dee2e6; padding: 10px; text-align: left; }
+th { background: #e9ecef; }
+.hidden-col { display: none !important; }
+.status-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; color: white; }
+.status-aprobado { background: #28a745; }
+.status-rechazado { background: #dc3545; }
+.editable-cell { background-color: #fffde7; outline: 1px dashed #ffc107; }

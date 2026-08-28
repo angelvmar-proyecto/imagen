@@ -1,111 +1,96 @@
-let currentImageData = null;
+let isEditMode = false;
+let tableData = JSON.parse(localStorage.getItem('invitaciones_excel_data')) || [
+    { id: 1, status: 'Aprobado', nombre: 'Juan Pérez', detalle: 'Mesa 1' },
+    { id: 2, status: 'Rechazado', nombre: 'María Gómez', detalle: 'Cancelado' }
+];
 
-document.getElementById('btnCapturar').addEventListener('click', () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                mostrarVistaPrevia(event.target.result);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-    input.click();
-});
-
-function mostrarVistaPrevia(base64Data) {
-    if (!base64Data) return;
-    currentImageData = base64Data;
-    document.getElementById('imgPreview').src = currentImageData;
-    document.getElementById('previewContainer').classList.remove('hidden');
+function saveToStorage() {
+    localStorage.setItem('invitaciones_excel_data', JSON.stringify(tableData));
 }
 
-function guardarRegistro(estatus) {
-    if (!currentImageData) return;
-    const registros = JSON.parse(localStorage.getItem('registros_invitaciones') || '[]');
-    const nuevoRegistro = {
-        id: Date.now(),
-        fecha: new Date().toLocaleString(),
-        estatus: estatus,
-        imagen: currentImageData
-    };
-    registros.unshift(nuevoRegistro);
-    localStorage.setItem('registros_invitaciones', JSON.stringify(registros));
-    
-    currentImageData = null;
-    document.getElementById('previewContainer').classList.add('hidden');
-    renderizarRegistros();
-}
+function renderTable() {
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
 
-function renderizarRegistros() {
-    const filtro = document.getElementById('filtroEstatus').value;
-    const registros = JSON.parse(localStorage.getItem('registros_invitaciones') || '[]');
-    const lista = document.getElementById('listaRegistros');
-    lista.innerHTML = '';
+    tableData.forEach((row, index) => {
+        const tr = document.createElement('tr');
+        
+        const cellEditableAttr = isEditMode ? 'contenteditable="true" class="editable-cell"' : '';
 
-    const filtrados = filtro === 'Todos' ? registros : registros.filter(r => r.estatus === filtro);
-
-    if (filtrados.length === 0) {
-        lista.innerHTML = '<li style="text-align:center; color:#888; padding:15px;">No hay registros</li>';
-        return;
-    }
-
-    filtrados.forEach(reg => {
-        const li = document.createElement('li');
-        li.className = 'registro-item';
-        li.innerHTML = `
-            <img src="${reg.imagen}">
-            <div>
-                <div><strong>Fecha:</strong> ${reg.fecha}</div>
-                <span class="badge ${reg.estatus}">${reg.estatus}</span>
-            </div>
-            <button onclick="borrarRegistroIndividual(${reg.id})" class="btn danger-outline" style="width:auto; padding:5px 10px;">🗑️</button>
+        tr.innerHTML = `
+            <td>${row.id}</td>
+            <td class="col-status-td">
+                <span class="status-badge status-${row.status.toLowerCase()}">${row.status}</span>
+            </td>
+            <td ${cellEditableAttr} onblur="updateCell(${index}, 'nombre', this.innerText)">${row.nombre}</td>
+            <td ${cellEditableAttr} onblur="updateCell(${index}, 'detalle', this.innerText)">${row.detalle}</td>
+            <td>
+                <button onclick="cambiarEstatus(${index}, 'Aprobado')" style="color:green; font-weight:bold;">✓</button>
+                <button onclick="cambiarEstatus(${index}, 'Rechazado')" style="color:red; font-weight:bold;">✗</button>
+            </td>
         `;
-        lista.appendChild(li);
+        tbody.appendChild(tr);
     });
 }
 
-function borrarRegistroIndividual(id) {
-    if (confirm('¿Desea eliminar este registro permanentemente?')) {
-        let registros = JSON.parse(localStorage.getItem('registros_invitaciones') || '[]');
-        registros = registros.filter(r => r.id !== id);
-        localStorage.setItem('registros_invitaciones', JSON.stringify(registros));
-        renderizarRegistros();
+function toggleMode() {
+    isEditMode = !isEditMode;
+    const btn = document.getElementById('btnToggleEdit');
+    btn.innerText = `Modo: ${isEditMode ? 'EDICIÓN' : 'LECTURA'}`;
+    btn.className = `btn ${isEditMode ? 'btn-danger' : 'btn-primary'}`;
+    renderTable();
+}
+
+function updateCell(index, field, value) {
+    if (!isEditMode) return;
+    tableData[index][field] = value;
+    saveToStorage();
+}
+
+function cambiarEstatus(index, nuevoEstatus) {
+    tableData[index].status = nuevoEstatus;
+    saveToStorage();
+    renderTable();
+}
+
+function purgeDeleted() {
+    if (confirm('¿Desea borrar los registros con estatus Rechazado?')) {
+        tableData = tableData.filter(row => row.status !== 'Rechazado');
+        saveToStorage();
+        renderTable();
     }
 }
 
-function confirmarBorradoPorEstatus() {
-    const filtro = document.getElementById('filtroEstatus').value;
-    if (filtro === 'Todos') {
-        if (confirm('¿Está seguro de que desea BORRAR TODOS los registros?')) {
-            localStorage.removeItem('registros_invitaciones');
-            renderizarRegistros();
-        }
-    } else {
-        if (confirm(`¿Está seguro de que desea borrar todos los registros con estatus: "${filtro}"?`)) {
-            let registros = JSON.parse(localStorage.getItem('registros_invitaciones') || '[]');
-            registros = registros.filter(r => r.estatus !== filtro);
-            localStorage.setItem('registros_invitaciones', JSON.stringify(registros));
-            renderizarRegistros();
-        }
-    }
+function toggleHideColumn() {
+    const colHeader = document.getElementById('colStatus');
+    colHeader.classList.toggle('hidden-col');
+    document.querySelectorAll('.col-status-td').forEach(td => td.classList.toggle('hidden-col'));
 }
 
-// Función global invocable directamente desde Java o por inicio diferido
+function exportToExcel() {
+    const worksheet = XLSX.utils.json_to_sheet(tableData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Invitaciones");
+    XLSX.writeFile(workbook, "invitaciones.xlsx");
+}
+
 window.cargarImagenCompartida = function(base64Data) {
-    if (base64Data && base64Data.length > 50) {
-        mostrarVistaPrevia(base64Data);
+    if (base64Data) {
+        const nuevo = {
+            id: Date.now(),
+            status: 'Aprobado',
+            nombre: 'Imagen Recibida',
+            detalle: 'Cargada desde WhatsApp'
+        };
+        tableData.unshift(nuevo);
+        saveToStorage();
+        renderTable();
     }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-    renderizarRegistros();
-    // Si la variable global ya fue inyectada antes de DOMContentLoaded
+    renderTable();
     if (window.sharedImageData) {
-        mostrarVistaPrevia(window.sharedImageData);
+        window.cargarImagenCompartida(window.sharedImageData);
     }
 });
