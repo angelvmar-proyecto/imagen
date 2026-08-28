@@ -29,12 +29,12 @@ jobs:
         run: npm ci || npm install
 
       - name: Add Android Platform
-        run: npx cap add android || true
+        run: |
+          npx cap add android || true
+          npx cap sync android
 
       - name: Force Asset Copy to Android Native Directory
         run: |
-          npx cap copy android
-          npx cap sync android
           mkdir -p android/app/src/main/assets/public
           cp -r www/* android/app/src/main/assets/public/
 
@@ -150,7 +150,8 @@ jobs:
         run: |
           cd android
           if [ ! -f gradlew ]; then
-            gradle wrapper
+            npm install -g @capacitor/cli
+            npx cap add android --overwrite || true
           fi
 
       - name: Build Android APK
