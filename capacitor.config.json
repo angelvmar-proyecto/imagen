@@ -2,5 +2,9 @@
   "appId": "com.angelvmar.imagen",
   "appName": "Control Celdas",
   "webDir": "www",
-  "bundledWebRuntime": false
+  "server": {
+    "androidScheme": "capacitor",
+    "cleartext": true
+  }
 }
+

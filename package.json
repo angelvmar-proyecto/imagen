@@ -1,14 +1,17 @@
 {
-  "name": "control-invitaciones",
+  "name": "imagen",
   "version": "1.0.0",
-  "description": "Control de Invitaciones",
+  "description": "App Control Celdas",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "echo 'No build script needed'"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
-    "@capacitor/cli": "^6.0.0",
     "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
   }
 }
+
