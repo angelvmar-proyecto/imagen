@@ -31,9 +31,12 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android || true
 
-      - name: Force Sync Local Files
+      - name: Synchronize Web Assets directly into APK
         run: |
+          npx cap copy android
           npx cap sync android
+          mkdir -p android/app/src/main/assets/public
+          cp -r www/* android/app/src/main/assets/public/
 
       - name: Inject Java Share Handler
         run: |
