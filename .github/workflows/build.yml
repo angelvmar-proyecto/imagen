@@ -146,6 +146,13 @@ jobs:
                   f.write(java_code)
           "
 
+      - name: Setup Gradle Wrapper if missing
+        run: |
+          cd android
+          if [ ! -f gradlew ]; then
+            gradle wrapper
+          fi
+
       - name: Build Android APK
         run: |
           cd android
