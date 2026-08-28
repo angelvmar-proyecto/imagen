@@ -28,13 +28,9 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      - name: Add Android Platform
+      - name: Sync Capacitor Android
         run: |
-          npx cap add android || true
-          npx cap sync android
-
-      - name: Force Asset Copy to Android Native Directory
-        run: |
+          npx cap sync android || true
           mkdir -p android/app/src/main/assets/public
           cp -r www/* android/app/src/main/assets/public/
 
@@ -145,14 +141,6 @@ jobs:
               with open(java_path, 'w') as f:
                   f.write(java_code)
           "
-
-      - name: Setup Gradle Wrapper if missing
-        run: |
-          cd android
-          if [ ! -f gradlew ]; then
-            npm install -g @capacitor/cli
-            npx cap add android --overwrite || true
-          fi
 
       - name: Build Android APK
         run: |
