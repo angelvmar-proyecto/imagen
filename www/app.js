@@ -55,7 +55,7 @@
             tbody.appendChild(tr);
         });
 
-        // Eventos para celdas editables
+        // Habilitar edición de celdas en Modo Edición
         if (isEditMode) {
             tbody.querySelectorAll('.cell-editable').forEach(cell => {
                 cell.addEventListener('blur', function() {
@@ -69,7 +69,7 @@
             });
         }
 
-        // Eventos botones accion
+        // Asignar listeners a botones de acción (✓ / ✗)
         tbody.querySelectorAll('.action-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const idx = parseInt(this.getAttribute('data-index'));
@@ -99,7 +99,7 @@
     document.addEventListener('DOMContentLoaded', () => {
         renderTable();
 
-        // Boton seleccionar imagen
+        // 1. Botón Seleccionar Imagen
         const btnCapturar = document.getElementById('btnCapturar');
         if (btnCapturar) {
             btnCapturar.addEventListener('click', () => {
@@ -118,7 +118,7 @@
             });
         }
 
-        // Boton alternar edicion
+        // 2. Botón Alternar Lectura / Edición
         const btnToggleEdit = document.getElementById('btnToggleEdit');
         if (btnToggleEdit) {
             btnToggleEdit.addEventListener('click', () => {
@@ -129,7 +129,7 @@
             });
         }
 
-        // Boton ocultar estatus
+        // 3. Botón Mostrar / Ocultar columna Estatus
         const btnToggleStatus = document.getElementById('btnToggleStatus');
         if (btnToggleStatus) {
             btnToggleStatus.addEventListener('click', () => {
@@ -139,7 +139,7 @@
             });
         }
 
-        // Boton borrar rechazados
+        // 4. Botón Borrar Rechazados
         const btnPurge = document.getElementById('btnPurge');
         if (btnPurge) {
             btnPurge.addEventListener('click', () => {
@@ -151,7 +151,7 @@
             });
         }
 
-        // Boton exportar CSV/Excel (Nativo compatible)
+        // 5. Botón Exportar CSV / Excel
         const btnExport = document.getElementById('btnExport');
         if (btnExport) {
             btnExport.addEventListener('click', () => {
@@ -173,7 +173,6 @@
             });
         }
 
-        // Inyeccion compartida WhatsApp / Galeria
         if (window.sharedImageData) {
             agregarRegistroDesdeImagen(window.sharedImageData);
         }
