@@ -18,6 +18,7 @@ document.getElementById('btnCapturar').addEventListener('click', () => {
 });
 
 function mostrarVistaPrevia(base64Data) {
+    if (!base64Data) return;
     currentImageData = base64Data;
     document.getElementById('imgPreview').src = currentImageData;
     document.getElementById('previewContainer').classList.remove('hidden');
@@ -94,16 +95,17 @@ function confirmarBorradoPorEstatus() {
     }
 }
 
-// Listener para recibir imágenes enviadas por WhatsApp / Intent
-window.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'SHARED_IMAGE') {
-        mostrarVistaPrevia(event.data.data);
+// Función global invocable directamente desde Java o por inicio diferido
+window.cargarImagenCompartida = function(base64Data) {
+    if (base64Data && base64Data.length > 50) {
+        mostrarVistaPrevia(base64Data);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderizarRegistros();
+    // Si la variable global ya fue inyectada antes de DOMContentLoaded
+    if (window.sharedImageData) {
+        mostrarVistaPrevia(window.sharedImageData);
     }
 });
-
-// Comprobar si la app inició con una imagen compartida
-if (window.sharedImageData) {
-    mostrarVistaPrevia(window.sharedImageData);
-}
-
-document.addEventListener('DOMContentLoaded', renderizarRegistros);

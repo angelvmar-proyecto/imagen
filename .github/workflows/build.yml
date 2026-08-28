@@ -62,23 +62,39 @@ jobs:
           import android.net.Uri;
           import android.os.Bundle;
           import android.util.Base64;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
           import com.getcapacitor.BridgeActivity;
+          import java.io.ByteArrayOutputStream;
           import java.io.InputStream;
 
           public class MainActivity extends BridgeActivity {
+              private String sharedBase64Image = null;
+
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   handleSendIntent(getIntent());
+
+                  // Configurar cliente WebView para inyectar la imagen cuando la página termine de cargar
+                  this.bridge.getWebView().setWebViewClient(new WebViewClient() {
+                      @Override
+                      public void onPageFinished(WebView view, String url) {
+                          super.onPageFinished(view, url);
+                          inyectarImagen();
+                      }
+                  });
               }
 
               @Override
               protected void onNewIntent(Intent intent) {
                   super.onNewIntent(intent);
                   handleSendIntent(intent);
+                  inyectarImagen();
               }
 
               private void handleSendIntent(Intent intent) {
+                  if (intent == null) return;
                   String action = intent.getAction();
                   String type = intent.getType();
 
@@ -87,25 +103,37 @@ jobs:
                       if (imageUri != null) {
                           try {
                               InputStream inputStream = getContentResolver().openInputStream(imageUri);
-                              byte[] bytes = new byte[inputStream.available()];
-                              inputStream.read(bytes);
+                              ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+                              int bufferSize = 1024;
+                              byte[] buffer = new byte[bufferSize];
+                              int len = 0;
+                              while ((len = inputStream.read(buffer)) != -1) {
+                                  byteBuffer.write(buffer, 0, len);
+                              }
                               inputStream.close();
-                              String base64Image = \"data:\" + type + \";base64,\" + Base64.encodeToString(bytes, Base64.NO_WRAP);
+                              byte[] bytes = byteBuffer.toByteArray();
                               
-                              this.bridge.getWebView().post(new Runnable() {
-                                  @Override
-                                  public void run() {
-                                      bridge.getWebView().evaluateJavascript(
-                                          \"window.sharedImageData = '\" + base64Image + \"';\" +
-                                          \"window.postMessage({type: 'SHARED_IMAGE', data: '\" + base64Image + \"'}, '*');\",
-                                          null
-                                      );
-                                  }
-                              });
+                              String mime = getContentResolver().getType(imageUri);
+                              if (mime == null) mime = \"image/jpeg\";
+                              
+                              sharedBase64Image = \"data:\" + mime + \";base64,\" + Base64.encodeToString(bytes, Base64.NO_WRAP);
                           } catch (Exception e) {
                               e.printStackTrace();
                           }
                       }
+                  }
+              }
+
+              private void inyectarImagen() {
+                  if (sharedBase64Image != null && this.bridge != null && this.bridge.getWebView() != null) {
+                      final String code = \"window.sharedImageData = '\" + sharedBase64Image + \"';\" +
+                                         \"if(window.cargarImagenCompartida) window.cargarImagenCompartida('\" + sharedBase64Image + \"');\";
+                      this.bridge.getWebView().post(new Runnable() {
+                          @Override
+                          public void run() {
+                              bridge.getWebView().evaluateJavascript(code, null);
+                          }
+                      });
                   }
               }
           }
