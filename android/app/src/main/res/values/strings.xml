@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Control Celdas</string>
-    <string name="title_activity_main">Control Celdas</string>
-    <string name="package_name">com.angelvmar.imagen</string>
-    <string name="custom_url_scheme">com.angelvmar.imagen</string>
-</resources>
