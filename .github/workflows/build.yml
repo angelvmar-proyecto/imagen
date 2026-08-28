@@ -31,12 +31,11 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android || true
 
-      - name: Inject Share Intent Filter & MainActivity Handler
+      - name: Inject Java Share Handler
         run: |
           python3 -c "
           import os
 
-          # 1. Modificar AndroidManifest.xml
           manifest_path = 'android/app/src/main/AndroidManifest.xml'
           if os.path.exists(manifest_path):
               with open(manifest_path, 'r') as f:
@@ -53,7 +52,6 @@ jobs:
                   with open(manifest_path, 'w') as f:
                       f.write(content)
 
-          # 2. Modificar MainActivity.java
           java_path = 'android/app/src/main/java/com/angelvmar/imagen/MainActivity.java'
           if os.path.exists(java_path):
               java_code = '''package com.angelvmar.imagen;
@@ -76,7 +74,6 @@ jobs:
                   super.onCreate(savedInstanceState);
                   handleSendIntent(getIntent());
 
-                  // Configurar cliente WebView para inyectar la imagen cuando la página termine de cargar
                   this.bridge.getWebView().setWebViewClient(new WebViewClient() {
                       @Override
                       public void onPageFinished(WebView view, String url) {
@@ -104,19 +101,17 @@ jobs:
                           try {
                               InputStream inputStream = getContentResolver().openInputStream(imageUri);
                               ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
-                              int bufferSize = 1024;
-                              byte[] buffer = new byte[bufferSize];
-                              int len = 0;
+                              byte[] buffer = new byte[1024];
+                              int len;
                               while ((len = inputStream.read(buffer)) != -1) {
                                   byteBuffer.write(buffer, 0, len);
                               }
                               inputStream.close();
-                              byte[] bytes = byteBuffer.toByteArray();
                               
                               String mime = getContentResolver().getType(imageUri);
                               if (mime == null) mime = \"image/jpeg\";
                               
-                              sharedBase64Image = \"data:\" + mime + \";base64,\" + Base64.encodeToString(bytes, Base64.NO_WRAP);
+                              sharedBase64Image = \"data:\" + mime + \";base64,\" + Base64.encodeToString(byteBuffer.toByteArray(), Base64.NO_WRAP);
                           } catch (Exception e) {
                               e.printStackTrace();
                           }
@@ -142,8 +137,10 @@ jobs:
                   f.write(java_code)
           "
 
-      - name: Sync Capacitor Android
-        run: npx cap sync android
+      - name: Force Sync Assets
+        run: |
+          npx cap copy android
+          npx cap sync android
 
       - name: Build Android APK
         run: |
