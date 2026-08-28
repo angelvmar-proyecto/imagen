@@ -3,7 +3,8 @@
   "appName": "Control Celdas",
   "webDir": "www",
   "server": {
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "hostname": "localhost"
   }
 }
 
