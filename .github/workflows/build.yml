@@ -31,6 +31,10 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android || true
 
+      - name: Force Sync Local Files
+        run: |
+          npx cap sync android
+
       - name: Inject Java Share Handler
         run: |
           python3 -c "
@@ -138,13 +142,6 @@ jobs:
               with open(java_path, 'w') as f:
                   f.write(java_code)
           "
-
-      - name: Force Copy Web Assets
-        run: |
-          mkdir -p android/app/src/main/assets/public
-          cp -r www/* android/app/src/main/assets/public/
-          npx cap copy android
-          npx cap sync android
 
       - name: Build Android APK
         run: |

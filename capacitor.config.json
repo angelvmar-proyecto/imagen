@@ -1,1 +1,5 @@
-{ "appId": "com.angelvmar.imagen", "appName": "Control Celdas", "webDir": "www", "server": { "androidScheme": "http", "cleartext": true } }
+{
+  "appId": "com.angelvmar.imagen",
+  "appName": "Control Celdas",
+  "webDir": "www"
+}
