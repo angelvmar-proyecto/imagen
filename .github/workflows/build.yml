@@ -31,24 +31,87 @@ jobs:
       - name: Add Android Platform
         run: npx cap add android || true
 
-      - name: Inject Share Intent Filter
+      - name: Inject Share Intent Filter & MainActivity Handler
         run: |
           python3 -c "
-          path = 'android/app/src/main/AndroidManifest.xml'
-          with open(path, 'r') as f:
-              content = f.read()
-          intent = '''
-                      <intent-filter>
-                          <action android:name=\"android.intent.action.SEND\" />
-                          <category android:name=\"android.intent.category.DEFAULT\" />
-                          <data android:mimeType=\"image/*\" />
-                          <data android:mimeType=\"text/plain\" />
-                      </intent-filter>
+          import os
+
+          # 1. Modificar AndroidManifest.xml
+          manifest_path = 'android/app/src/main/AndroidManifest.xml'
+          if os.path.exists(manifest_path):
+              with open(manifest_path, 'r') as f:
+                  content = f.read()
+              intent = '''
+                          <intent-filter>
+                              <action android:name=\"android.intent.action.SEND\" />
+                              <category android:name=\"android.intent.category.DEFAULT\" />
+                              <data android:mimeType=\"image/*\" />
+                          </intent-filter>
+              '''
+              if 'android.intent.action.SEND' not in content:
+                  content = content.replace('</activity>', intent + '\n        </activity>')
+                  with open(manifest_path, 'w') as f:
+                      f.write(content)
+
+          # 2. Modificar MainActivity.java
+          java_path = 'android/app/src/main/java/com/angelvmar/imagen/MainActivity.java'
+          if os.path.exists(java_path):
+              java_code = '''package com.angelvmar.imagen;
+
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.util.Base64;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.InputStream;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  handleSendIntent(getIntent());
+              }
+
+              @Override
+              protected void onNewIntent(Intent intent) {
+                  super.onNewIntent(intent);
+                  handleSendIntent(intent);
+              }
+
+              private void handleSendIntent(Intent intent) {
+                  String action = intent.getAction();
+                  String type = intent.getType();
+
+                  if (Intent.ACTION_SEND.equals(action) && type != null && type.startsWith(\"image/\")) {
+                      Uri imageUri = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
+                      if (imageUri != null) {
+                          try {
+                              InputStream inputStream = getContentResolver().openInputStream(imageUri);
+                              byte[] bytes = new byte[inputStream.available()];
+                              inputStream.read(bytes);
+                              inputStream.close();
+                              String base64Image = \"data:\" + type + \";base64,\" + Base64.encodeToString(bytes, Base64.NO_WRAP);
+                              
+                              this.bridge.getWebView().post(new Runnable() {
+                                  @Override
+                                  public void run() {
+                                      bridge.getWebView().evaluateJavascript(
+                                          \"window.sharedImageData = '\" + base64Image + \"';\" +
+                                          \"window.postMessage({type: 'SHARED_IMAGE', data: '\" + base64Image + \"'}, '*');\",
+                                          null
+                                      );
+                                  }
+                              });
+                          } catch (Exception e) {
+                              e.printStackTrace();
+                          }
+                      }
+                  }
+              }
+          }
           '''
-          if 'android.intent.action.SEND' not in content:
-              content = content.replace('</activity>', intent + '\n        </activity>')
-              with open(path, 'w') as f:
-                  f.write(content)
+              with open(java_path, 'w') as f:
+                  f.write(java_code)
           "
 
       - name: Sync Capacitor Android

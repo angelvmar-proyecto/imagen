@@ -9,15 +9,19 @@ document.getElementById('btnCapturar').addEventListener('click', () => {
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                currentImageData = event.target.result;
-                document.getElementById('imgPreview').src = currentImageData;
-                document.getElementById('previewContainer').classList.remove('hidden');
+                mostrarVistaPrevia(event.target.result);
             };
             reader.readAsDataURL(file);
         }
     };
     input.click();
 });
+
+function mostrarVistaPrevia(base64Data) {
+    currentImageData = base64Data;
+    document.getElementById('imgPreview').src = currentImageData;
+    document.getElementById('previewContainer').classList.remove('hidden');
+}
 
 function guardarRegistro(estatus) {
     if (!currentImageData) return;
@@ -88,6 +92,18 @@ function confirmarBorradoPorEstatus() {
             renderizarRegistros();
         }
     }
+}
+
+// Listener para recibir imágenes enviadas por WhatsApp / Intent
+window.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SHARED_IMAGE') {
+        mostrarVistaPrevia(event.data.data);
+    }
+});
+
+// Comprobar si la app inició con una imagen compartida
+if (window.sharedImageData) {
+    mostrarVistaPrevia(window.sharedImageData);
 }
 
 document.addEventListener('DOMContentLoaded', renderizarRegistros);
