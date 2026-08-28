@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Invitaciones</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Control de Invitaciones</h2>
+
+        <div class="card">
+            <button id="btnCapturar" class="btn primary">📷 Capturar / Seleccionar Imagen</button>
+            <div id="previewContainer" class="hidden">
+                <img id="imgPreview" src="" alt="Vista previa">
+                <div class="actions">
+                    <button onclick="guardarRegistro('Aprobado')" class="btn success">✅ Aprobar y Guardar</button>
+                    <button onclick="guardarRegistro('Rechazado')" class="btn danger">❌ Rechazar y Guardar</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Registros Guardados</h3>
+            <div class="filter-bar">
+                <select id="filtroEstatus" onchange="renderizarRegistros()">
+                    <option value="Todos">Todos</option>
+                    <option value="Aprobado">Aprobados</option>
+                    <option value="Rechazado">Rechazados</option>
+                </select>
+                <button onclick="confirmarBorradoPorEstatus()" class="btn danger-outline">🗑️ Borrar por Estatus</button>
+            </div>
+
+            <ul id="listaRegistros" class="registro-lista"></ul>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
