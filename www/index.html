@@ -3,157 +3,275 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Control Celdas - OCR & Registros</title>
+  <title>Control de Celdas y OCR</title>
+  <!-- Tesseract.js para OCR local en el navegador -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     * { box-sizing: border-box; font-family: sans-serif; }
-    body { margin: 0; padding: 12px; background: #f4f6f9; color: #333; }
-    h2 { margin-top: 0; text-align: center; }
-    .panel { background: #fff; padding: 12px; border-radius: 8px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    button { padding: 8px 12px; border: none; border-radius: 4px; background: #007bff; color: white; font-weight: bold; cursor: pointer; margin: 2px; }
+    body { margin: 0; padding: 10px; background: #f0f2f5; color: #1c1e21; }
+    h2 { margin: 4px 0 12px 0; text-align: center; }
+    .card { background: white; padding: 10px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+    .btn-group { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
+    button, label.btn { padding: 6px 10px; border: none; border-radius: 4px; background: #007bff; color: white; font-weight: bold; cursor: pointer; font-size: 12px; }
     button.danger { background: #dc3545; }
     button.success { background: #28a745; }
-    button.warning { background: #ffc107; color: #333; }
-    .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; font-size: 13px; }
-    th, td { border: 1px solid #ccc; padding: 6px; text-align: left; }
-    th { background: #e9ecef; }
-    .status-check { transform: scale(1.2); }
-    .editable input { width: 100%; border: 1px solid #007bff; padding: 4px; }
+    button.warning { background: #ffc107; color: #000; }
+    input[type="file"] { display: none; }
+    
+    .dimensions-control { display: flex; gap: 8px; align-items: center; font-size: 12px; margin-bottom: 8px; }
+    .dimensions-control input { width: 50px; padding: 4px; border: 1px solid #ccc; border-radius: 4px; }
+
+    canvas { max-width: 100%; border: 1px solid #ccc; border-radius: 6px; display: none; margin-top: 6px; }
+
+    /* Contenedor con scroll bidimensional y cabeceras fijas */
+    .table-container { max-height: 400px; max-width: 100%; overflow: auto; border: 1px solid #ccc; background: white; }
+    table { border-collapse: collapse; font-size: 11px; width: max-content; }
+    th, td { border: 1px solid #ddd; padding: 4px; text-align: center; min-width: 60px; }
+    th { background: #f8f9fa; position: sticky; top: 0; z-index: 2; }
+    th.sticky-col, td.sticky-col { position: sticky; left: 0; background: #fff; z-index: 1; }
+    th.sticky-col { z-index: 3; background: #e9ecef; }
+    
+    .status-check { transform: scale(1.1); }
+    td input[type="text"] { width: 100%; border: none; background: transparent; font-size: 11px; padding: 2px; }
+    td input[type="text"]:focus { outline: 1px solid #007bff; background: #e8f0fe; }
     .col-hidden { display: none !important; }
-    img#preview { max-width: 100%; border-radius: 6px; margin-top: 8px; display: none; }
+    #status-msg { font-size: 12px; font-weight: bold; color: #555; }
   </style>
 </head>
 <body>
 
-  <h2>Control de Celdas y Texto</h2>
+  <h2>Control Celdas (OCR & Matriz)</h2>
 
-  <div class="panel">
-    <img id="preview" alt="Imagen cargada">
-    <p id="ocr-status">Esperando imagen compartida desde WhatsApp...</p>
+  <div class="card">
+    <div class="btn-group">
+      <label for="file-input" class="btn">📁 Cargar Imagen</label>
+      <input type="file" id="file-input" accept="image/*">
+      <button id="btn-ocr" class="success">🔍 Escanear OCR</button>
+    </div>
+    <div id="status-msg">Esperando imagen...</div>
+    <canvas id="main-canvas"></canvas>
   </div>
 
-  <div class="panel">
-    <div class="actions">
-      <button id="btn-toggle-edit" class="warning">Modo Edición</button>
-      <button id="btn-toggle-cols">Ocultar/Mostrar Columnas</button>
-      <button id="btn-delete-status" class="danger">Eliminar por Estatus</button>
-      <button id="btn-save" class="success">Guardar Registros</button>
-      <button id="btn-whatsapp" class="success">Enviar por WhatsApp</button>
+  <div class="card">
+    <div class="dimensions-control">
+      <label>Filas: <input type="number" id="num-rows" value="48" min="1" max="100"></label>
+      <label>Columnas: <input type="number" id="num-cols" value="21" min="1" max="50"></label>
+      <button id="btn-resize">Ajustar Tamaño</button>
     </div>
 
-    <table id="data-table">
-      <thead>
-        <tr>
-          <th class="col-status">Estatus</th>
-          <th class="col-datos">Datos Extraídos</th>
-          <th class="col-notas">Notas / Excel</th>
-        </tr>
-      </thead>
-      <tbody id="table-body">
-      </tbody>
-    </table>
+    <div class="btn-group">
+      <button id="btn-edit-mode" class="warning">Modo Edición</button>
+      <button id="btn-toggle-cols">Ocultar/Mostrar Cols</button>
+      <button id="btn-delete-status" class="danger">Eliminar Seleccionados</button>
+      <button id="btn-save" class="success">Guardar</button>
+      <button id="btn-send-whatsapp" class="success">Enviar WhatsApp</button>
+    </div>
+
+    <div class="table-container">
+      <table id="matrix-table">
+        <thead id="table-head"></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
   </div>
 
   <script>
-    let registros = JSON.parse(localStorage.getItem('registros_db') || '[]');
+    let rows = 48;
+    let cols = 21;
+    let gridData = JSON.parse(localStorage.getItem('grid_db') || 'null');
+    let statusData = JSON.parse(localStorage.getItem('status_db') || 'null');
     let modoEdicion = false;
-    let columnasOcultas = false;
+    let ocultarCols = false;
+    let imagenActualBase64 = null;
 
-    function renderTabla() {
+    const canvas = document.getElementById('main-canvas');
+    const ctx = canvas.getContext('2d');
+
+    function initDataStructures() {
+      if (!gridData) {
+        gridData = Array.from({ length: rows }, () => Array(cols).fill(''));
+      }
+      if (!statusData) {
+        statusData = Array(rows).fill(false);
+      }
+    }
+
+    function renderTable() {
+      initDataStructures();
+      const thead = document.getElementById('table-head');
       const tbody = document.getElementById('table-body');
-      tbody.innerHTML = '';
       
-      registros.forEach((reg, index) => {
+      // Render Head
+      let headHtml = `<tr><th class="sticky-col col-status ${ocultarCols ? 'col-hidden' : ''}">ST</th>`;
+      for (let c = 0; c < cols; c++) {
+        headHtml += `<th class="${c > 2 && ocultarCols ? 'col-hidden' : ''}">C${c + 1}</th>`;
+      }
+      headHtml += '</tr>';
+      thead.innerHTML = headHtml;
+
+      // Render Body
+      tbody.innerHTML = '';
+      for (let r = 0; r < rows; r++) {
         const tr = document.createElement('tr');
         
-        // Estatus (Check solo lectura en modo normal, interactivo en edición)
+        // Columna Status Checkbox
         const tdStatus = document.createElement('td');
-        tdStatus.className = 'col-status' + (columnasOcultas ? ' col-hidden' : '');
-        const check = document.createElement('input');
-        check.type = 'checkbox';
-        check.className = 'status-check';
-        check.checked = reg.status || false;
-        check.disabled = !modoEdicion;
-        check.onchange = (e) => { registros[index].status = e.target.checked; };
-        tdStatus.appendChild(check);
+        tdStatus.className = `sticky-col col-status ${ocultarCols ? 'col-hidden' : ''}`;
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.className = 'status-check';
+        chk.checked = statusData[r] || false;
+        chk.disabled = !modoEdicion;
+        chk.onchange = (e) => { statusData[r] = e.target.checked; };
+        tdStatus.appendChild(chk);
         tr.appendChild(tdStatus);
 
-        // Columna Datos
-        const tdDatos = document.createElement('td');
-        tdDatos.className = 'col-datos';
-        if (modoEdicion) {
-          tdDatos.className += ' editable';
-          tdDatos.innerHTML = `<input value="${reg.datos || ''}" onchange="registros[${index}].datos = this.value">`;
-        } else {
-          tdDatos.textContent = reg.datos || '';
+        // Celdas de datos
+        for (let c = 0; c < cols; c++) {
+          const td = document.createElement('td');
+          if (c > 2 && ocultarCols) td.className = 'col-hidden';
+          
+          const val = gridData[r] && gridData[r][c] !== undefined ? gridData[r][c] : '';
+          
+          if (modoEdicion) {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = val;
+            input.onchange = (e) => { gridData[r][c] = e.target.value; };
+            td.appendChild(input);
+          } else {
+            td.textContent = val;
+          }
+          tr.appendChild(td);
         }
-        tr.appendChild(tdDatos);
-
-        // Columna Notas / Excel
-        const tdNotas = document.createElement('td');
-        tdNotas.className = 'col-notas' + (columnasOcultas ? ' col-hidden' : '');
-        if (modoEdicion) {
-          tdNotas.className += ' editable';
-          tdNotas.innerHTML = `<input value="${reg.notas || ''}" onchange="registros[${index}].notas = this.value">`;
-        } else {
-          tdNotas.textContent = reg.notas || '';
-        }
-        tr.appendChild(tdNotas);
-
         tbody.appendChild(tr);
-      });
+      }
     }
 
-    // Receptor global de imagen enviado desde la actividad de Android
-    window.cargarImagenCompartida = function(base64Image) {
-      const img = document.getElementById('preview');
-      img.src = base64Image;
-      img.style.display = 'block';
-      document.getElementById('ocr-status').textContent = 'Procesando imagen recibida...';
-      
-      // Simulación de conversión de imagen a registro de texto
-      setTimeout(() => {
-        registros.push({ status: false, datos: 'Texto extraído de WhatsApp ' + new Date().toLocaleTimeString(), notas: 'Registro auto' });
-        document.getElementById('ocr-status').textContent = 'Imagen procesada y agregada a la tabla.';
-        renderTabla();
-      }, 1000);
+    function procesarImagen(base64Src) {
+      imagenActualBase64 = base64Src;
+      const img = new Image();
+      img.onload = function() {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        canvas.style.display = 'block';
+        document.getElementById('status-msg').textContent = 'Imagen lista para OCR o edición.';
+      };
+      img.src = base64Src;
+    }
+
+    // Escaneo OCR por Tesseract.js
+    document.getElementById('btn-ocr').onclick = async () => {
+      if (!imagenActualBase64) {
+        alert('Carga o comparte una imagen primero.');
+        return;
+      }
+      document.getElementById('status-msg').textContent = 'Procesando OCR (Esto puede tomar unos segundos)...';
+      try {
+        const worker = await Tesseract.createWorker('spa');
+        const ret = await worker.recognize(imagenActualBase64);
+        await worker.terminate();
+
+        const lines = ret.data.text.split('\n').filter(line => line.trim() !== '');
+        rows = Math.max(lines.length, rows);
+        document.getElementById('num-rows').value = rows;
+
+        gridData = Array.from({ length: rows }, () => Array(cols).fill(''));
+        lines.forEach((line, rIndex) => {
+          const tokens = line.split(/\s+/);
+          tokens.forEach((token, cIndex) => {
+            if (cIndex < cols) {
+              gridData[rIndex][cIndex] = token;
+            }
+          });
+        });
+
+        document.getElementById('status-msg').textContent = 'OCR finalizado y datos cargados.';
+        renderTable();
+      } catch (err) {
+        document.getElementById('status-msg').textContent = 'Error en OCR: ' + err.message;
+      }
     };
 
-    if (window.sharedImageData) {
-      window.cargarImagenCompartida(window.sharedImageData);
-    }
+    // Ajustar matriz manualmente
+    document.getElementById('btn-resize').onclick = () => {
+      const newRows = parseInt(document.getElementById('num-rows').value) || 48;
+      const newCols = parseInt(document.getElementById('num-cols').value) || 21;
 
-    document.getElementById('btn-toggle-edit').onclick = () => {
+      const newGrid = Array.from({ length: newRows }, (_, r) => 
+        Array.from({ length: newCols }, (_, c) => (gridData[r] && gridData[r][c] !== undefined ? gridData[r][c] : ''))
+      );
+      const newStatus = Array.from({ length: newRows }, (_, r) => statusData[r] || false);
+
+      rows = newRows;
+      cols = newCols;
+      gridData = newGrid;
+      statusData = newStatus;
+      renderTable();
+    };
+
+    // Handlers de archivos y share
+    document.getElementById('file-input').onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (evt) => procesarImagen(evt.target.result);
+        reader.readAsDataURL(file);
+      }
+    };
+
+    window.cargarImagenCompartida = function(base64Image) {
+      if (base64Image) procesarImagen(base64Image);
+    };
+    if (window.sharedImageData) window.cargarImagenCompartida(window.sharedImageData);
+
+    // Acciones de botones
+    document.getElementById('btn-edit-mode').onclick = () => {
       modoEdicion = !modoEdicion;
-      document.getElementById('btn-toggle-edit').textContent = modoEdicion ? 'Modo Lectura' : 'Modo Edición';
-      renderTabla();
+      document.getElementById('btn-edit-mode').textContent = modoEdicion ? 'Modo Lectura' : 'Modo Edición';
+      renderTable();
     };
 
     document.getElementById('btn-toggle-cols').onclick = () => {
-      columnasOcultas = !columnasOcultas;
-      renderTabla();
+      ocultarCols = !ocultarCols;
+      renderTable();
     };
 
     document.getElementById('btn-delete-status').onclick = () => {
-      registros = registros.filter(r => !r.status);
-      renderTabla();
+      const keptGrid = [];
+      const keptStatus = [];
+      for (let r = 0; r < rows; r++) {
+        if (!statusData[r]) {
+          keptGrid.push(gridData[r]);
+          keptStatus.push(false);
+        }
+      }
+      gridData = keptGrid;
+      statusData = keptStatus;
+      rows = gridData.length;
+      document.getElementById('num-rows').value = rows;
+      renderTable();
     };
 
     document.getElementById('btn-save').onclick = () => {
-      localStorage.setItem('registros_db', JSON.stringify(registros));
-      alert('Registros guardados localmente.');
+      localStorage.setItem('grid_db', JSON.stringify(gridData));
+      localStorage.setItem('status_db', JSON.stringify(statusData));
+      alert('Matriz guardada en el dispositivo.');
     };
 
-    document.getElementById('btn-whatsapp').onclick = () => {
-      let texto = 'Resumen de Registros:\n';
-      registros.forEach(r => {
-        texto += `[${r.status ? 'X' : ' '}] ${r.datos} | ${r.notas}\n`;
+    document.getElementById('btn-send-whatsapp').onclick = () => {
+      let msg = '*Resumen de Matriz:*\n';
+      gridData.forEach((row, r) => {
+        const lineStr = row.filter(c => c !== '').join(' | ');
+        if (lineStr) {
+          msg += `[${statusData[r] ? 'X' : ' '}] Fila ${r + 1}: ${lineStr}\n`;
+        }
       });
-      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(texto);
-      window.open(url, '_system');
+      window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(msg), '_system');
     };
 
-    renderTabla();
+    renderTable();
   </script>
 </body>
 </html>
