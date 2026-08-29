@@ -25,22 +25,21 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Install dependencies & Capacitor CLI
+      - name: Install dependencies & CLI
         run: |
           npm install
           npm install -g @capacitor/cli
 
-      - name: Build & Sync Capacitor Project
+      - name: Build & Sync Capacitor
         run: |
           rm -rf android
           npx cap add android
           npx cap copy android
           npx cap sync android
-          # Asegurar copia manual de respaldos por si Capacitor omite assets
           mkdir -p android/app/src/main/assets/public
           cp -r www/* android/app/src/main/assets/public/
 
-      - name: Inject Java Share Handler
+      - name: Inject Native Handlers
         run: |
           python3 -c "
           import os
