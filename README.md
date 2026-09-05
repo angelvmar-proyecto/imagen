@@ -1,0 +1,1 @@
+# Escáner de Tablas OCR
