@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>OCR Escáner de Tablas</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="https://unpkg.com/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <div class="header">
+    <h1>Escáner de Tablas (Ultra Rápido)</h1>
+    <p id="statusText">Listo para iniciar...</p>
+  </div>
+
+  <div class="controls">
+    <button onclick="capturarImagen()">📷 Capturar / Cargar</button>
+    <button onclick="autoAlinear90Grados()">📐 Auto-Alinear Rejilla</button>
+    <button onclick="resetRejilla()">🔄 Reset Rejilla</button>
+    <button class="btn-main" onclick="ejecutarEscaneoRapido()">⚡ Escaneo Rápido (1-Shot)</button>
+    <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="cargarDesdeInput(event)">
+  </div>
+
+  <div class="canvas-container">
+    <img id="imgPreview" alt="Vista previa" onload="inicializarRejilla()">
+    <canvas id="gridCanvas"></canvas>
+  </div>
+
+  <div class="progress-container" id="progressWrapper" style="display:none;">
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-info">
+      <span id="progressStep">Procesando...</span>
+      <span id="progressPercent">0%</span>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchInput" placeholder="Buscar en resultados..." oninput="filtrarMatriz()">
+    <button onclick="copiarAlPortapapeles()">📋 Copiar TSV</button>
+    <button onclick="limpiarTabla()">🗑️ Limpiar</button>
+    <span id="rowCount">0 filas</span>
+  </div>
+
+  <div class="table-container" id="tableWrapper">
+    <div class="empty-state">Carga una imagen y presiona "Escaneo Rápido".</div>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
+
