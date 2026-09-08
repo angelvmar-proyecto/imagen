@@ -2,6 +2,9 @@ const pantallaCarga=document.getElementById('pantallaCarga'),barraProgreso=docum
 
 let imagenActual=null, reconocedor=null;
 
+// ==================================================
+// PASO 1: CARGAR TESSERACT — igual, pero solo UNA VEZ
+// ==================================================
 async function cargarOCR(){
   log('🔤 Cargando Tesseract.js OCR...','info');
   try{
@@ -11,7 +14,7 @@ async function cargarOCR(){
     await reconocedor.setParameters({preserve_interword_spaces:'1'});
     estadoOCR.textContent='✅ OCR listo';
     barraProgreso.style.width='100%';
-    log('✅ Tesseract.js listo — español + inglés','ok');
+    log('✅ Tesseract.js listo','ok');
     return true;
   }catch(e){
     estadoOCR.textContent='❌ Error OCR';
@@ -20,6 +23,9 @@ async function cargarOCR(){
   }
 }
 
+// ==================================================
+// PASO 2: DETECTAR LÍNEAS — MEJORADO, SIN LÍNEAS FALSAS
+// ==================================================
 function detectarLineas(img){
   log('🔍 Detectando líneas de tabla...','info');
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
@@ -32,9 +38,9 @@ function detectarLineas(img){
     let oscuro=0;
     for(let x=0;x<c.width;x+=2){
       const i=(y*c.width+x)*4;
-      if((datos[i]+datos[i+1]+datos[i+2])/3<220) oscuro++;
+      if((datos[i]+datos[i+1]+datos[i+2])/3<200) oscuro++;
     }
-    if(oscuro>c.width*0.08) h.push(y);
+    if(oscuro>c.width*0.10) h.push(y);
   }
 
   const v=[];
@@ -42,48 +48,71 @@ function detectarLineas(img){
     let oscuro=0;
     for(let y=0;y<c.height;y+=2){
       const i=(y*c.width+x)*4;
-      if((datos[i]+datos[i+1]+datos[i+2])/3<220) oscuro++;
+      if((datos[i]+datos[i+1]+datos[i+2])/3<200) oscuro++;
     }
-    if(oscuro>c.height*0.08) v.push(x);
+    if(oscuro>c.height*0.10) v.push(x);
   }
 
-  const filas=[], cols=[], minDist=5;
+  const filas=[], cols=[], minDistFilas=15, minDistCols=8;
   let ult=-9999;
-  h.sort((a,b)=>a-b).forEach(y=>{if(y-ult>minDist){filas.push(y);ult=y;}});
+  h.sort((a,b)=>a-b).forEach(y=>{if(y-ult>minDistFilas){filas.push(y);ult=y;}});
   ult=-9999;
-  v.sort((a,b)=>a-b).forEach(x=>{if(x-ult>minDist){cols.push(x);ult=x;}});
+  v.sort((a,b)=>a-b).forEach(x=>{if(x-ult>minDistCols){cols.push(x);ult=x;}});
 
   log(`📊 ${filas.length} filas, ${cols.length} columnas detectadas`,'ok');
   return {filas,cols,ctx,c};
 }
 
-async function leerCelda(ctx,x1,y1,x2,y2){
-  const w=x2-x1, h=y2-y1;
-  if(w<8||h<8) return '';
-  const temp=document.createElement('canvas');
-  temp.width=w; temp.height=h;
-  const tctx=temp.getContext('2d');
-  tctx.drawImage(ctx.canvas,x1,y1,w,h,0,0,w,h);
+// ==================================================
+// PASO 3: OCR UNA SOLA VEZ + ORGANIZAR POR POSICIÓN
+// ==================================================
+async function extraerTextoCompleto(img){
+  log('📝 Extrayendo texto de toda la imagen...','info');
   try{
-    const {data:{text}}=await reconocedor.recognize(temp);
-    return text.trim().replace(/\s+/g,' ');
-  }catch{return '';}
+    const {data:{words}}=await reconocedor.recognize(img,{output:'words'});
+    log(`✅ ${words.length} palabras encontradas`,'ok');
+    return words.map(w=>({
+      texto:w.text.trim(),
+      x:w.bbox.x0,
+      y:w.bbox.y0,
+      ancho:w.bbox.x1-w.bbox.x0,
+      alto:w.bbox.y1-w.bbox.y0
+    }));
+  }catch(e){
+    log(`❌ Error OCR: ${e.message}`,'error');
+    return [];
+  }
 }
 
-async function construirTabla(datos){
-  const{filas,cols,ctx}=datos;
+// ==================================================
+// PASO 4: ASIGNAR PALABRAS A CELDAS SEGÚN POSICIÓN
+// ==================================================
+function construirTabla(datos,palabras){
+  const{filas,cols}=datos;
   if(filas.length<2||cols.length<2){
-    return `<p style="color:red;padding:20px;">⚠️ Tabla no detectada completa<br>Filas: ${filas.length} — Columnas: ${cols.length}<br>Revisa que la imagen sea clara y bien iluminada</p>`;
+    return `<p style="color:red;padding:20px;">⚠️ Tabla no detectada<br>Filas: ${filas.length} — Columnas: ${cols.length}</p>`;
   }
-  log('📝 Leyendo contenido de celdas...','info');
+
+  const tabla=Array(filas.length-1).fill().map(()=>Array(cols.length-1).fill(''));
+
+  for(const p of palabras){
+    for(let f=0;f<filas.length-1;f++){
+      for(let c=0;c<cols.length-1;c++){
+        if(p.x>=cols[c]&&p.x<cols[c+1]&&p.y>=filas[f]&&p.y<filas[f+1]){
+          tabla[f][c]+=(tabla[f][c]?' ':'')+p.texto;
+          break;
+        }
+      }
+    }
+  }
+
   let html='<table><thead><tr>';
   for(let c=0;c<cols.length-1;c++) html+=`<th>C${c+1}</th>`;
   html+='</tr></thead><tbody>';
   for(let f=0;f<filas.length-1;f++){
     html+='<tr>';
     for(let c=0;c<cols.length-1;c++){
-      const texto=await leerCelda(ctx,cols[c],filas[f],cols[c+1],filas[f+1]);
-      html+=`<td>${texto||'-'}</td>`;
+      html+=`<td>${tabla[f][c]||'-'}</td>`;
     }
     html+='</tr>';
   }
@@ -92,6 +121,9 @@ async function construirTabla(datos){
   return html;
 }
 
+// ==================================================
+// PASO 5: FLUJO COMPLETO — SIN BLOQUEOS
+// ==================================================
 async function iniciar(){
   const ok=await cargarOCR();
   setTimeout(()=>{
@@ -118,9 +150,11 @@ entradaImagen.addEventListener('change',e=>{
 });
 
 btnAnalizar.addEventListener('click',async ()=>{
-  if(!imagenActual||!reconocedor)return;
-  const datos=detectarLineas(imagenActual);
-  contenedorTabla.innerHTML=await construirTabla(datos);
+  if(!imagenActual||!reconocedor){log('⚠️ OCR no listo','warn');return;}
+  log('🚀 Iniciando extracción...','info');
+  const datosLineas=detectarLineas(imagenActual);
+  const palabras=await extraerTextoCompleto(imagenActual);
+  contenedorTabla.innerHTML=construirTabla(datosLineas,palabras);
   vistaImagen.classList.add('oculto');
   resultadoTabla.classList.remove('oculto');
 });
