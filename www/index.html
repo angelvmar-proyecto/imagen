@@ -6,48 +6,61 @@
   <title>MAR Caribe</title>
   <link rel="stylesheet" href="css/estilos.css">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
 </head>
 <body>
+
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen → IA → Tabla</p>
+  <p>Imagen → IA Local → Tabla</p>
 </header>
+
 <main>
-  <div id="carga">
+  <div id="cargaModelos">
     <h2>Cargando modelos de IA...</h2>
-    <div class="barra"><div id="progreso"></div></div>
-    <p id="estado">Iniciando...</p>
+    <div class="barra"><div id="barraProgreso"></div></div>
+    <p id="estadoCarga">Iniciando SSD MobileNet v2...</p>
   </div>
+
   <div id="paso1" class="oculto">
     <h2>1. Elegir imagen</h2>
-    <input type="file" id="archivo" accept="image/*">
+    <input type="file" id="archivoImagen" accept="image/*">
     <button id="btnElegir">📁 Elegir Imagen</button>
-    <div id="vista" class="oculto">
-      <img id="imagen" alt="Imagen cargada">
-      <div class="selModelo">
-        <label><input type="radio" name="modelo" value="ssd" checked> SSD MobileNet (rápido)</label>
-        <label><input type="radio" name="modelo" value="efficientdet"> EfficientDet (preciso)</label>
+    <div id="vistaImagen" class="oculto">
+      <img id="imagenPreview" alt="Imagen cargada">
+      <div class="selectorModelo">
+        <label>
+          <input type="radio" name="modelo" value="ssd" checked>
+          SSD MobileNet v2 (rápido)
+        </label>
+        <label>
+          <input type="radio" name="modelo" value="efficientdet">
+          EfficientDet-Lite0 (preciso)
+        </label>
       </div>
       <button id="btnDetectar">🔍 Detectar con IA</button>
     </div>
   </div>
+
   <div id="paso2" class="oculto">
-    <h2>2. Resultados</h2>
-    <canvas id="lienzo"></canvas>
-    <div id="resultados"></div>
-    <button id="btnTabla">📊 Extraer tabla</button>
+    <h2>2. Resultados de la IA</h2>
+    <canvas id="lienzoDeteccion"></canvas>
+    <div id="resultadosIA"></div>
+    <button id="btnExtraerTabla">📊 Extraer como tabla</button>
     <button id="btnVolver">⬅️ Otra imagen</button>
   </div>
+
   <div id="paso3" class="oculto">
     <h2>3. Tabla extraída</h2>
     <div id="contenedorTabla"></div>
     <button id="btnCopiar">📋 Copiar</button>
-    <button id="btnWA">💬 WhatsApp</button>
-    <button id="btnNuevo">🔄 Nueva imagen</button>
+    <button id="btnWhatsApp">💬 Enviar WhatsApp</button>
+    <button id="btnNueva">🔄 Nueva imagen</button>
   </div>
+
   <div id="avisos"></div>
 </main>
+
 <script src="js/app.js"></script>
 </body>
 </html>
