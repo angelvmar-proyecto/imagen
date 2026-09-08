@@ -3,39 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAR Caribe</title>
+  <title>MAR Caribe — 3 Motores IA</title>
   <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen WhatsApp → Tabla con texto real</p>
+  <p>Imagen → Tabla — 3 Motores IA Independientes</p>
 </header>
 <main>
-  <div id="pantallaCarga">
-    <h2>Cargando OCR...</h2>
-    <div class="barra"><div id="barraProgreso"></div></div>
-    <p id="estadoOCR">⏳ Cargando Tesseract.js...</p>
-    <div id="logs"></div>
+  <!-- CARGA GLOBAL DE TF.js Y TFLite -->
+  <div id="cargaGlobal">
+    <h3>Cargando motores base...</h3>
+    <div class="barra"><div id="barraGlobal"></div></div>
+    <p id="estadoTF">⏳ TF.js: Cargando...</p>
+    <p id="estadoTFLite">⏳ TFLite: Cargando...</p>
+    <div id="logsGlobal"></div>
   </div>
-  <div id="pantallaPrincipal" class="oculto">
+
+  <!-- SELECCIÓN DE IMAGEN -->
+  <div id="seccionImagen" class="oculto">
     <button id="btnSeleccionar">📁 Elegir Imagen</button>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
     <div id="vistaImagen" class="oculto">
-      <img id="imagenPreview" alt="Imagen">
-      <button id="btnAnalizar">🔍 Extraer tabla</button>
-    </div>
-    <div id="resultadoTabla" class="oculto">
-      <h3>📋 Tabla completa</h3>
-      <div id="contenedorTabla"></div>
-      <button id="btnNuevaImagen">🔄 Otra imagen</button>
+      <img id="imagenPreview" alt="Imagen de tabla">
     </div>
   </div>
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script>
-const logsDiv=document.getElementById('logs');
-function log(texto,tipo='info'){const h=new Date().toLocaleTimeString(),c={info:'#0ff',ok:'#0f0',error:'#f55',warn:'#ff0'},d=document.createElement('div');d.style.color=c[tipo];d.textContent=`[${h}] ${texto}`;logsDiv.appendChild(d);logsDiv.scrollTop=logsDiv.scrollHeight;}
-</script>
+
+  <!-- MOTOR 1: SSD MobileNet v2 -->
+  <section class="motor" id="motor1">
+    <h3>🔍 Motor 1: SSD MobileNet v2</h3>
+    <div class="estado">Estado: <span id="estadoM1">⏳ Pendiente</span></div>
+    <div class="barra"><div id="barraM1"></div></div>
+    <div class="botonesMotor">
+      <button id="btnAnalizarM1">🔍 Analizar</button>
+      <button id="btnResetM1" class="btnReset">🔄 Reset</button>
+    </div>
+    <div id="resultadoM1" class="resultado"></div>
+    <div id="logsM1" class="logs"></div>
+  </section>
+
+  <!-- MOTOR 2: EfficientDet-Lite0 -->
+  <section class="motor" id="motor2">
+    <h3>⚡ Motor 2: EfficientDet-Lite0</h3>
+    <div class="estado">Estado: <span id="estadoM2">⏳ Pendiente</span></div>
+    <div class="barra"><div id="barraM2"></div></div>
+    <div class="botonesMotor">
+      <button id="btnAnalizarM2">⚡ Analizar</button>
+      <button id="btnResetM2" class="btnReset">🔄 Reset</button>
+    </div>
+    <div id="resultadoM2" class="resultado"></div>
+    <div id="logsM2" class="logs"></div>
+  </section>
+
+  <!-- MOTOR 3: YOLOv8n -->
+  <section class="motor" id="motor3">
+    <h3>🎯 Motor 3: YOLOv8n</h3>
+    <div class="estado">Estado: <span id="estadoM3">⏳ Pendiente</span></div>
+    <div class="barra"><div id="barraM3"></div></div>
+    <div class="botonesMotor">
+      <button id="btnAnalizarM3">🎯 Analizar</button>
+      <button id="btnResetM3" class="btnReset">🔄 Reset</button>
+    </div>
+    <div id="resultadoM3" class="resultado"></div>
+    <div id="logsM3" class="logs"></div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
