@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace "com.tumarcaribe.app"
-    compileSdkVersion 34
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.tumarcaribe.app"
-        minSdkVersion 22
-        targetSdkVersion 34
+        minSdk 24
+        targetSdk 34
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -41,8 +41,9 @@ android {
 }
 
 dependencies {
-    // Capacitor — 🔑 ESTAS LÍNEAS FALTABAN y son la causa del error
-    implementation "com.getcapacitor:android:7.0.1"
+    // ✅ Dependencia CORRECTA de Capacitor — NO usa versión fija así
+    // Capacitor se instala via npm y se referencia localmente, NO desde Maven
+    implementation project(':capacitor-android')
 
     // AndroidX
     implementation "androidx.core:core-ktx:1.12.0"
