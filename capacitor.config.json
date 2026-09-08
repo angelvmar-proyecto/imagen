@@ -1,5 +1,17 @@
 {
-  "appId": "com.tumarcaribe.app",
-  "appName": "MarCaribe",
-  "webDir": "www"
+  "appId": "com.marcaribe.app",
+  "appName": "MAR Caribe",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "Permissions": {
+      "android": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
+    }
+  }
 }
+
