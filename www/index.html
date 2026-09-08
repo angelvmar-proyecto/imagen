@@ -7,12 +7,10 @@
   <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
-
 <header>
   <h1>🏝️ MAR Caribe</h1>
   <p>Imagen de tabla → Tabla estructurada — 100% Local</p>
 </header>
-
 <main>
   <div id="pantallaCarga">
     <h2>Cargando modelos...</h2>
@@ -24,19 +22,17 @@
     </div>
     <div id="logs" style="margin-top:15px; padding:10px; background:#1a1a1a; color:#0f0; font-family:monospace; font-size:11px; max-height:200px; overflow-y:auto; border-radius:6px;">
       <div>📋 Iniciando...</div>
+      <div id="diagnosticoTFLite"></div>
     </div>
   </div>
-
   <div id="pantallaPrincipal" class="oculto">
     <h2>Convertir imagen de tabla</h2>
     <input type="file" id="entradaImagen" accept="image/*">
     <button id="btnSeleccionar">📁 Elegir Imagen</button>
-    
     <div id="vistaImagen" class="oculto">
       <img id="imagenPreview" alt="Imagen cargada">
       <button id="btnAnalizar">🔍 Analizar tabla</button>
     </div>
-
     <div id="resultadoTabla" class="oculto">
       <h3>Tabla reconstruida</h3>
       <div id="contenedorTabla"></div>
@@ -44,29 +40,15 @@
     </div>
   </div>
 </main>
-
-<!-- ==================================================
-     ✅ SOLO ARCHIVOS LOCALES — SIN CDN, SIN INTERNET
-     ================================================== -->
 <script src="lib/tf.min.js"></script>
 <script src="lib/tf-tflite.min.js"></script>
-
 <script>
-const logsDiv = document.getElementById('logs');
-function log(texto, tipo = 'info') {
-  const hora = new Date().toLocaleTimeString();
-  const col = { info:'#0ff', ok:'#0f0', error:'#f55', warn:'#ff0' };
-  const div = document.createElement('div');
-  div.style.color = col[tipo];
-  div.textContent = `[${hora}] ${texto}`;
-  logsDiv.appendChild(div);
-  logsDiv.scrollTop = logsDiv.scrollHeight;
-  console.log(texto);
-}
-
-log('✅ HTML cargado', 'ok');
-log(`📍 TF.js local: ${window.tf ? 'v' + tf.version.tfjs : 'NO CARGÓ'}`, window.tf ? 'ok' : 'error');
-log(`📍 TF-TFLite local: ${(window.tf && window.tf.tflite) ? 'DISPONIBLE' : 'NO CARGÓ'}`, (window.tf && window.tf.tflite) ? 'ok' : 'error');
+const logsDiv=document.getElementById('logs');
+function log(tipo='info',texto){const h=new Date().toLocaleTimeString(),c={info:'#0ff',ok:'#0f0',error:'#f55',warn:'#ff0'},d=document.createElement('div');d.style.color=c[tipo];d.textContent=`[${h}] ${texto}`;logsDiv.appendChild(d);logsDiv.scrollTop=logsDiv.scrollHeight;}
+log('ok','✅ HTML cargado');
+log(window.tf?'ok':'error',window.tf?`📍 TF.js local: v${tf.version.tfjs}`:'📍 TF.js local: NO CARGÓ');
+function diagnosticarTFLite(){const d=document.getElementById('diagnosticoTFLite');d.innerHTML=!window.tf?'<span style="color:#f55">❌ tf.min.js NO se cargó</span>':window.tf.tflite?'<span style="color:#0f0">✅ TF.js v'+tf.version.tfjs+'</span><br><span style="color:#0f0">✅ tfjs-tflite DISPONIBLE</span>':'<span style="color:#0f0">✅ TF.js v'+tf.version.tfjs+'</span><br><span style="color:#f55">❌ tf-tflite.min.js NO se cargó</span><br><span style="color:#ff0">👉 Verifica lib/tf-tflite.min.js</span>';}
+setTimeout(diagnosticarTFLite,500);
 </script>
 <script src="js/app.js"></script>
 </body>
