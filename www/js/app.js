@@ -1,110 +1,180 @@
-// ELEMENTOS DEL HTML — TAL CUAL ESTÁN
+// ==============================================
+// MAR CARIBE — LECTURA REAL DE IMÁGENES
+// SIN EJEMPLOS, SIN SIMULACIONES: TU IMAGEN → TU TEXTO → TU TABLA
+// ==============================================
+
+// Elementos del HTML
 const selImagen = document.getElementById('selectorImagen');
-const btnSeleccionar = document.getElementById('btnSeleccionar');
-const vistaImagen = document.getElementById('vistaImagen');
-const imgPreview = document.getElementById('imgPreview');
-const btnLeer = document.getElementById('btnLeer');
+const btnElegir = document.getElementById('btnElegir');
+const contenedorImagen = document.getElementById('contenedorImagen');
+const imagenSubida = document.getElementById('imagenSubida');
+const btnLeerAhora = document.getElementById('btnLeerAhora');
 const paso1 = document.getElementById('paso1');
 const paso2 = document.getElementById('paso2');
 const paso3 = document.getElementById('paso3');
-const textoExtraido = document.getElementById('textoExtraido');
+const barraCarga = document.getElementById('barraCarga');
+const progresoOCR = document.getElementById('progresoOCR');
+const textoLeido = document.getElementById('textoLeido');
 const btnCrearTabla = document.getElementById('btnCrearTabla');
-const btnVolver1 = document.getElementById('btnVolver1');
-const contenedorTabla = document.getElementById('contenedorTabla');
-const btnCopiar = document.getElementById('btnCopiar');
-const btnEnviarWA = document.getElementById('btnEnviarWA');
-const btnNueva = document.getElementById('btnNueva');
-const mensaje = document.getElementById('mensaje');
+const btnVolver = document.getElementById('btnVolver');
+const contenedorTablaReal = document.getElementById('contenedorTablaReal');
+const btnCopiarTodo = document.getElementById('btnCopiarTodo');
+const btnEnviarWhatsApp = document.getElementById('btnEnviarWhatsApp');
+const btnEmpezarDeNuevo = document.getElementById('btnEmpezarDeNuevo');
+const avisos = document.getElementById('avisos');
 
-let imagenCargada = null;
-let datosTabla = [];
+// Datos reales
+let datosTablaFinal = [];
 
-// ==================================
-// CONECTAR BOTONES — DIRECTO Y CLARO
-// ==================================
-btnSeleccionar.addEventListener('click', () => {
+// ==============================================
+// PASO 1: SELECCIONAR Y VER IMAGEN REAL
+// ==============================================
+btnElegir.addEventListener('click', () => {
   selImagen.click();
 });
 
 selImagen.addEventListener('change', (e) => {
   const archivo = e.target.files[0];
   if (!archivo) return;
-  
+
+  if (!archivo.type.startsWith('image/')) {
+    mostrarAviso('❌ El archivo no es una imagen válida', 'error');
+    return;
+  }
+
+  // ✅ AQUÍ SE CARGA Y SE VE TU IMAGEN — NO ES EJEMPLO
   const lector = new FileReader();
-  lector.onload = (e) => {
-    imagenCargada = e.target.result;
-    imgPreview.src = imagenCargada;
-    vistaImagen.style.display = 'block';
-    mostrarMensaje('Imagen cargada ✅', 'exito');
+  lector.onload = (eventoLectura) => {
+    imagenSubida.src = eventoLectura.target.result;
+    contenedorImagen.classList.remove('oculto');
+    mostrarAviso('✅ Imagen cargada correctamente', 'exito');
   };
   lector.readAsDataURL(archivo);
 });
 
-btnLeer.addEventListener('click', () => {
-  if (!imagenCargada) {
-    mostrarMensaje('Primero selecciona una imagen', 'error');
+// ==============================================
+// PASO 2: LEER TEXTO REAL CON TESSERACT.JS
+// ==============================================
+btnLeerAhora.addEventListener('click', async () => {
+  if (!imagenSubida.src) {
+    mostrarAviso('⚠️ Primero selecciona una imagen', 'alerta');
     return;
   }
-  // Simulación de lectura OCR — aquí va el real después
-  textoExtraido.value = `FECHA|CLIENTE|HAB|ENTRADA|SALIDA|IMPORTE
-09/08/2026|Juan Pérez|302|09/10/2026|09/15/2026|12450
-09/08/2026|María López|405|09/12/2026|09/18/2026|8900`;
-  paso1.style.display = 'none';
-  paso2.style.display = 'block';
-  mostrarMensaje('Texto extraído ✅', 'exito');
+
+  paso1.classList.add('oculto');
+  paso2.classList.remove('oculto');
+  barraCarga.classList.remove('oculto');
+  progresoOCR.style.width = '0%';
+  textoLeido.value = '';
+
+  try {
+    // ✅ OCR REAL — LEE LO QUE DICE TU IMAGEN
+    const resultado = await Tesseract.recognize(
+      imagenSubida.src,
+      'spa+eng', // Español + Inglés
+      {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            progresoOCR.style.width = Math.round(m.progress * 100) + '%';
+          }
+        }
+      }
+    );
+
+    // ✅ TEXTO REAL EXTRAÍDO DE TU IMAGEN — NADA ESCRITO POR MÍ
+    textoLeido.value = resultado.data.text.trim();
+    
+    if (!textoLeido.value) {
+      mostrarAviso('⚠️ No se pudo leer texto de la imagen', 'alerta');
+    } else {
+      mostrarAviso('✅ Texto leído: ' + resultado.data.text.length + ' caracteres', 'exito');
+    }
+
+  } catch (error) {
+    mostrarAviso('❌ Error al leer: ' + error.message, 'error');
+    paso1.classList.remove('oculto');
+    paso2.classList.add('oculto');
+  }
 });
 
+// Volver a elegir imagen
+btnVolver.addEventListener('click', () => {
+  paso2.classList.add('oculto');
+  paso1.classList.remove('oculto');
+});
+
+// ==============================================
+// PASO 3: CONVERTIR TEXTO REAL EN TABLA
+// ==============================================
 btnCrearTabla.addEventListener('click', () => {
-  const lineas = textoExtraido.value.trim().split('\n');
-  datosTabla = lineas.map(l => l.split('|'));
+  const texto = textoLeido.value.trim();
+  if (!texto) {
+    mostrarAviso('⚠️ No hay texto para convertir', 'alerta');
+    return;
+  }
+
+  paso2.classList.add('oculto');
+  paso3.classList.remove('oculto');
+
+  // ✅ PARSEAR EL TEXTO REAL QUE VINO DE TU IMAGEN
+  const lineas = texto.split('\n').filter(l => l.trim().length > 0);
   
-  let html = '<table border="1" cellpadding="8" cellspacing="0" style="width:100%;">';
-  datosTabla.forEach((fila, i) => {
-    html += '<tr>' + fila.map(c => i===0 ? `<th>${c}</th>` : `<td>${c}</td>`).join('') + '</tr>';
+  datosTablaFinal = lineas.map(linea => {
+    // Detectar separador: | , tabulaciones o espacios múltiples
+    if (linea.includes('|')) return linea.split('|').map(c => c.trim());
+    if (linea.includes('\t')) return linea.split('\t').map(c => c.trim());
+    return linea.split(/\s{3,}/).map(c => c.trim()).filter(c => c);
   });
-  html += '</table>';
-  
-  contenedorTabla.innerHTML = html;
-  paso2.style.display = 'none';
-  paso3.style.display = 'block';
-  mostrarMensaje('Tabla creada ✅', 'exito');
-});
 
-btnVolver1.addEventListener('click', () => {
-  paso2.style.display = 'none';
-  paso1.style.display = 'block';
-});
-
-btnCopiar.addEventListener('click', () => {
-  let texto = datosTabla.map(f => f.join(' | ')).join('\n');
-  navigator.clipboard.writeText(texto).then(() => {
-    mostrarMensaje('Copiado al portapapeles ✅', 'exito');
+  // ✅ DIBUJAR TABLA REAL
+  let htmlTabla = '<table><tbody>';
+  datosTablaFinal.forEach((fila, indice) => {
+    const etiqueta = indice === 0 ? 'th' : 'td';
+    htmlTabla += '<tr>' + fila.map(celda => `<${etiqueta}>${celda}</${etiqueta}>`).join('') + '</tr>';
   });
+  htmlTabla += '</tbody></table>';
+
+  contenedorTablaReal.innerHTML = htmlTabla;
+  mostrarAviso(`✅ Tabla creada: ${datosTablaFinal.length} filas leídas de TU imagen`, 'exito');
 });
 
-btnEnviarWA.addEventListener('click', () => {
-  let texto = datosTabla.map(f => f.join(' | ')).join('\n');
-  const url = 'https://wa.me/?text=' + encodeURIComponent('🏝️ TABLA COMPARTIDA:\n' + texto);
-  window.open(url, '_blank');
+// ==============================================
+// ACCIONES FINALES
+// ==============================================
+btnCopiarTodo.addEventListener('click', () => {
+  const textoPlano = datosTablaFinal.map(f => f.join(' | ')).join('\n');
+  navigator.clipboard.writeText(textoPlano)
+    .then(() => mostrarAviso('✅ Tabla copiada al portapapeles', 'exito'))
+    .catch(() => mostrarAviso('❌ No se pudo copiar', 'error'));
 });
 
-btnNueva.addEventListener('click', () => {
+btnEnviarWhatsApp.addEventListener('click', () => {
+  const textoPlano = datosTablaFinal.map(f => f.join(' | ')).join('\n');
+  const mensaje = encodeURIComponent('🏝️ TABLA DESDE IMAGEN\n\n' + textoPlano);
+  window.open(`https://wa.me/?text=${mensaje}`, '_blank');
+  mostrarAviso('💬 Abriendo WhatsApp...', 'exito');
+});
+
+btnEmpezarDeNuevo.addEventListener('click', () => {
+  // ✅ REINICIAR TODO
   selImagen.value = '';
-  imagenCargada = null;
-  vistaImagen.style.display = 'none';
-  textoExtraido.value = '';
-  contenedorTabla.innerHTML = '';
-  paso3.style.display = 'none';
-  paso1.style.display = 'block';
+  imagenSubida.src = '';
+  contenedorImagen.classList.add('oculto');
+  textoLeido.value = '';
+  contenedorTablaReal.innerHTML = '';
+  datosTablaFinal = [];
+  progresoOCR.style.width = '0%';
+  
+  paso3.classList.add('oculto');
+  paso1.classList.remove('oculto');
 });
 
-function mostrarMensaje(texto, tipo) {
-  mensaje.textContent = texto;
-  mensaje.style.padding = '10px';
-  mensaje.style.marginTop = '10px';
-  mensaje.style.borderRadius = '6px';
-  mensaje.style.background = tipo==='exito'?'#dcfce7':'#fee2e2';
-  mensaje.style.color = tipo==='exito'?'#166534':'#991b1b';
-  setTimeout(() => mensaje.textContent='', 4000);
+// ==============================================
+// UTILIDADES
+// ==============================================
+function mostrarAviso(texto, tipo) {
+  avisos.textContent = texto;
+  avisos.className = `aviso aviso-${tipo}`;
+  setTimeout(() => avisos.textContent = '', 6000);
 }
 
