@@ -6,13 +6,13 @@
   <title>MAR Caribe</title>
   <link rel="stylesheet" href="css/estilos.css">
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 </head>
 <body>
 
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen → IA Local → Tabla</p>
+  <p>Imagen → IA Local / Tabla → WhatsApp</p>
 </header>
 
 <main>
@@ -39,11 +39,12 @@
         </label>
       </div>
       <button id="btnDetectar">🔍 Detectar con IA</button>
+      <button id="btnAnalizarTabla">📐 Analizar como Tabla</button>
     </div>
   </div>
 
   <div id="paso2" class="oculto">
-    <h2>2. Resultados de la IA</h2>
+    <h2 id="tituloPaso2">Resultados</h2>
     <canvas id="lienzoDeteccion"></canvas>
     <div id="resultadosIA"></div>
     <button id="btnExtraerTabla">📊 Extraer como tabla</button>

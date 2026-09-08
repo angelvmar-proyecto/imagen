@@ -1,7 +1,7 @@
 {
   "name": "mar-caribe",
   "version": "1.0.0",
-  "description": "MAR Caribe - Detección con 2 modelos IA locales",
+  "description": "MAR Caribe - IA Local + Detección de Tablas",
   "main": "www/index.html",
   "scripts": {
     "sync": "npx cap sync android",
@@ -11,7 +11,7 @@
     "@capacitor/android": "^6.0.0",
     "@capacitor/core": "^6.0.0",
     "@tensorflow/tfjs": "^4.17.0",
-    "@tensorflow/tfjs-tflite": "^0.0.1-alpha.10"
+    "@tensorflow-models/coco-ssd": "^2.2.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0"

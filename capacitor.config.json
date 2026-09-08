@@ -6,12 +6,6 @@
     "androidScheme": "file"
   },
   "android": {
-    "allowMixedContent": true,
-    "cordova": {
-      "preferences": {
-        "android-minSdkVersion": "24",
-        "android-targetSdkVersion": "34"
-      }
-    }
+    "allowMixedContent": true
   }
 }

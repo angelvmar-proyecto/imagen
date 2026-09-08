@@ -7,6 +7,7 @@ p{color:#64748b;margin-bottom:16px;}
 button{width:100%;padding:14px;margin:8px 0;border:none;border-radius:10px;font-size:16px;cursor:pointer;}
 button:active{transform:scale(0.98);}
 #btnElegir,#btnDetectar,#btnExtraerTabla{background:#0891b2;color:white;}
+#btnAnalizarTabla{background:#8b5cf6;color:white;}
 #btnCopiar,#btnWhatsApp{background:#10b981;color:white;}
 #btnVolver,#btnNueva{background:#e2e8f0;color:#334155;}
 img,canvas{max-width:100%;border-radius:10px;margin:10px 0;background:white;}

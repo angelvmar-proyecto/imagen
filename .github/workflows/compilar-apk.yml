@@ -32,11 +32,6 @@ jobs:
       - name: 🔄 Sincronizar Capacitor con Android
         run: npx cap sync android
 
-      - name: 📁 Copiar modelos a ruta de assets
-        run: |
-          mkdir -p android/app/src/main/assets/public/models
-          cp android/app/src/main/assets/models/* android/app/src/main/assets/public/models/ || true
-
       - name: 🔧 Dar permisos a Gradle
         run: chmod +x android/gradlew
 
