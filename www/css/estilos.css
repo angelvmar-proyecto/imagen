@@ -1,26 +1,13 @@
-*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,sans-serif;}
-body{background:#f0f4f8;padding:16px;max-width:480px;margin:0 auto;}
-header{background:linear-gradient(135deg,#0891b2,#0d9488);color:white;padding:20px;border-radius:12px;margin-bottom:20px;}
-h1{font-size:24px;}
-h2{color:#0891b2;margin:20px 0 10px;font-size:18px;}
-p{color:#64748b;margin-bottom:8px;}
-button{width:100%;padding:14px;margin:8px 0;border:none;border-radius:10px;font-size:16px;cursor:pointer;}
-button:active{transform:scale(0.98);}
-#btnElegir,#btnDetectar,#btnExtraerTabla{background:#0891b2;color:white;}
-#btnAnalizarTabla{background:#8b5cf6;color:white;}
-#btnCopiar,#btnWhatsApp{background:#10b981;color:white;}
-#btnVolver,#btnNueva{background:#e2e8f0;color:#334155;}
-img,canvas{max-width:100%;border-radius:10px;margin:10px 0;background:white;}
-.selectorModelo{display:flex;gap:16px;margin:12px 0;padding:12px;background:#e2e8f0;border-radius:8px;flex-wrap:wrap;}
-.selectorModelo label{display:flex;align-items:center;gap:6px;cursor:pointer;}
-.selectorModelo label.desactivado{opacity:0.5;cursor:not-allowed;}
-.barra{width:100%;height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden;margin:12px 0;}
-#barraProgreso{height:100%;background:linear-gradient(90deg,#0891b2,#0d9488);width:0%;transition:width 0.3s;}
-table{width:100%;border-collapse:collapse;margin:15px 0;background:white;border-radius:10px;overflow:hidden;}
-th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #e5e7eb;}
-th{background:#f1f5f9;color:#475569;font-weight:600;}
-.oculto{display:none !important;}
-.aviso{padding:12px;border-radius:8px;margin-top:12px;text-align:center;font-weight:500;}
-.aviso-exito{background:#dcfce7;color:#166534;}
-.aviso-error{background:#fee2e2;color:#991b1b;}
-#archivoImagen{display:none;}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+body { padding: 16px; background: #f5f5f5; color: #333; max-width: 600px; margin: 0 auto; }
+header { text-align: center; margin-bottom: 24px; }
+h1 { color: #2c3e50; margin-bottom: 8px; }
+.barra { width: 100%; height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; margin: 16px 0; }
+.barra div { height: 100%; background: #27ae60; width: 0%; transition: width 0.3s; }
+p { margin: 8px 0; line-height: 1.5; }
+button, input[type="file"] { width: 100%; padding: 12px; margin: 8px 0; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; }
+button { background: #3498db; color: white; }
+button:hover { background: #2980b9; }
+.oculto { display: none !important; }
+img { max-width: 100%; height: auto; margin: 16px 0; border-radius: 8px; border: 1px solid #ddd; }
+table { width: 100%; margin: 16px 0; }
