@@ -1,13 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAR Caribe - Detector IA</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MAR Caribe — Dashboard</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; font-family:system-ui, -apple-system, sans-serif; }
+    body { background:#f0f4f8; color:#1e293b; min-height:100vh; }
+    header { background:linear-gradient(135deg, #0891b2, #0d9488); color:white; padding:20px; text-align:center; }
+    h1 { font-size:22px; margin-bottom:4px; }
+    .subtitulo { font-size:14px; opacity:0.9; }
+    .contenedor { padding:16px; }
+    .tarjeta { background:white; border-radius:12px; padding:20px; margin-bottom:16px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+    h2 { font-size:18px; color:#0891b2; margin-bottom:12px; }
+    .boton { display:block; width:100%; background:#0891b2; color:white; border:none; padding:14px; border-radius:8px; font-size:16px; font-weight:500; margin:8px 0; cursor:pointer; }
+    .boton:active { background:#0e7490; }
+    .estado { padding:12px; border-radius:8px; background:#f0fdf4; border-left:4px solid:#22c55e; color:#166534; margin-top:12px; }
+  </style>
 </head>
 <body>
-  <h1>MAR Caribe — IA Lista ✅</h1>
-  <script type="module" src="js/detector-doble.js"></script>
+  <header>
+    <h1>🏝️ MAR Caribe</h1>
+    <p class="subtitulo">Sistema de Gestión — Timeshare & Logística</p>
+  </header>
+
+  <main class="contenedor">
+    <div class="tarjeta">
+      <h2>📊 Panel Principal</h2>
+      <p>Bienvenido al sistema de gestión MAR Caribe.</p>
+      <button class="boton" onclick="saludar()">Probar App</button>
+      <button class="boton" onclick="verEstado()">Ver Estado</button>
+      <div id="resultado" class="estado" style="display:none;"></div>
+    </div>
+
+    <div class="tarjeta">
+      <h2>📋 Módulos</h2>
+      <button class="boton" style="background:#0d9488;">Dashboard Timeshare</button>
+      <button class="boton" style="background:#f59e0b;">Escaneo OCR</button>
+      <button class="boton" style="background:#3b82f6;">Envío WhatsApp</button>
+    </div>
+  </main>
+
+  <script>
+    function saludar() {
+      const res = document.getElementById('resultado');
+      res.style.display = 'block';
+      res.innerHTML = '✅ ¡La app funciona correctamente! 🎉';
+    }
+    function verEstado() {
+      const res = document.getElementById('resultado');
+      res.style.display = 'block';
+      res.innerHTML = '🟢 Sistema en línea<br>📦 Plataforma: Android<br>🕒 ' + new Date().toLocaleString();
+    }
+  </script>
 </body>
 </html>
 
