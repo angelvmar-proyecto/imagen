@@ -1,17 +1,14 @@
-// Estado global
+// ===== APP: LECTOR DE TABLAS DESDE IMAGEN =====
 const App = {
-  paginaActiva: 'dashboard',
-  datos: {
-    reservas: [],
-    escaneos: [],
-    ultimoMensaje: null
-  },
+  paginaActiva: 'seleccion',
+  imagenActual: null,
+  textoReconocido: '',
+  datosTabla: { cabeceras: [], filas: [] },
 
   init() {
-    this.navegar('dashboard');
-    this.cargarReservas();
     this.vincularEventos();
-    console.log('🏝️ MAR Caribe — App inicializada');
+    this.navegar('seleccion');
+    console.log('🏝️ MAR Caribe — Lector de Tablas inicializado');
   },
 
   navegar(paginaId) {
@@ -19,147 +16,160 @@ const App = {
     document.querySelectorAll('nav button').forEach(b => b.classList.remove('activo'));
     
     document.getElementById(paginaId).classList.add('activa');
-    document.querySelector(`[data-pagina="${paginaId}"]`).classList.add('activo');
+    document.querySelector(`nav button[data-pagina="${paginaId}"]`).classList.add('activo');
     
     this.paginaActiva = paginaId;
   },
 
   vincularEventos() {
-    // Navegación
+    // Navegación inferior
     document.querySelectorAll('nav button').forEach(btn => {
       btn.addEventListener('click', () => this.navegar(btn.dataset.pagina));
     });
 
-    // Botones Dashboard
-    document.getElementById('btn-escaneo')?.addEventListener('click', () => this.navegar('ocr'));
-    document.getElementById('btn-whatsapp')?.addEventListener('click', () => this.navegar('compartir'));
-
-    // Botones OCR
-    document.getElementById('btn-camara')?.addEventListener('click', () => this.escanearCamara());
-    document.getElementById('btn-archivo')?.addEventListener('click', () => this.seleccionarArchivo());
-    document.getElementById('btn-procesar')?.addEventListener('click', () => this.procesarOCR());
-
-    // Botones Compartir
-    document.getElementById('btn-enviar-whatsapp')?.addEventListener('click', () => this.enviarWhatsApp());
-    document.getElementById('btn-copiar')?.addEventListener('click', () => this.copiarMensaje());
-
-    // Formulario Reserva
-    document.getElementById('form-reserva')?.addEventListener('submit', e => {
-      e.preventDefault();
-      this.guardarReserva();
+    // Selección de imagen
+    document.getElementById('btn-seleccionar').addEventListener('click', () => {
+      document.getElementById('input-imagen').click();
     });
+
+    document.getElementById('input-imagen').addEventListener('change', (e) => this.cargarImagen(e));
+    document.getElementById('btn-camara').addEventListener('click', () => this.usarCamara());
+    document.getElementById('btn-procesar').addEventListener('click', () => this.procesarImagen());
+
+    // Paso 2: Texto
+    document.getElementById('btn-convertir-tabla').addEventListener('click', () => this.convertirATabla());
+    document.getElementById('btn-volver-imagen').addEventListener('click', () => this.navegar('seleccion'));
+
+    // Paso 3: Tabla
+    document.getElementById('btn-copiar-tabla').addEventListener('click', () => this.copiarTabla());
+    document.getElementById('btn-compartir-whatsapp').addEventListener('click', () => this.compartirPorWhatsApp());
+    document.getElementById('btn-nuevo-proceso').addEventListener('click', () => this.reiniciarProceso());
   },
 
-  // ===== DASHBOARD =====
-  cargarReservas() {
-    const guardadas = localStorage.getItem('marcaribe_reservas');
-    if (guardadas) this.datos.reservas = JSON.parse(guardadas);
-    this.actualizarTablaReservas();
-  },
+  // ===== PASO 1: CARGAR IMAGEN =====
+  cargarImagen(evento) {
+    const archivo = evento.target.files[0];
+    if (!archivo) return;
 
-  guardarReserva() {
-    const reserva = {
-      id: Date.now(),
-      nombre: document.getElementById('res-nombre').value,
-      fecha: document.getElementById('res-fecha').value,
-      personas: document.getElementById('res-personas').value,
-      estado: document.getElementById('res-estado').value,
-      notas: document.getElementById('res-notas').value,
-      creado: new Date().toLocaleString()
+    if (!archivo.type.startsWith('image/')) {
+      this.mostrarEstado('estado-seleccion', '❌ El archivo seleccionado no es una imagen', 'error');
+      return;
+    }
+
+    const lector = new FileReader();
+    lector.onload = (e) => {
+      this.imagenActual = e.target.result;
+      document.getElementById('imagen-preview').src = this.imagenActual;
+      document.getElementById('vista-previa').classList.remove('oculto');
+      document.getElementById('btn-procesar').classList.remove('oculto');
+      this.mostrarEstado('estado-seleccion', '✅ Imagen cargada correctamente', 'exito');
     };
+    lector.readAsDataURL(archivo);
+  },
 
-    if (!reserva.nombre || !reserva.fecha) {
-      this.mostrarEstado('estado-dashboard', 'Por favor completa nombre y fecha', 'alerta');
+  usarCamara() {
+    this.mostrarEstado('estado-seleccion', '📷 Abriendo cámara... Toma la foto y confirma', 'info');
+    // En Capacitor real usaríamos: Capacitor.Camera.getPhoto()
+    // Por ahora abrimos selector de archivo que incluye cámara en Android
+    document.getElementById('input-imagen').click();
+  },
+
+  // ===== PASO 2: PROCESAR IMAGEN → TEXTO =====
+  procesarImagen() {
+    if (!this.imagenActual) {
+      this.mostrarEstado('estado-seleccion', '⚠️ Primero selecciona una imagen', 'alerta');
       return;
     }
 
-    this.datos.reservas.unshift(reserva);
-    localStorage.setItem('marcaribe_reservas', JSON.stringify(this.datos.reservas));
-    
-    document.getElementById('form-reserva').reset();
-    this.actualizarTablaReservas();
-    this.mostrarEstado('estado-dashboard', '✅ Reserva guardada correctamente', 'exito');
-  },
-
-  actualizarTablaReservas() {
-    const tabla = document.getElementById('tabla-reservas');
-    if (!tabla) return;
-    
-    tabla.innerHTML = this.datos.reservas.map(r => `
-      <tr>
-        <td>${r.nombre}</td>
-        <td>${r.fecha}</td>
-        <td>${r.personas}</td>
-        <td><span style="color:${r.estado==='Confirmada'?'#22c55e':'#f59e0b'}">${r.estado}</span></td>
-      </tr>
-    `).join('') || '<tr><td colspan="4" style="text-align:center;color:#94a3b8">Sin reservas registradas</td></tr>';
-  },
-
-  // ===== OCR / ESCANEO =====
-  escanearCamara() {
-    this.mostrarEstado('estado-ocr', '📷 Accediendo a la cámara...', 'info');
-    this.simularProgreso(80, () => {
-      document.getElementById('ocr-texto').value = 
-        '=== ESCANEADO DESDE CÁMARA ===\n' +
-        'Fecha: ' + new Date().toLocaleString() + '\n' +
-        'Cliente: Pérez López, Juan\n' +
-        'Habitación: 302\n' +
-        'Entrada: 2026-09-10 | Salida: 2026-09-15\n' +
-        'Personas: 4 | Adultos: 2 | Menores: 2\n' +
-        'Total: $12,450.00 MXN\n' +
-        'Estado: Confirmada ✅';
-      this.mostrarEstado('estado-ocr', '✅ Imagen capturada y procesada', 'exito');
+    this.navegar('texto');
+    this.mostrarEstado('estado-texto', '🔍 Analizando imagen y leyendo texto...', 'info');
+    this.mostrarProgreso(150, () => {
+      // === SIMULACIÓN DE OCR — Aquí se integrará Tesseract.js después ===
+      this.textoReconocido = this.simularLecturaOCR();
+      document.getElementById('texto-reconocido').value = this.textoReconocido;
+      this.mostrarEstado('estado-texto', '✅ Texto extraído correctamente', 'exito');
     });
   },
 
-  seleccionarArchivo() {
-    this.mostrarEstado('estado-ocr', '📂 Seleccionando imagen...', 'info');
-    this.simularProgreso(60, () => {
-      document.getElementById('ocr-texto').value = 
-        '=== ARCHIVO CARGADO ===\n' +
-        'Fuente: Galería / Archivo local\n' +
-        'Fecha: ' + new Date().toLocaleString() + '\n' +
-        'Reserva #8872 | Cliente: Martínez Ana\n' +
-        'Periodo: 2026-10-01 al 2026-10-07\n' +
-        'Semanas: 1 | Tipo: Gold\n' +
-        'Monto: $18,200.00 MXN';
-      this.mostrarEstado('estado-ocr', '✅ Archivo procesado correctamente', 'exito');
-    });
+  simularLecturaOCR() {
+    // Esto simula lo que leería Tesseract.js de una tabla real
+    return `FECHA        | NOMBRE          | HAB | ENTRADA    | SALIDA     | PAX | TOTAL
+-------------|-----------------|-----|------------|------------|-----|-----------
+09/08/2026   | Pérez Juan      | 302 | 09/10/2026 | 09/15/2026 | 4   | $12,450.00
+09/08/2026   | López María     | 405 | 09/12/2026 | 09/18/2026 | 2   | $8,900.00
+09/08/2026   | García Carlos   | 201 | 09/15/2026 | 09/20/2026 | 3   | $9,600.00
+09/08/2026   | Ana Martínez    | 510 | 10/01/2026 | 10/07/2026 | 5   | $18,200.00`;
   },
 
-  procesarOCR() {
-    const texto = document.getElementById('ocr-texto').value;
-    if (!texto) {
-      this.mostrarEstado('estado-ocr', '⚠️ No hay texto para procesar', 'alerta');
+  // ===== PASO 3: CONVERTIR TEXTO → TABLA =====
+  convertirATabla() {
+    const texto = document.getElementById('texto-reconocido').value;
+    if (!texto.trim()) {
+      this.mostrarEstado('estado-texto', '⚠️ No hay texto para convertir', 'alerta');
       return;
     }
-    this.mostrarEstado('estado-ocr', '🔍 Analizando tablas y datos...', 'info');
-    this.simularProgreso(100, () => {
-      this.datos.ultimoMensaje = texto;
-      this.mostrarEstado('estado-ocr', '✅ Datos extraídos y listos para compartir', 'exito');
-    });
+
+    this.textoReconocido = texto;
+    this.navegar('tabla');
+    this.mostrarEstado('estado-tabla', '📊 Convirtiendo a tabla estructurada...', 'info');
+
+    // Parsear el texto reconociendo separadores | o espacios
+    const lineas = texto.trim().split('\n').filter(l => l.trim() && !l.includes('---'));
+    
+    if (lineas.length === 0) {
+      this.mostrarEstado('estado-tabla', '❌ No se encontraron datos en el texto', 'error');
+      return;
+    }
+
+    // Primera línea = cabeceras
+    this.datosTabla.cabeceras = this.parsearFila(lineas[0]);
+    
+    // Resto de líneas = filas
+    this.datosTabla.filas = lineas.slice(1).map(fila => this.parsearFila(fila));
+
+    this.renderizarTabla();
+    this.mostrarEstado('estado-tabla', `✅ Tabla generada: ${this.datosTabla.filas.length} filas`, 'exito');
   },
 
-  // ===== COMPARTIR / WHATSAPP =====
-  enviarWhatsApp() {
-    const texto = document.getElementById('mensaje-texto').value || this.datos.ultimoMensaje;
-    if (!texto) {
-      this.mostrarEstado('estado-compartir', '⚠️ No hay mensaje para enviar', 'alerta');
-      return;
+  parsearFila(textoFila) {
+    // Reconocer separador: | o múltiples espacios
+    if (textoFila.includes('|')) {
+      return textoFila.split('|').map(c => c.trim()).filter(c => c !== '');
+    } else {
+      // Para formato con espacios — detecta columnas por múltiples espacios
+      return textoFila.split(/\s{2,}/).map(c => c.trim()).filter(c !== '');
     }
+  },
 
-    const numero = document.getElementById('whatsapp-numero').value.replace(/\D/g, '');
-    if (!numero || numero.length < 10) {
-      this.mostrarEstado('estado-compartir', '⚠️ Ingresa un número válido', 'alerta');
-      return;
-    }
+  renderizarTabla() {
+    // Cabecera
+    const elCabecera = document.getElementById('tabla-cabecera');
+    elCabecera.innerHTML = '<tr>' + 
+      this.datosTabla.cabeceras.map(c => `<th>${c}</th>`).join('') + 
+    '</tr>';
 
-    const mensaje = encodeURIComponent('🏝️ MAR Caribe — Datos de Reserva\n\n' + texto);
-    const url = `https://wa.me/52${numero}?text=${mensaje}`;
+    // Cuerpo
+    const elCuerpo = document.getElementById('tabla-cuerpo');
+    elCuerpo.innerHTML = this.datosTabla.filas.map(fila => 
+      '<tr>' + fila.map(celda => `<td>${celda}</td>`).join('') + '</tr>'
+    ).join('');
+  },
+
+  // ===== ACCIONES FINALES =====
+  copiarTabla() {
+    const textoTabla = this.generarTextoTabla();
+    navigator.clipboard.writeText(textoTabla)
+      .then(() => this.mostrarEstado('estado-tabla', '✅ ¡Tabla copiada al portapapeles!', 'exito'))
+      .catch(() => this.mostrarEstado('estado-tabla', '❌ No se pudo copiar', 'error'));
+  },
+
+  compartirPorWhatsApp() {
+    const textoTabla = this.generarTextoTabla();
+    const mensaje = encodeURIComponent('🏝️ MAR Caribe — Tabla Convertida\n\n' + textoTabla);
+    const url = `https://wa.me/?text=${mensaje}`;
     
-    this.mostrarEstado('estado-compartir', '🔗 Abriendo WhatsApp...', 'exito');
+    this.mostrarEstado('estado-tabla', '💬 Abriendo WhatsApp...', 'exito');
     
-    // En Capacitor abre en navegador; en móvil abre WhatsApp directo
     if (window.Capacitor?.Browser) {
       Capacitor.Browser.open({ url });
     } else {
@@ -167,16 +177,35 @@ const App = {
     }
   },
 
-  copiarMensaje() {
-    const texto = document.getElementById('mensaje-texto').value || this.datos.ultimoMensaje;
-    if (!texto) {
-      this.mostrarEstado('estado-compartir', '⚠️ No hay texto para copiar', 'alerta');
-      return;
-    }
+  generarTextoTabla() {
+    let texto = '🏝️ MAR Caribe — Tabla Convertida\n';
+    texto += 'Fecha de procesamiento: ' + new Date().toLocaleString() + '\n\n';
+    
+    // Cabeceras
+    texto += this.datosTabla.cabeceras.join(' | ') + '\n';
+    texto += '-'.repeat(40) + '\n';
+    
+    // Filas
+    this.datosTabla.filas.forEach(fila => {
+      texto += fila.join(' | ') + '\n';
+    });
+    
+    return texto;
+  },
 
-    navigator.clipboard.writeText('🏝️ MAR Caribe\n\n' + texto)
-      .then(() => this.mostrarEstado('estado-compartir', '✅ ¡Mensaje copiado al portapapeles!', 'exito'))
-      .catch(() => this.mostrarEstado('estado-compartir', '❌ No se pudo copiar', 'error'));
+  reiniciarProceso() {
+    this.imagenActual = null;
+    this.textoReconocido = '';
+    this.datosTabla = { cabeceras: [], filas: [] };
+    
+    document.getElementById('input-imagen').value = '';
+    document.getElementById('vista-previa').classList.add('oculto');
+    document.getElementById('btn-procesar').classList.add('oculto');
+    document.getElementById('texto-reconocido').value = '';
+    document.getElementById('tabla-cabecera').innerHTML = '';
+    document.getElementById('tabla-cuerpo').innerHTML = '';
+    
+    this.navegar('seleccion');
   },
 
   // ===== UTILIDADES =====
@@ -185,21 +214,24 @@ const App = {
     if (!el) return;
     el.className = `estado estado-${tipo} visible`;
     el.textContent = mensaje;
-    setTimeout(() => el.classList.remove('visible'), 5000);
+    clearTimeout(this._timeoutEstado);
+    this._timeoutEstado = setTimeout(() => el.classList.remove('visible'), 6000);
   },
 
-  simularProgreso(segundos, callback) {
+  mostrarProgreso(ms, callback) {
     const barra = document.getElementById('barra-progreso');
     const progreso = document.getElementById('progreso');
-    if (barra) barra.classList.remove('oculto');
+    barra.classList.remove('oculto');
+    progreso.style.width = '0%';
+    
     let pct = 0;
     const intervalo = setInterval(() => {
-      pct += 100 / (segundos * 10);
+      pct += 100 / (ms / 100);
       if (pct >= 100) {
         pct = 100;
         clearInterval(intervalo);
         setTimeout(() => {
-          if (barra) barra.classList.add('oculto');
+          barra.classList.add('oculto');
           progreso.style.width = '0%';
           callback();
         }, 300);
@@ -209,7 +241,7 @@ const App = {
   }
 };
 
-// Iniciar app al cargar
+// Iniciar app
 document.addEventListener('DOMContentLoaded', () => App.init());
 </script>
 

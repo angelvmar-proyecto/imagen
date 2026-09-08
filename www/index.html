@@ -4,152 +4,116 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#0891b2">
-  <title>MAR Caribe — Sistema Completo</title>
+  <title>MAR Caribe — Lectura de Tablas</title>
   <link rel="stylesheet" href="css/estilos.css">
 </head>
 <body>
 
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p class="subtitulo">Timeshare · OCR · Logística · WhatsApp</p>
+  <p class="subtitulo">Lectura y Conversión de Tablas desde Imagen</p>
 </header>
 
 <main class="contenedor">
-  <!-- ===== PÁGINA DASHBOARD ===== -->
-  <section id="dashboard" class="pagina activa">
+  <!-- ===== PÁGINA 1: SELECCIONAR IMAGEN ===== -->
+  <section id="seleccion" class="pagina activa">
     <div class="tarjeta">
-      <h2>📊 Panel de Control</h2>
-      <p style="color:#64748b; margin-bottom:16px;">Gestión de reservas y datos de clientes</p>
+      <h2>📸 Paso 1: Seleccionar Imagen</h2>
+      <p style="color:#64748b; margin-bottom:16px;">
+        Selecciona la imagen que recibiste por WhatsApp o de cualquier origen
+      </p>
       
-      <div class="fila">
-        <button class="boton boton-primario" id="btn-escaneo">
-          <span>📷</span> Escanear OCR
-        </button>
-        <button class="boton boton-secundario" id="btn-whatsapp">
-          <span>📲</span> Compartir
-        </button>
+      <input type="file" id="input-imagen" accept="image/*" style="display:none;">
+      
+      <button class="boton boton-primario" id="btn-seleccionar">
+        <span>📁</span> Elegir Imagen del Dispositivo
+      </button>
+      
+      <button class="boton boton-secundario" id="btn-camara">
+        <span>📷</span> Tomar Foto con Cámara
+      </button>
+
+      <!-- Vista previa de la imagen -->
+      <div id="vista-previa" class="oculto" style="margin-top:16px; text-align:center;">
+        <img id="imagen-preview" style="max-width:100%; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.1);">
       </div>
+
+      <button class="boton boton-exito oculto" id="btn-procesar" style="margin-top:16px;">
+        <span>🔍</span> 2. Reconocer y Convertir en Tabla
+      </button>
     </div>
 
-    <div class="tarjeta">
-      <h2>➕ Nueva Reserva</h2>
-      <form id="form-reserva">
-        <div class="campo">
-          <label>Nombre del Cliente</label>
-          <input type="text" id="res-nombre" placeholder="Apellidos, Nombres" required>
-        </div>
-        <div class="fila">
-          <div class="campo">
-            <label>Fecha de Entrada</label>
-            <input type="date" id="res-fecha" required>
-          </div>
-          <div class="campo">
-            <label>Personas</label>
-            <input type="number" id="res-personas" placeholder="2" min="1" max="12">
-          </div>
-        </div>
-        <div class="campo">
-          <label>Estado</label>
-          <select id="res-estado">
-            <option value="Pendiente">⏳ Pendiente</option>
-            <option value="Confirmada" selected>✅ Confirmada</option>
-            <option value="Cancelada">❌ Cancelada</option>
-          </select>
-        </div>
-        <div class="campo">
-          <label>Notas / Observaciones</label>
-          <textarea id="res-notas" rows="2" placeholder="Detalles especiales..."></textarea>
-        </div>
-        <button type="submit" class="boton boton-exito">💾 Guardar Reserva</button>
-      </form>
-      <div id="estado-dashboard" class="estado"></div>
-    </div>
-
-    <div class="tarjeta">
-      <h2>📋 Reservas Registradas</h2>
-      <table class="tabla">
-        <thead>
-          <tr>
-            <th>Cliente</th>
-            <th>Fecha</th>
-            <th>Pax</th>
-            <th>Estado</th>
-          </tr>
-        </thead>
-        <tbody id="tabla-reservas"></tbody>
-      </table>
-    </div>
+    <div id="estado-seleccion" class="estado"></div>
   </section>
 
-  <!-- ===== PÁGINA OCR / ESCANEO ===== -->
-  <section id="ocr" class="pagina">
+  <!-- ===== PÁGINA 2: TEXTO RECONOCIDO ===== -->
+  <section id="texto" class="pagina">
     <div class="tarjeta">
-      <h2>📷 Escaneo y Reconocimiento</h2>
-      <p style="color:#64748b; margin-bottom:16px;">Extrae datos de imágenes o documentos</p>
+      <h2>📝 Paso 2: Texto Extraído</h2>
+      <p style="color:#64748b; margin-bottom:16px;">
+        Texto leído de la imagen. Revísalo antes de convertir
+      </p>
       
-      <div class="fila">
-        <button class="boton boton-primario" id="btn-camara">
-          <span>📸</span> Usar Cámara
-        </button>
-        <button class="boton boton-outline" id="btn-archivo">
-          <span>📁</span> Desde Archivo
-        </button>
-      </div>
-
       <div class="barra-progreso oculto" id="barra-progreso">
         <div class="progreso" id="progreso"></div>
       </div>
 
-      <div class="campo" style="margin-top:16px;">
-        <label>Texto Extraído</label>
-        <textarea id="ocr-texto" rows="10" placeholder="El texto reconocido aparecerá aquí..."></textarea>
+      <textarea id="texto-reconocido" rows="12" style="width:100%; padding:12px; border:1px solid #e2e8f0; border-radius:10px; font-size:14px; background:#fafafa;" placeholder="El texto reconocido aparecerá aquí..."></textarea>
+      
+      <div class="fila" style="margin-top:16px;">
+        <button class="boton boton-primario" id="btn-convertir-tabla">
+          <span>📊</span> 3. Convertir a Tabla
+        </button>
+        <button class="boton boton-outline" id="btn-volver-imagen">
+          <span>⬅️</span> Cambiar Imagen
+        </button>
       </div>
-
-      <button class="boton boton-alerta" id="btn-procesar">🔍 Procesar y Extraer Datos</button>
-      <div id="estado-ocr" class="estado"></div>
     </div>
+    <div id="estado-texto" class="estado"></div>
   </section>
 
-  <!-- ===== PÁGINA COMPARTIR / WHATSAPP ===== -->
-  <section id="compartir" class="pagina">
+  <!-- ===== PÁGINA 3: TABLA GENERADA ===== -->
+  <section id="tabla" class="pagina">
     <div class="tarjeta">
-      <h2>📲 Compartir por WhatsApp</h2>
-      <p style="color:#64748b; margin-bottom:16px;">Envía los datos extraídos directamente</p>
+      <h2>📋 Paso 3: Tabla Generada</h2>
+      <p style="color:#64748b; margin-bottom:16px;">
+        Datos organizados en tabla. Puedes editar, copiar o compartir
+      </p>
       
-      <div class="campo">
-        <label>Número de WhatsApp</label>
-        <input type="tel" id="whatsapp-numero" placeholder="Ej: 9981234567" maxlength="15">
+      <div style="overflow-x:auto;">
+        <table class="tabla" id="tabla-datos">
+          <thead id="tabla-cabecera"></thead>
+          <tbody id="tabla-cuerpo"></tbody>
+        </table>
       </div>
 
-      <div class="campo">
-        <label>Mensaje a Enviar</label>
-        <textarea id="mensaje-texto" rows="12" placeholder="Escribe o pega el mensaje..."></textarea>
-      </div>
-
-      <div class="fila">
-        <button class="boton boton-exito" id="btn-enviar-whatsapp">
+      <div class="fila" style="margin-top:20px;">
+        <button class="boton boton-exito" id="btn-copiar-tabla">
+          <span>📋</span> Copiar Tabla
+        </button>
+        <button class="boton boton-secundario" id="btn-compartir-whatsapp">
           <span>💬</span> Enviar por WhatsApp
         </button>
-        <button class="boton boton-outline" id="btn-copiar">
-          <span>📋</span> Copiar
-        </button>
       </div>
 
-      <div id="estado-compartir" class="estado"></div>
+      <button class="boton boton-outline" id="btn-nuevo-proceso" style="margin-top:10px;">
+        <span>🔄</span> Nueva Imagen
+      </button>
     </div>
+    <div id="estado-tabla" class="estado"></div>
   </section>
 </main>
 
 <!-- NAVEGACIÓN INFERIOR -->
 <nav>
-  <button data-pagina="dashboard" class="activo">
-    <span>🏠</span> Inicio
+  <button data-pagina="seleccion" class="activo">
+    <span>📷</span> Imagen
   </button>
-  <button data-pagina="ocr">
-    <span>📷</span> Escanear
+  <button data-pagina="texto">
+    <span>📝</span> Texto
   </button>
-  <button data-pagina="compartir">
-    <span>📲</span> Compartir
+  <button data-pagina="tabla">
+    <span>📊</span> Tabla
   </button>
 </nav>
 
