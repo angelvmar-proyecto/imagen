@@ -3,75 +3,92 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAR Caribe — 3 Motores IA</title>
-  <link rel="stylesheet" href="css/estilos.css">
+  <title>MAR Caribe — Tabla OCR</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
+    body{background:#f0f2f5;padding:16px;max-width:1200px;margin:0 auto;}
+    h1,h2{text-align:center;color:#1a1a1a;margin-bottom:20px;}
+    .motor-card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:20px;margin-bottom:24px;}
+    .estado{padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:16px;background:#e9ecef;}
+    .barra-fondo{width:100%;height:12px;background:#e9ecef;border-radius:6px;overflow:hidden;margin-bottom:16px;}
+    .barra-progreso{height:100%;background:linear-gradient(90deg,#28a745,#20c997);border-radius:6px;transition:width 0.3s ease;}
+    .btn-group{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+    button{padding:14px 24px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.15s,box-shadow 0.15s;}
+    button:active{transform:scale(0.97);}
+    .btn-analizar{background:#007bff;color:#fff;}
+    .btn-reset{background:#dc3545;color:#fff;}
+    .logs{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:10px;font-family:monospace;font-size:13px;max-height:180px;overflow-y:auto;margin-top:12px;}
+    .resultado{margin-top:16px;overflow-x:auto;}
+    table{border-collapse:collapse;width:100%;margin-top:8px;}
+    th,td{border:1px solid #dee2e6;padding:8px 10px;text-align:left;font-size:14px;}
+    th{background:#212529;color:#fff;}
+    tr:nth-child(even){background:#f8f9fa;}
+    .oculto{display:none !important;}
+    .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:20px;}
+    .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
+    .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
+    #vistaImagen{margin-top:20px;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+  </style>
 </head>
 <body>
-<header>
-  <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen → Tabla — 3 Motores IA Independientes</p>
-</header>
-<main>
-  <!-- CARGA GLOBAL DE TF.js Y TFLite -->
-  <div id="cargaGlobal">
-    <h3>Cargando motores base...</h3>
-    <div class="barra"><div id="barraGlobal"></div></div>
-    <p id="estadoTF">⏳ TF.js: Cargando...</p>
-    <p id="estadoTFLite">⏳ TFLite: Cargando...</p>
-    <div id="logsGlobal"></div>
-  </div>
 
-  <!-- SELECCIÓN DE IMAGEN -->
-  <div id="seccionImagen" class="oculto">
-    <button id="btnSeleccionar">📁 Elegir Imagen</button>
+<div id="cargaGlobal" class="carga-pantalla">
+  <h2>Iniciando MAR Caribe...</h2>
+  <div class="barra-fondo" style="width:280px;">
+    <div id="barraGlobal" class="barra-progreso" style="width:0%"></div>
+  </div>
+  <p id="estadoTF">TF.js: ⏳ Pendiente</p>
+  <p id="estadoTFLite">TFLite: ⏳ Pendiente</p>
+  <div id="logsGlobal" class="logs" style="width:90%;max-width:500px;max-height:200px;"></div>
+</div>
+
+<div id="seccionImagen" class="oculto">
+  <h1>📊 MAR Caribe — OCR de Tablas</h1>
+  <div id="btnSeleccionar" class="seccion-imagen">
+    <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
-    <div id="vistaImagen" class="oculto">
-      <img id="imagenPreview" alt="Imagen de tabla">
+  </div>
+  <img id="vistaImagen" class="oculto" alt="Vista previa de la tabla">
+
+  <div class="motor-card">
+    <h2>🔍 Motor 1: SSD MobileNet v2</h2>
+    <div id="estadoM1" class="estado">⏳ Pendiente</div>
+    <div class="barra-fondo"><div id="barraM1" class="barra-progreso" style="width:0%"></div></div>
+    <div class="btn-group">
+      <button id="btnAnalizarM1" class="btn-analizar">🔍 Analizar</button>
+      <button id="btnResetM1" class="btn-reset">🔄 Reset</button>
     </div>
+    <div id="logsM1" class="logs"></div>
+    <div id="resultadoM1" class="resultado"></div>
   </div>
 
-  <!-- MOTOR 1: SSD MobileNet v2 -->
-  <section class="motor" id="motor1">
-    <h3>🔍 Motor 1: SSD MobileNet v2</h3>
-    <div class="estado">Estado: <span id="estadoM1">⏳ Pendiente</span></div>
-    <div class="barra"><div id="barraM1"></div></div>
-    <div class="botonesMotor">
-      <button id="btnAnalizarM1">🔍 Analizar</button>
-      <button id="btnResetM1" class="btnReset">🔄 Reset</button>
+  <div class="motor-card">
+    <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
+    <div id="estadoM2" class="estado">⏳ Pendiente</div>
+    <div class="barra-fondo"><div id="barraM2" class="barra-progreso" style="width:0%"></div></div>
+    <div class="btn-group">
+      <button id="btnAnalizarM2" class="btn-analizar">⚡ Analizar</button>
+      <button id="btnResetM2" class="btn-reset">🔄 Reset</button>
     </div>
-    <div id="resultadoM1" class="resultado"></div>
-    <div id="logsM1" class="logs"></div>
-  </section>
-
-  <!-- MOTOR 2: EfficientDet-Lite0 -->
-  <section class="motor" id="motor2">
-    <h3>⚡ Motor 2: EfficientDet-Lite0</h3>
-    <div class="estado">Estado: <span id="estadoM2">⏳ Pendiente</span></div>
-    <div class="barra"><div id="barraM2"></div></div>
-    <div class="botonesMotor">
-      <button id="btnAnalizarM2">⚡ Analizar</button>
-      <button id="btnResetM2" class="btnReset">🔄 Reset</button>
-    </div>
-    <div id="resultadoM2" class="resultado"></div>
     <div id="logsM2" class="logs"></div>
-  </section>
+    <div id="resultadoM2" class="resultado"></div>
+  </div>
 
-  <!-- MOTOR 3: YOLOv8n -->
-  <section class="motor" id="motor3">
-    <h3>🎯 Motor 3: YOLOv8n</h3>
-    <div class="estado">Estado: <span id="estadoM3">⏳ Pendiente</span></div>
-    <div class="barra"><div id="barraM3"></div></div>
-    <div class="botonesMotor">
-      <button id="btnAnalizarM3">🎯 Analizar</button>
-      <button id="btnResetM3" class="btnReset">🔄 Reset</button>
+  <div class="motor-card">
+    <h2>🎯 Motor 3: YOLOv8n</h2>
+    <div id="estadoM3" class="estado">⏳ Pendiente</div>
+    <div class="barra-fondo"><div id="barraM3" class="barra-progreso" style="width:0%"></div></div>
+    <div class="btn-group">
+      <button id="btnAnalizarM3" class="btn-analizar">🎯 Analizar</button>
+      <button id="btnResetM3" class="btn-reset">🔄 Reset</button>
     </div>
-    <div id="resultadoM3" class="resultado"></div>
     <div id="logsM3" class="logs"></div>
-  </section>
-</main>
+    <div id="resultadoM3" class="resultado"></div>
+  </div>
+</div>
 
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
