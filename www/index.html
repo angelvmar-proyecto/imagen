@@ -3,41 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAR Caribe — Leer Tablas</title>
+  <title>MAR Caribe</title>
   <link rel="stylesheet" href="css/estilos.css">
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 </head>
 <body>
-
-<h1>🏝️ MAR Caribe</h1>
-<p>Imagen → Texto → Tabla</p>
-
-<!-- SELECCIONAR IMAGEN -->
-<input type="file" id="archivo" accept="image/*">
-<button id="btnSeleccionar">📁 Elegir Imagen</button>
-
-<!-- VISTA DE TU IMAGEN -->
-<div id="vista" style="display:none; margin:15px 0;">
-  <img id="foto" alt="Tu imagen">
-  <button id="btnLeer">🔍 Leer Texto</button>
-</div>
-
-<!-- TEXTO LEÍDO -->
-<div id="cajaTexto" style="display:none; margin:15px 0;">
-  <h3>Texto extraído:</h3>
-  <textarea id="texto" rows="8"></textarea>
-  <button id="btnTabla">📊 Hacer Tabla</button>
-</div>
-
-<!-- TABLA FINAL -->
-<div id="cajaTabla" style="display:none; margin:15px 0;">
-  <h3>Tu tabla:</h3>
-  <div id="tabla"></div>
-  <button id="btnCopiar">📋 Copiar</button>
-  <button id="btnWA">💬 WhatsApp</button>
-  <button id="btnNuevo">🔄 Otra imagen</button>
-</div>
-
+<header>
+  <h1>🏝️ MAR Caribe</h1>
+  <p>Imagen → IA → Tabla</p>
+</header>
+<main>
+  <div id="carga">
+    <h2>Cargando modelos de IA...</h2>
+    <div class="barra"><div id="progreso"></div></div>
+    <p id="estado">Iniciando...</p>
+  </div>
+  <div id="paso1" class="oculto">
+    <h2>1. Elegir imagen</h2>
+    <input type="file" id="archivo" accept="image/*">
+    <button id="btnElegir">📁 Elegir Imagen</button>
+    <div id="vista" class="oculto">
+      <img id="imagen" alt="Imagen cargada">
+      <div class="selModelo">
+        <label><input type="radio" name="modelo" value="ssd" checked> SSD MobileNet (rápido)</label>
+        <label><input type="radio" name="modelo" value="efficientdet"> EfficientDet (preciso)</label>
+      </div>
+      <button id="btnDetectar">🔍 Detectar con IA</button>
+    </div>
+  </div>
+  <div id="paso2" class="oculto">
+    <h2>2. Resultados</h2>
+    <canvas id="lienzo"></canvas>
+    <div id="resultados"></div>
+    <button id="btnTabla">📊 Extraer tabla</button>
+    <button id="btnVolver">⬅️ Otra imagen</button>
+  </div>
+  <div id="paso3" class="oculto">
+    <h2>3. Tabla extraída</h2>
+    <div id="contenedorTabla"></div>
+    <button id="btnCopiar">📋 Copiar</button>
+    <button id="btnWA">💬 WhatsApp</button>
+    <button id="btnNuevo">🔄 Nueva imagen</button>
+  </div>
+  <div id="avisos"></div>
+</main>
 <script src="js/app.js"></script>
 </body>
 </html>
-
