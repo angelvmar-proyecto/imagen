@@ -41,9 +41,8 @@ android {
 }
 
 dependencies {
-    // ✅ Dependencia CORRECTA de Capacitor — NO usa versión fija así
-    // Capacitor se instala via npm y se referencia localmente, NO desde Maven
-    implementation project(':capacitor-android')
+    // ✅ Capacitor se incluye automáticamente al hacer `npx cap sync`
+    // NO declaramos la dependencia manualmente — el plugin de Capacitor la maneja solo
 
     // AndroidX
     implementation "androidx.core:core-ktx:1.12.0"

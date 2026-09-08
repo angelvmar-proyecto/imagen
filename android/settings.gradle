@@ -15,6 +15,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MARCaribe"
 include ':app'
-include ':capacitor-android'
-project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor-android')
+// ⚠️ NO incluimos capacitor-android aquí — lo agrega `npx cap sync` automáticamente
 
