@@ -14,13 +14,13 @@ jobs:
       - name: 📥 Obtener código
         uses: actions/checkout@v4
 
-      - name: ⚙️ Configurar Node.js
+      - name: ⚙️ Configurar Node.js 22 (requerido por Capacitor CLI)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
-      - name: ☕ Configurar Java 21
+      - name: ☕ Configurar Java 21 (requerido por Capacitor 8.x)
         uses: actions/setup-java@v4
         with:
           java-version: '21'
@@ -32,13 +32,13 @@ jobs:
       - name: 🔄 Sincronizar Capacitor
         run: npx cap sync android
 
-      - name: 🔧 Permisos
+      - name: 🔧 Dar permisos a Gradle
         run: chmod +x android/gradlew
 
       - name: 🏗️ Compilar APK
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📤 Subir APK
+      - name: 📤 Subir APK final
         uses: actions/upload-artifact@v4
         with:
           name: MAR-Caribe-APK
