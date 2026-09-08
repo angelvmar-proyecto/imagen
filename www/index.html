@@ -9,35 +9,34 @@
 <body>
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen de tabla → Tabla estructurada</p>
+  <p>Imagen de tabla → Tabla estructurada — Con IA</p>
 </header>
 <main>
   <div id="pantallaCarga">
-    <h2>Cargando...</h2>
+    <h2>Cargando motores de IA...</h2>
     <div class="barra"><div id="barraProgreso"></div></div>
-    <p id="estadoCarga">Iniciando...</p>
-    <p id="estadoTF">⏳ TF.js: Pendiente</p>
-    <p id="estadoTFLite">⏳ TFLite: Pendiente</p>
+    <p id="estadoTF">⏳ TF.js: Cargando...</p>
+    <p id="estadoTFLite">⏳ TFLite: Cargando...</p>
     <p id="estadoSSD">⏳ SSD MobileNet: Pendiente</p>
-    <p id="estadoEfficient">⏳ EfficientDet: Pendiente</p>
+    <p id="estadoOCR">⏳ OCR: Pendiente</p>
     <div id="logs"></div>
   </div>
   <div id="pantallaPrincipal" class="oculto">
     <h2>Convertir imagen de tabla</h2>
-    <input type="file" id="entradaImagen" accept="image/*">
     <button id="btnSeleccionar">📁 Elegir Imagen</button>
+    <input type="file" id="entradaImagen" accept="image/*" class="oculto">
     <div id="vistaImagen" class="oculto">
-      <img id="imagenPreview" alt="Imagen">
-      <button id="btnAnalizar">🔍 Analizar tabla</button>
+      <img id="imagenPreview" alt="Imagen de tabla">
+      <button id="btnAnalizar">🔍 Analizar con IA</button>
     </div>
     <div id="resultadoTabla" class="oculto">
-      <h3>Tabla reconstruida</h3>
+      <h3>📋 Tabla reconstruida</h3>
       <div id="contenedorTabla"></div>
       <button id="btnNuevaImagen">🔄 Otra imagen</button>
     </div>
   </div>
-<script src="lib/tf.min.js"></script>
-<script src="lib/tf-tflite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
 <script>
 const logsDiv=document.getElementById('logs');
 function log(texto,tipo='info'){const h=new Date().toLocaleTimeString(),c={info:'#0ff',ok:'#0f0',error:'#f55',warn:'#ff0'},d=document.createElement('div');d.style.color=c[tipo];d.textContent=`[${h}] ${texto}`;logsDiv.appendChild(d);logsDiv.scrollTop=logsDiv.scrollHeight;}
