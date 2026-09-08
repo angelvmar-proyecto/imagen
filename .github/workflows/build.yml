@@ -32,13 +32,8 @@ jobs:
       - name: 🔄 Sincronizar Capacitor con Android
         run: npx cap sync android
 
-      - name: 🔧 Generar Gradle Wrapper
-        run: |
-          cd android
-          if [ ! -f "gradlew" ]; then
-            gradle wrapper --gradle-version 8.11.1
-          fi
-          chmod +x gradlew
+      - name: 🔧 Dar permisos a Gradle
+        run: chmod +x android/gradlew
 
       - name: 🏗️ Compilar APK
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
