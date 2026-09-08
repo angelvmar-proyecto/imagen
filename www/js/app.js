@@ -39,12 +39,26 @@ const RUTA_EFFICIENT = 'assets/models/efficientdet_lite0.tflite';
 const RUTA_LABELS = 'assets/models/labels.txt';
 
 // ==============================================
+// ESPERAR A QUE TFJS-TFLITE ESTÉ LISTO
+// ==============================================
+function esperarLibreriaTFLite(callback, intentos = 0) {
+  if (window.tf && window.tf.tflite) {
+    callback();
+  } else if (intentos < 50) { // máximo 5 segundos
+    setTimeout(() => esperarLibreriaTFLite(callback, intentos + 1), 100);
+  } else {
+    estadoCarga.textContent = '❌ Librería TFLite no cargó';
+    mostrarAviso('Revisa tu conexión o el CDN de tfjs-tflite', 'error');
+  }
+}
+
+// ==============================================
 // CARGAR ETIQUETAS
 // ==============================================
 async function cargarEtiquetas() {
   try {
     const res = await fetch(RUTA_LABELS);
-    if (!res.ok) throw new Error('No encontrado');
+    if (!res.ok) throw new Error('No encontrado: ' + res.status);
     const texto = await res.text();
     labelsLista = texto.split('\n').map(l => l.trim()).filter(l => l);
     return true;
@@ -55,16 +69,12 @@ async function cargarEtiquetas() {
 }
 
 // ==============================================
-// ✅ FUNCIÓN CORREGIDA — SIN fromWeightedArray
+// CARGAR MODELO .tflite — FUNCIÓN CORRECTA DE TFJS-TFLITE
 // ==============================================
 async function cargarModelo(ruta, nombre) {
   try {
-    // Usamos tfjs-tflite que es la librería correcta para .tflite
-    // Si no está disponible, avisamos claro
-    if (!window.tflite) {
-      throw new Error('Librería TFLite no cargada');
-    }
-    const modelo = await window.tflite.loadTFLiteModel(ruta);
+    // ✅ Función REAL de la librería, NO inventada
+    const modelo = await tf.tflite.loadTFLiteModel(ruta);
     return { ok: true, modelo };
   } catch (err) {
     console.error(`Error cargando ${nombre}:`, err);
@@ -73,9 +83,16 @@ async function cargarModelo(ruta, nombre) {
 }
 
 // ==============================================
-// INICIALIZAR MODELOS
+// INICIALIZAR TODO
 // ==============================================
 async function inicializarModelos() {
+  // ✅ Primero esperar a que la librería esté disponible
+  if (!window.tf || !window.tf.tflite) {
+    estadoCarga.textContent = 'Esperando librería TFLite...';
+    esperarLibreriaTFLite(inicializarModelos);
+    return;
+  }
+
   estadoCarga.textContent = 'Cargando etiquetas...';
   barraProgreso.style.width = '10%';
   const etiquetasOK = await cargarEtiquetas();
@@ -122,7 +139,7 @@ async function inicializarModelos() {
     }, 800);
   } else {
     estadoCarga.textContent = '❌ No se pudo cargar ningún modelo';
-    mostrarAviso('Revisa que la librería tflite.js esté incluida en el HTML', 'error');
+    mostrarAviso('Verifica que los archivos .tflite estén en www/assets/models/', 'error');
   }
 }
 
@@ -350,5 +367,5 @@ function mostrarAviso(texto, tipo) {
   setTimeout(() => avisos.textContent = '', 5000);
 }
 
-// INICIAR
-window.addEventListener('DOMContentLoaded', inicializarModelos);
+// INICIAR — AL CARGAR TODO EL DOCUMENTO
+window.addEventListener('load', inicializarModelos);

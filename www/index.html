@@ -5,10 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MAR Caribe</title>
   <link rel="stylesheet" href="css/estilos.css">
-  <!-- TensorFlow.js -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-  <!-- ✅ Librería para cargar modelos .tflite — ESTO FALTABA y es lo que rompí -->
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
 </head>
 <body>
 
@@ -68,10 +64,11 @@
   <div id="avisos"></div>
 </main>
 
+<!-- TensorFlow.js - CARGA EN ORDEN, SIN ASYNC/DEFER -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.10/dist/tf-tflite.min.js"></script>
+
+<!-- NUESTRO CÓDIGO - CARGA DESPUÉS DE LAS LIBRERÍAS -->
 <script src="js/app.js"></script>
-<script>
-  // Inicializar TFLite
-  window.tflite = tf.tflite;
-</script>
 </body>
 </html>
