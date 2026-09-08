@@ -29,7 +29,12 @@ jobs:
       - name: 📦 Instalar dependencias
         run: npm install
 
-      - name: 🔄 Sincronizar Capacitor con Android
+      - name: 📁 Copiar modelos a ruta de Capacitor
+        run: |
+          mkdir -p android/app/src/main/assets/models
+          cp -r assets/models/* android/app/src/main/assets/models/ || true
+
+      - name: 🔄 Sincronizar Capacitor
         run: npx cap sync android
 
       - name: 🔧 Dar permisos a Gradle

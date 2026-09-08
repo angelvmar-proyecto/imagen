@@ -3,7 +3,7 @@ body{background:#f0f4f8;padding:16px;max-width:480px;margin:0 auto;}
 header{background:linear-gradient(135deg,#0891b2,#0d9488);color:white;padding:20px;border-radius:12px;margin-bottom:20px;}
 h1{font-size:24px;}
 h2{color:#0891b2;margin:20px 0 10px;font-size:18px;}
-p{color:#64748b;margin-bottom:16px;}
+p{color:#64748b;margin-bottom:8px;}
 button{width:100%;padding:14px;margin:8px 0;border:none;border-radius:10px;font-size:16px;cursor:pointer;}
 button:active{transform:scale(0.98);}
 #btnElegir,#btnDetectar,#btnExtraerTabla{background:#0891b2;color:white;}
@@ -13,6 +13,7 @@ button:active{transform:scale(0.98);}
 img,canvas{max-width:100%;border-radius:10px;margin:10px 0;background:white;}
 .selectorModelo{display:flex;gap:16px;margin:12px 0;padding:12px;background:#e2e8f0;border-radius:8px;flex-wrap:wrap;}
 .selectorModelo label{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.selectorModelo label.desactivado{opacity:0.5;cursor:not-allowed;}
 .barra{width:100%;height:10px;background:#e2e8f0;border-radius:5px;overflow:hidden;margin:12px 0;}
 #barraProgreso{height:100%;background:linear-gradient(90deg,#0891b2,#0d9488);width:0%;transition:width 0.3s;}
 table{width:100%;border-collapse:collapse;margin:15px 0;background:white;border-radius:10px;overflow:hidden;}

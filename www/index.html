@@ -5,21 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MAR Caribe</title>
   <link rel="stylesheet" href="css/estilos.css">
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
 </head>
 <body>
 
 <header>
   <h1>🏝️ MAR Caribe</h1>
-  <p>Imagen → IA Local / Tabla → WhatsApp</p>
+  <p>Modelos locales independientes + Tabla</p>
 </header>
 
 <main>
   <div id="cargaModelos">
-    <h2>Cargando modelos de IA...</h2>
+    <h2>Cargando modelos...</h2>
     <div class="barra"><div id="barraProgreso"></div></div>
-    <p id="estadoCarga">Iniciando SSD MobileNet v2...</p>
+    <p id="estadoCarga">Iniciando...</p>
+    <div id="estadoModelos">
+      <p id="estadoSSD">⏳ SSD MobileNet v2: Pendiente</p>
+      <p id="estadoEfficient">⏳ EfficientDet-Lite0: Pendiente</p>
+    </div>
   </div>
 
   <div id="paso1" class="oculto">
@@ -29,13 +32,13 @@
     <div id="vistaImagen" class="oculto">
       <img id="imagenPreview" alt="Imagen cargada">
       <div class="selectorModelo">
-        <label>
-          <input type="radio" name="modelo" value="ssd" checked>
-          SSD MobileNet v2 (rápido)
+        <label id="labelSSD">
+          <input type="radio" name="modelo" value="ssd">
+          SSD MobileNet v2
         </label>
-        <label>
-          <input type="radio" name="modelo" value="efficientdet">
-          EfficientDet-Lite0 (preciso)
+        <label id="labelEfficient">
+          <input type="radio" name="modelo" value="efficient">
+          EfficientDet-Lite0
         </label>
       </div>
       <button id="btnDetectar">🔍 Detectar con IA</button>
