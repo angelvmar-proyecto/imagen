@@ -34,9 +34,9 @@ let datosTabla = [];
 let labelsLista = [];
 
 // ✅ RUTAS CORRECTAS — android_asset apunta a donde ya están tus archivos
-const RUTA_SSD = 'android_asset/models/ssd_mobilenet_v2.tflite';
-const RUTA_EFFICIENT = 'android_asset/models/efficientdet_lite0.tflite';
-const RUTA_LABELS = 'android_asset/models/labels.txt';
+const RUTA_SSD = 'assets/models/ssd_mobilenet_v2.tflite';
+const RUTA_EFFICIENT = 'assets/models/efficientdet_lite0.tflite';
+const RUTA_LABELS = 'assets/models/labels.txt';
 
 // ==============================================
 // CARGAR ETIQUETAS
