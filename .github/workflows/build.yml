@@ -17,28 +17,28 @@ jobs:
       - name: ⚙️ Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 20
           cache: 'npm'
 
-      - name: ☕ Configurar Java 17
+      - name: ☕ Configurar Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
-      - name: 📦 Instalar dependencias npm
+      - name: 📦 Instalar dependencias
         run: npm install
 
-      - name: 🔄 Sincronizar Capacitor con Android
+      - name: 🔄 Sincronizar Capacitor
         run: npx cap sync android
 
-      - name: 🔧 Dar permisos a Gradle
+      - name: 🔧 Permisos
         run: chmod +x android/gradlew
 
       - name: 🏗️ Compilar APK
         run: cd android && ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 📤 Subir APK final
+      - name: 📤 Subir APK
         uses: actions/upload-artifact@v4
         with:
           name: MAR-Caribe-APK
