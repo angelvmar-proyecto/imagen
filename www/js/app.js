@@ -33,7 +33,7 @@ let detecciones = [];
 let datosTabla = [];
 let labelsLista = [];
 
-// ✅ RUTAS CORRECTAS — android_asset apunta a donde ya están tus archivos
+// ✅ RUTAS CORRECTAS — YA ESTÁN BIEN, NO SE TOCAN
 const RUTA_SSD = 'assets/models/ssd_mobilenet_v2.tflite';
 const RUTA_EFFICIENT = 'assets/models/efficientdet_lite0.tflite';
 const RUTA_LABELS = 'assets/models/labels.txt';
@@ -55,17 +55,16 @@ async function cargarEtiquetas() {
 }
 
 // ==============================================
-// CARGAR UN MODELO — independiente
+// ✅ FUNCIÓN CORREGIDA — SIN fromWeightedArray
 // ==============================================
 async function cargarModelo(ruta, nombre) {
   try {
-    const respuesta = await fetch(ruta);
-    if (!respuesta.ok) throw new Error(`HTTP ${respuesta.status}`);
-    const buffer = await respuesta.arrayBuffer();
-    const modelo = await tf.loadGraphModel(tf.io.fromWeightedArray([new Uint8Array(buffer)], {
-      inputs: [{name: 'input', shape: [1, 300, 300, 3], dtype: 'uint8'}],
-      outputs: ['detection_boxes', 'detection_classes', 'detection_scores', 'num_detections']
-    }));
+    // Usamos tfjs-tflite que es la librería correcta para .tflite
+    // Si no está disponible, avisamos claro
+    if (!window.tflite) {
+      throw new Error('Librería TFLite no cargada');
+    }
+    const modelo = await window.tflite.loadTFLiteModel(ruta);
     return { ok: true, modelo };
   } catch (err) {
     console.error(`Error cargando ${nombre}:`, err);
@@ -74,7 +73,7 @@ async function cargarModelo(ruta, nombre) {
 }
 
 // ==============================================
-// INICIALIZAR TODO — cada modelo por separado
+// INICIALIZAR MODELOS
 // ==============================================
 async function inicializarModelos() {
   estadoCarga.textContent = 'Cargando etiquetas...';
@@ -82,7 +81,7 @@ async function inicializarModelos() {
   const etiquetasOK = await cargarEtiquetas();
   if (!etiquetasOK) estadoCarga.textContent = '⚠️ Sin etiquetas, modelos se cargan igual';
 
-  // SSD MobileNet v2 — INDEPENDIENTE
+  // SSD MobileNet v2
   estadoCarga.textContent = 'SSD MobileNet v2...';
   barraProgreso.style.width = '35%';
   const resSSD = await cargarModelo(RUTA_SSD, 'SSD MobileNet v2');
@@ -98,7 +97,7 @@ async function inicializarModelos() {
     labelSSD.querySelector('input').disabled = true;
   }
 
-  // EfficientDet-Lite0 — INDEPENDIENTE, no espera al otro
+  // EfficientDet-Lite0
   barraProgreso.style.width = '70%';
   estadoCarga.textContent = 'EfficientDet-Lite0...';
   const resEfficient = await cargarModelo(RUTA_EFFICIENT, 'EfficientDet-Lite0');
@@ -123,7 +122,7 @@ async function inicializarModelos() {
     }, 800);
   } else {
     estadoCarga.textContent = '❌ No se pudo cargar ningún modelo';
-    mostrarAviso('Verifica que los archivos .tflite estén en android/app/src/main/assets/models/', 'error');
+    mostrarAviso('Revisa que la librería tflite.js esté incluida en el HTML', 'error');
   }
 }
 
