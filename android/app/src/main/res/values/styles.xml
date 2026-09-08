@@ -1,24 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Tema principal que pide AndroidManifest.xml -->
     <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryVariant">@color/colorPrimaryDark</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
         <item name="android:statusBarColor">@color/colorPrimaryDark</item>
     </style>
 
-    <!-- Tema para la pantalla de inicio sin barra de acción -->
     <style name="AppTheme.NoActionBarLaunch" parent="AppTheme">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:windowBackground">@color/backgroundColor</item>
-    </style>
-
-    <!-- Tema de SplashScreen que también se usaba -->
-    <style name="Theme.SplashScreen" parent="AppTheme.NoActionBarLaunch">
-        <item name="android:windowBackground">@color/backgroundColor</item>
     </style>
 </resources>
 
