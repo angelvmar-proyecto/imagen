@@ -1,0 +1,56 @@
+name: Compilar APK MAR Caribe
+
+# Se ejecuta automáticamente cuando haces push a GitHub
+on:
+  push:
+    branches: [ main, master ]
+  # También puedes lanzarla manualmente desde la web
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compilar Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descarga tu código desde GitHub
+      - name: 📥 Obtener código
+        uses: actions/checkout@v4
+
+      # 2. Configurar Node.js para Capacitor
+      - name: ⚙️ Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # 3. Configurar Java para Android
+      - name: ☕ Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 4. Instalar dependencias del proyecto
+      - name: 📦 Instalar paquetes npm
+        run: npm install
+
+      # 5. Sincronizar Capacitor con Android
+      - name: 🔄 Sincronizar Capacitor
+        run: npx cap sync android
+
+      # 6. Dar permisos de ejecución a Gradle
+      - name: 🔧 Permisos Gradle
+        run: chmod +x android/gradlew
+
+      # 7. 🏗️ COMPILAR EL APK
+      - name: 🏗️ Compilar APK
+        run: cd android && ./gradlew assembleDebug
+
+      # 8. ✅ Subir el APK como descarga
+      - name: 📤 Subir APK final
+        uses: actions/upload-artifact@v4
+        with:
+          name: MAR-Caribe-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+
