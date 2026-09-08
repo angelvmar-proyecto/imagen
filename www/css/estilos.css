@@ -1,11 +1,14 @@
-/* Visibilidad de páginas */
-.pagina { display: none; }
-.pagina.activa { display: block; animation: aparecer 0.25s ease; }
-.oculto { display: none !important; }
-.estado { display: none; }
-.estado.visible { display: block; }
-@keyframes aparecer {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
+* { margin:0; padding:0; box-sizing:border-box; font-family:system-ui; }
+body { background:#f0f4f8; padding:16px; max-width:480px; margin:0 auto; }
+header { background:linear-gradient(135deg,#0891b2,#0d9488); color:white; padding:20px; border-radius:12px; margin-bottom:20px; }
+h2 { color:#0891b2; margin:20px 0 10px; }
+p { color:#64748b; margin-bottom:15px; }
+button { display:block; width:100%; padding:14px; margin:8px 0; border:none; border-radius:10px; font-size:16px; cursor:pointer; }
+button:nth-of-type(odd) { background:#0891b2; color:white; }
+button:nth-of-type(even) { background:#e2e8f0; color:#334155; }
+textarea { width:100%; padding:12px; border:1px solid #cbd5e1; border-radius:8px; font-size:14px; margin:10px 0; background:white; }
+table { border-collapse:collapse; margin:15px 0; background:white; }
+th { background:#f1f5f9; color:#475569; }
+th, td { border:1px solid #e2e8f0; padding:10px; text-align:left; }
+#selectorImagen { display:none; }
 
