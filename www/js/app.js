@@ -5,6 +5,10 @@ let offsetX=0, offsetY=0;
 let escalaOriginal=1;
 let arrastrando=false;
 let ultimoToque={x:0,y:0};
+let lineasFilas=[];
+let lineasColumnas=[];
+let lineaSeleccionada=null;
+let modoEdicion=false;
 const motor={m1:{cargando:false},m2:{cargando:false},m3:{cargando:false},m4:{cargando:false},m5:{cargando:false}};
 
 const estadoTF=document.getElementById('estadoTF');
@@ -23,6 +27,15 @@ const selectorMotor=document.getElementById('selectorMotor');
 const btnCopiarLog=document.getElementById('btnCopiarLog');
 const visorWrapper=document.getElementById('visorWrapper');
 const visorInterior=document.getElementById('visorInterior');
+const sensibilidad=document.getElementById('sensibilidad');
+const espaciadoMinimo=document.getElementById('espaciadoMinimo');
+const btnModoEditar=document.getElementById('btnModoEditar');
+const btnAgregarFila=document.getElementById('btnAgregarFila');
+const btnAgregarColumna=document.getElementById('btnAgregarColumna');
+const btnBorrarLinea=document.getElementById('btnBorrarLinea');
+const btnBloquear=document.getElementById('btnBloquear');
+const btnGuardarConfig=document.getElementById('btnGuardarConfig');
+const btnCargarConfig=document.getElementById('btnCargarConfig');
 
 function log(t,a,tp='info'){
   const h=new Date().toLocaleTimeString();
@@ -34,9 +47,9 @@ function log(t,a,tp='info'){
   a.scrollTop=a.scrollHeight;
 }
 
-function logAjuste(motor,brillo,distFilas,distCols,denV,denH){
+function logAjuste(sens,esp,filas,cols){
   const h=new Date().toLocaleTimeString();
-  logsAjustes.textContent=`${h} | ${motor} | brillo:${brillo} | filas:${distFilas} | cols:${distCols} | denV:${denV.toFixed(2)} | denH:${denH.toFixed(2)}`;
+  logsAjustes.textContent=`${h} | Sensibilidad:${sens} | Espaciado:${esp} | Filas:${filas.length} | Columnas:${cols.length}`;
 }
 
 function setEstado(m,t){document.getElementById(`estado${m}`).textContent=t;}
@@ -56,48 +69,65 @@ async function cargarMotoresBase(){
   estadoOCR.textContent=window.Tesseract?'✅ OCR: Cargado':'⚠️ OCR: No disponible';
   log(window.Tesseract?'Tesseract listo ✅':'Tesseract no cargó',logsGlobal,window.Tesseract?'ok':'warn');
   barraGlobal.style.width='100%';
-  log('Interfaz lista — ajusta sliders y usa zoom',logsGlobal,'ok');
+  log('Interfaz lista — ajusta y edita líneas libremente',logsGlobal,'ok');
   setTimeout(()=>{cargaGlobal.classList.add('oculto');seccionImagen.classList.remove('oculto');},800);
 }
 
-function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,minDensidadH){
+function mapearSensibilidad(valor){
+  const mapa={
+    bajo: {brillo:220,denV:0.45,denH:0.12},
+    medio:{brillo:200,denV:0.35,denH:0.08},
+    alto: {brillo:180,denV:0.25,denH:0.05}
+  };
+  return mapa[valor] || mapa.medio;
+}
+
+function mapearEspaciado(valor){
+  return parseInt(valor);
+}
+
+function detectarEstructuraAutomatica(img){
+  const sensVal=sensibilidad.value;
+  const espVal=mapearEspaciado(espaciadoMinimo.value);
+  const params=mapearSensibilidad(sensVal);
+
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   c.width=img.width; c.height=img.height;
   ctx.drawImage(img,0,0);
   const d=ctx.getImageData(0,0,c.width,c.height).data;
 
-  const lh=[], umbralPixelesFila=c.width*minDensidadH;
+  const lh=[], umbralFila=c.width*params.denH;
   for(let y=0;y<c.height;y++){
     let pixelesOscuros=0;
     for(let x=0;x<c.width;x++){
       const i=(y*c.width+x)*4;
-      if((d[i]+d[i+1]+d[i+2])/3<brillo)pixelesOscuros++;
+      if((d[i]+d[i+1]+d[i+2])/3<params.brillo)pixelesOscuros++;
     }
-    if(pixelesOscuros>umbralPixelesFila)lh.push({y,peso:pixelesOscuros});
+    if(pixelesOscuros>umbralFila)lh.push({y,peso:pixelesOscuros});
   }
   const filas=[]; let ultimaY=-9999;
-  lh.sort((a,b)=>a.y-b.y).forEach(linea=>{
-    if(linea.y-ultimaY>minDistFilas){filas.push(linea.y);ultimaY=linea.y;}
+  lh.sort((a,b)=>a.y-b.y).forEach(l=>{
+    if(l.y-ultimaY>espVal){filas.push(l.y);ultimaY=l.y;}
   });
 
-  const lv=[], umbralPixelesColumna=c.height*minDensidadV;
+  const lv=[], umbralCol=c.height*params.denV;
   for(let x=0;x<c.width;x++){
     let pixelesOscuros=0;
     for(let y=0;y<c.height;y++){
       const i=(y*c.width+x)*4;
-      if((d[i]+d[i+1]+d[i+2])/3<brillo)pixelesOscuros++;
+      if((d[i]+d[i+1]+d[i+2])/3<params.brillo)pixelesOscuros++;
     }
-    if(pixelesOscuros>umbralPixelesColumna)lv.push({x,peso:pixelesOscuros});
+    if(pixelesOscuros>umbralCol)lv.push({x,peso:pixelesOscuros});
   }
   const columnas=[]; let ultimaX=-9999;
-  lv.sort((a,b)=>a.x-b.x).forEach(linea=>{
-    if(linea.x-ultimaX>minDistCols){columnas.push(linea.x);ultimaX=linea.x;}
+  lv.sort((a,b)=>a.x-b.x).forEach(l=>{
+    if(l.x-ultimaX>espVal){columnas.push(l.x);ultimaX=l.x;}
   });
 
   if(columnas.length<2){
-    for(let dd=0.35;dd>=0.15&&columnas.length<2;dd-=0.05){
+    for(let dd=0.30;dd>=0.12&&columnas.length<2;dd-=0.03){
       const ub=c.height*dd, cols=[], ux=-9999;
-      lv.forEach(l=>{if(l.peso>ub&&l.x-ux>minDistCols){cols.push(l.x);ux=l.x;}});
+      lv.forEach(l=>{if(l.peso>ub&&l.x-ux>espVal){cols.push(l.x);ux=l.x;}});
       if(cols.length>=2){columnas.splice(0,0,...cols);break;}
     }
   }
@@ -106,23 +136,23 @@ function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,min
 
 function actualizarPrevisualizacion(){
   if(!imagenActual)return;
-  const num=parseInt(selectorMotor.value);
-  const v=getValoresMotor(num);
-  const dt=detectarEstructura(imagenActual,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
-  logAjuste(`M${num}`,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
-
+  const sensVal=sensibilidad.value;
+  const espVal=espaciadoMinimo.value;
   const rect=vistaImagen.getBoundingClientRect();
   const escalaVista=rect.width/imagenActual.width;
+
   ctxPrevia.clearRect(0,0,canvasPrevia.width,canvasPrevia.height);
 
   ctxPrevia.strokeStyle='#ff0000'; ctxPrevia.lineWidth=2;
-  dt.filas.forEach(y=>{
+  if(lineaSeleccionada?.tipo=='fila')ctxPrevia.strokeStyle='#ffff00';
+  lineasFilas.forEach(y=>{
     const py=y*escalaVista*escalaZoom+offsetY;
     ctxPrevia.beginPath(); ctxPrevia.moveTo(0,py); ctxPrevia.lineTo(canvasPrevia.width,py); ctxPrevia.stroke();
   });
 
   ctxPrevia.strokeStyle='#0055ff'; ctxPrevia.lineWidth=2;
-  dt.columnas.forEach(x=>{
+  if(lineaSeleccionada?.tipo=='columna')ctxPrevia.strokeStyle='#ffff00';
+  lineasColumnas.forEach(x=>{
     const px=x*escalaVista*escalaZoom+offsetX;
     ctxPrevia.beginPath(); ctxPrevia.moveTo(px,0); ctxPrevia.lineTo(px,canvasPrevia.height); ctxPrevia.stroke();
   });
@@ -131,7 +161,9 @@ function actualizarPrevisualizacion(){
   ctxPrevia.fillRect(8,8,220,28);
   ctxPrevia.font='bold 13px monospace';
   ctxPrevia.fillStyle='#fff';
-  ctxPrevia.fillText(`Filas: ${dt.filas.length-1}  Columnas: ${dt.columnas.length-1}`,14,26);
+  ctxPrevia.fillText(`Filas: ${lineasFilas.length}  Columnas: ${lineasColumnas.length}`,14,26);
+
+  logAjuste(sensVal,espVal,lineasFilas,lineasColumnas);
 }
 
 function aplicarZoom(){
@@ -163,6 +195,7 @@ async function construirTablaConTexto(filas,columnas,nombre,img){
   for(let i=0;i<columnas.length-1;i++)h+=`<th>C${i+1}</th>`;
   h+='</tr></thead><tbody>';
   const palabras=await leerTodoDeUnaVez(img);
+  filas.sort((a,b)=>a-b); columnas.sort((a,b)=>a-b);
   for(let f=0;f<filas.length-1;f++){h+='<tr>';
     for(let c=0;c<columnas.length-1;c++)
       h+=`<td>${buscarTextoEnCelda(palabras,columnas[c],filas[f],columnas[c+1],filas[f+1])}</td>`;
@@ -170,44 +203,24 @@ async function construirTablaConTexto(filas,columnas,nombre,img){
   }
   return h+'</tbody></table>';
 }
-function getValoresMotor(num){
-  return {
-    brillo:parseInt(document.getElementById(`sliderBrilloM${num}`).value),
-    distFilas:parseInt(document.getElementById(`sliderFilasM${num}`).value),
-    distCols:parseInt(document.getElementById(`sliderColsM${num}`).value),
-    denV:parseFloat(document.getElementById(`sliderDenVM${num}`).value),
-    denH:parseFloat(document.getElementById(`sliderDenHM${num}`).value)
-  };
-}
-function conectarSliders(num){
-  const actualizar=()=>{
-    const v=getValoresMotor(num);
-    document.getElementById(`valBrilloM${num}`).textContent=v.brillo;
-    document.getElementById(`valFilasM${num}`).textContent=v.distFilas;
-    document.getElementById(`valColsM${num}`).textContent=v.distCols;
-    document.getElementById(`valDenVM${num}`).textContent=v.denV.toFixed(2);
-    document.getElementById(`valDenHM${num}`).textContent=v.denH.toFixed(2);
-    actualizarPrevisualizacion();
-  };
-  [`sliderBrilloM${num}`,`sliderFilasM${num}`,`sliderColsM${num}`,`sliderDenVM${num}`,`sliderDenHM${num}`].forEach(id=>{
-    document.getElementById(id).addEventListener('input',actualizar);
-  });
-  actualizar();
-}
+
 async function ejecutarMotor(num,nombre){
   const m=`M${num}`;
   if(!imagenActual){alert('⚠️ Elige imagen primero');return;}
+  if(lineasFilas.length<2||lineasColumnas.length<2){alert('⚠️ Define al menos 2 filas y 2 columnas');return;}
   if(motor[`m${num}`].cargando)return;
-  const v=getValoresMotor(num);
+
   motor[`m${num}`].cargando=true;
   setEstado(m,'🔄 Procesando...');setBarra(m,10);setResultado(m,'');
-  const al=getLogs(m); log(`${nombre}`,al);
+  const al=getLogs(m); log(`${nombre} usando líneas definidas`,al);
+
   const t=setTimeout(()=>{motor[`m${num}`].cargando=false;setEstado(m,'❌ Tiempo');setBarra(m,0);},TIEMPO_LIMITE);
   try{
     setBarra(m,30);
-    const dt=detectarEstructura(imagenActual,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
-    setBarra(m,50); log(`→ ${dt.filas.length-1}×${dt.columnas.length-1}`,al,'ok');
-    setResultado(m,await construirTablaConTexto(dt.filas,dt.columnas,nombre,imagenActual));
+    const filasOrd=[...lineasFilas].sort((a,b)=>a-b);
+    const colsOrd=[...lineasColumnas].sort((a,b)=>a-b);
+    setBarra(m,50); log(`→ ${filasOrd.length-1}×${colsOrd.length-1} celdas`,al,'ok');
+    setResultado(m,await construirTablaConTexto(filasOrd,colsOrd,nombre,imagenActual));
     setEstado(m,'✅ Completado');setBarra(m,100);
   }catch(e){setEstado(m,'❌ Error');log(`Error:${e.message}`,al,'error');}
   finally{clearTimeout(t);motor[`m${num}`].cargando=false;}
@@ -217,32 +230,155 @@ function resetMotor(num){
   getLogs(`M${num}`).innerHTML='';
 }
 
-window.addEventListener('load',()=>{
-  for(let i=1;i<=5;i++)conectarSliders(i);
-  selectorMotor.addEventListener('change',()=>{
-    document.querySelectorAll('.motor-card').forEach((c,i)=>c.classList.toggle('activo',i+1===parseInt(selectorMotor.value)));
+function recalcularLineas(){
+  if(!imagenActual)return;
+  const dt=detectarEstructuraAutomatica(imagenActual);
+  lineasFilas=dt.filas;
+  lineasColumnas=dt.columnas;
+  lineaSeleccionada=null;
+  actualizarPrevisualizacion();
+}
+
+function guardarConfiguracion(){
+  const config={
+    sensibilidad:sensibilidad.value,
+    espaciado:espaciadoMinimo.value,
+    filas:lineasFilas,
+    columnas:lineasColumnas
+  };
+  localStorage.setItem('marCaribeConfig',JSON.stringify(config));
+  alert('✅ Configuración guardada como estándar');
+}
+
+function cargarConfiguracion(){
+  const guardada=localStorage.getItem('marCaribeConfig');
+  if(!guardada){alert('⚠️ No hay configuración guardada');return;}
+  try{
+    const config=JSON.parse(guardada);
+    sensibilidad.value=config.sensibilidad;
+    espaciadoMinimo.value=config.espaciado;
+    lineasFilas=config.filas || [];
+    lineasColumnas=config.columnas || [];
     actualizarPrevisualizacion();
-  });
+    alert('✅ Configuración cargada');
+  }catch{alert('❌ Error al cargar configuración');}
+}
+
+let modoAgregar=null;
+function iniciarAgregarFila(){modoAgregar='fila';alert('Toca la imagen para agregar fila horizontal');}
+function iniciarAgregarColumna(){modoAgregar='columna';alert('Toca la imagen para agregar columna vertical');}
+
+function obtenerCoordenadaImagen(touchX,touchY){
+  const rect=vistaImagen.getBoundingClientRect();
+  const escalaVista=imagenActual?imagenActual.width/rect.width:1;
+  const x=(touchX-offsetX)/escalaZoom*escalaVista;
+  const y=(touchY-offsetY)/escalaZoom*escalaVista;
+  return {x,y};
+}
+
+function manejarToqueEdicion(e){
+  if(!modoEdicion||!imagenActual)return;
+  const t=e.touches?.[0] || e;
+  const {x,y}=obtenerCoordenadaImagen(t.clientX,t.clientY);
+
+  if(modoAgregar==='fila'){
+    lineasFilas.push(Math.max(0,Math.min(imagenActual.height,y)));
+    lineasFilas.sort((a,b)=>a-b);
+    modoAgregar=null;
+    actualizarPrevisualizacion();
+    e.preventDefault();
+    return;
+  }
+  if(modoAgregar==='columna'){
+    lineasColumnas.push(Math.max(0,Math.min(imagenActual.width,x)));
+    lineasColumnas.sort((a,b)=>a-b);
+    modoAgregar=null;
+    actualizarPrevisualizacion();
+    e.preventDefault();
+    return;
+  }
+
+  const umbral=10/escalaZoom;
+  let masCerca=null, minDist=umbral;
+  lineasFilas.forEach((ly,i)=>{const d=Math.abs(y-ly);if(d<minDist){minDist=d;masCerca={tipo:'fila',indice:i,valor:ly};}});
+  lineasColumnas.forEach((lx,i)=>{const d=Math.abs(x-lx);if(d<minDist){minDist=d;masCerca={tipo:'columna',indice:i,valor:lx};}});
+
+  if(masCerca){
+    lineaSeleccionada=masCerca;
+    ultimoToque={x,y,valor:masCerca.valor};
+    actualizarPrevisualizacion();
+  }else{
+    lineaSeleccionada=null;
+    actualizarPrevisualizacion();
+  }
+}
+
+function moverLinea(e){
+  if(!lineaSeleccionada||!modoEdicion||!imagenActual)return;
+  const t=e.touches?.[0] || e;
+  const {x,y}=obtenerCoordenadaImagen(t.clientX,t.clientY);
+  if(lineaSeleccionada.tipo==='fila'){
+    lineasFilas[lineaSeleccionada.indice]=Math.max(0,Math.min(imagenActual.height,y));
+    lineasFilas.sort((a,b)=>a-b);
+  }else{
+    lineasColumnas[lineaSeleccionada.indice]=Math.max(0,Math.min(imagenActual.width,x));
+    lineasColumnas.sort((a,b)=>a-b);
+  }
+  actualizarPrevisualizacion();
+  e.preventDefault();
+}
+
+function borrarLineaSeleccionada(){
+  if(!lineaSeleccionada){alert('Primero selecciona una línea tocándola');return;}
+  if(lineaSeleccionada.tipo==='fila') lineasFilas.splice(lineaSeleccionada.indice,1);
+  else lineasColumnas.splice(lineaSeleccionada.indice,1);
+  lineaSeleccionada=null;
+  actualizarPrevisualizacion();
+}
+
+function toggleModoEdicion(){
+  modoEdicion=!modoEdicion;
+  btnModoEditar.textContent=modoEdicion?'✅ Bloquear Líneas':'✏️ Editar Líneas';
+  [btnAgregarFila,btnAgregarColumna,btnBorrarLinea,btnBloquear].forEach(b=>b.disabled=!modoEdicion);
+  if(!modoEdicion){lineaSeleccionada=null;modoAgregar=null;actualizarPrevisualizacion();}
+}
+
+window.addEventListener('load',()=>{
+  sensibilidad.addEventListener('change',recalcularLineas);
+  espaciadoMinimo.addEventListener('input',recalcularLineas);
+
+  btnModoEditar.addEventListener('click',toggleModoEdicion);
+  btnAgregarFila.addEventListener('click',iniciarAgregarFila);
+  btnAgregarColumna.addEventListener('click',iniciarAgregarColumna);
+  btnBorrarLinea.addEventListener('click',borrarLineaSeleccionada);
+  btnGuardarConfig.addEventListener('click',guardarConfiguracion);
+  btnCargarConfig.addEventListener('click',cargarConfiguracion);
+
   btnCopiarLog.addEventListener('click',()=>{
     navigator.clipboard.writeText(logsAjustes.textContent).then(()=>{
       const t=btnCopiarLog.textContent;btnCopiarLog.textContent='✅ Copiado!';
       setTimeout(()=>btnCopiarLog.textContent=t,2000);
     });
   });
+
   document.getElementById('btnZoomMas').addEventListener('click',zoomMas);
   document.getElementById('btnZoomMenos').addEventListener('click',zoomMenos);
   document.getElementById('btnZoomReset').addEventListener('click',zoomReset);
 
   visorWrapper.addEventListener('touchstart',e=>{
+    if(modoEdicion){manejarToqueEdicion(e);return;}
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       visorWrapper.dataset.distancia=d;
     }else if(e.touches.length===1){
       arrastrando=true; ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY;
     }
-  });
+  },{passive:false});
+
   visorWrapper.addEventListener('touchmove',e=>{
     e.preventDefault();
+    if(modoEdicion&&lineaSeleccionada){moverLinea(e);return;}
+    if(modoEdicion&&modoAgregar){manejarToqueEdicion(e);return;}
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       const ant=parseFloat(visorWrapper.dataset.distancia);
@@ -253,8 +389,13 @@ window.addEventListener('load',()=>{
       ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY; aplicarZoom();
     }
   },{passive:false});
-  visorWrapper.addEventListener('touchend',()=>{arrastrando=false;visorWrapper.dataset.distancia='';});
-  visorWrapper.addEventListener('dblclick',zoomReset);
+
+  visorWrapper.addEventListener('touchend',()=>{
+    arrastrando=false;visorWrapper.dataset.distancia='';
+    if(modoEdicion){/* mantiene selección */}
+  });
+
+  visorWrapper.addEventListener('click',e=>{if(modoEdicion&&modoAgregar)manejarToqueEdicion(e);});
 
   btnSeleccionar.addEventListener('click',()=>entradaImagen.click());
   entradaImagen.addEventListener('change',e=>{
@@ -265,8 +406,8 @@ window.addEventListener('load',()=>{
           canvasPrevia.width=vistaImagen.clientWidth;
           canvasPrevia.height=vistaImagen.clientHeight;
           escalaOriginal=1;escalaZoom=1;offsetX=0;offsetY=0;
-          setTimeout(actualizarPrevisualizacion,100);
-          log('Imagen cargada — ajusta sliders y usa zoom',logsGlobal,'ok');
+          recalcularLineas();
+          log('Imagen cargada — ajusta sensibilidad o edita líneas',logsGlobal,'ok');
         };
       };imagenActual.src=ev.target.result;
     };r.readAsDataURL(f);
