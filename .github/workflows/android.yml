@@ -27,9 +27,10 @@ jobs:
           npm install
           npx cap sync android
 
-      - name: Compilar con Gradle
+      - name: Corregir formato de gradlew y Compilar
         run: |
           cd android
+          dos2unix gradlew || sed -i -e 's/\r$//' gradlew
           chmod +x gradlew
           ./gradlew assembleDebug
 
