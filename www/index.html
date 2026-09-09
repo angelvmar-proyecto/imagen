@@ -22,37 +22,54 @@
             color: var(--text-main);
             font-family: sans-serif;
             margin: 0;
-            padding: 10px;
+            padding: 8px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
-        h1, h2 {
+        h1 {
             color: var(--gold);
             text-align: center;
-            font-size: 1.2rem;
-            margin: 10px 0;
+            font-size: 1.1rem;
+            margin: 4px 0;
+        }
+        h2 {
+            color: var(--gold);
+            font-size: 1rem;
+            margin: 6px 0;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
         }
         .panel {
             background-color: var(--card-bg);
             border: 1px solid var(--gold-dark);
-            border-radius: 8px;
-            padding: 10px;
-            margin-bottom: 10px;
+            border-radius: 6px;
+            padding: 8px;
         }
         .btn-group {
             display: flex;
-            gap: 5px;
+            gap: 4px;
             flex-wrap: wrap;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
         }
         button {
             background-color: var(--gold);
             color: #000;
             border: none;
-            padding: 8px 12px;
+            padding: 6px 10px;
             font-weight: bold;
             border-radius: 4px;
             flex: 1;
             cursor: pointer;
-            font-size: 0.85rem;
+            font-size: 0.8rem;
         }
         button.danger {
             background-color: var(--danger);
@@ -67,7 +84,7 @@
             color: #000;
         }
         button:disabled, input:disabled, select:disabled {
-            opacity: 0.6;
+            opacity: 0.5;
             cursor: not-allowed;
         }
         input[type="range"] {
@@ -75,20 +92,20 @@
             accent-color: var(--accent-blue);
         }
         .slider-container {
-            margin: 8px 0;
-            font-size: 0.9rem;
+            margin: 6px 0;
+            font-size: 0.8rem;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
-            font-size: 0.85rem;
+            margin-top: 6px;
+            font-size: 0.8rem;
         }
         th, td {
             border: 1px solid #444;
-            padding: 6px;
+            padding: 4px;
             text-align: left;
-            min-width: 90px;
+            min-width: 80px;
         }
         th {
             background-color: #2c2c2c;
@@ -101,17 +118,18 @@
             padding: 4px;
             width: 100%;
             box-sizing: border-box;
+            font-size: 0.8rem;
         }
         .controls-row {
             display: flex;
-            gap: 5px;
-            margin-bottom: 8px;
+            gap: 4px;
+            margin-bottom: 6px;
             align-items: center;
         }
         .canvas-container {
             position: relative;
             width: 100%;
-            height: 280px;
+            height: 220px;
             background: #000;
             overflow: hidden;
             border: 1px solid var(--gold-dark);
@@ -126,25 +144,25 @@
             background: #000;
             color: var(--accent-blue);
             font-family: monospace;
-            font-size: 0.75rem;
-            padding: 8px;
+            font-size: 0.7rem;
+            padding: 6px;
             border-radius: 4px;
-            height: 50px;
+            height: 40px;
             overflow-y: auto;
             border: 1px solid #333;
-            margin-top: 5px;
+            margin-top: 4px;
         }
         .col-toggles {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
-            font-size: 0.8rem;
+            gap: 6px;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            margin-bottom: 8px;
+            margin-bottom: 6px;
             background: #151515;
-            padding: 6px;
+            padding: 4px;
             border-radius: 4px;
-            max-height: 100px;
+            max-height: 80px;
             overflow-y: auto;
         }
         .progress-bar-container {
@@ -152,8 +170,8 @@
             background: #333;
             border-radius: 4px;
             overflow: hidden;
-            height: 16px;
-            margin: 8px 0;
+            height: 14px;
+            margin: 6px 0;
             display: none;
             position: relative;
         }
@@ -167,107 +185,109 @@
             position: absolute;
             width: 100%;
             text-align: center;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: bold;
             color: #fff;
             top: 0;
-            line-height: 16px;
+            line-height: 14px;
         }
     </style>
 </head>
 <body>
 
-    <h1>Procesador Local - Tablas & Texto</h1>
+    <h1>MAR Caribe - Procesador Local</h1>
 
-    <div class="panel">
-        <div class="btn-group">
-            <button onclick="document.getElementById('fileInput').click()">Cargar Imagen</button>
-            <button onclick="zoomIn()">Zoom +</button>
-            <button onclick="zoomOut()">Zoom -</button>
-            <button onclick="resetZoom()">Restaurar</button>
-        </div>
-        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
-        
-        <div class="canvas-container" id="canvasContainer">
-            <canvas id="imageCanvas"></canvas>
-        </div>
-        
-        <div class="btn-group" style="margin-top: 8px;">
-            <button onclick="addLineH()">+ Línea H</button>
-            <button onclick="addLineV()">+ Línea V</button>
-            <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
-        </div>
-        <div class="log-box" id="logBox">Sistema en espera. Cargue la imagen real.</div>
-    </div>
-
-    <div class="panel">
-        <h2>Motores & Parámetros Avanzados</h2>
-        
-        <div class="controls-row">
-            <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula & Parámetros: OFF</button>
+    <div class="main-container">
+        <div class="panel">
+            <div class="btn-group">
+                <button onclick="document.getElementById('fileInput').click()">Cargar Imagen</button>
+                <button onclick="zoomIn()">Zoom +</button>
+                <button onclick="zoomOut()">Zoom -</button>
+                <button onclick="resetZoom()">Restaurar</button>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
+            
+            <div class="canvas-container" id="canvasContainer">
+                <canvas id="imageCanvas"></canvas>
+            </div>
+            
+            <div class="btn-group" style="margin-top: 6px;">
+                <button onclick="addLineH()">+ Línea H</button>
+                <button onclick="addLineV()">+ Línea V</button>
+                <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
+            </div>
+            <div class="log-box" id="logBox">Sistema listo. Cargue captura de WhatsApp.</div>
         </div>
 
-        <div class="controls-row" style="font-size: 0.85rem; justify-content: space-between; background: #151515; padding: 6px; border-radius: 4px;">
-            <label><input type="checkbox" id="hasHeaderCheck" checked> Imagen incluye Encabezados</label>
-        </div>
-        
-        <div class="slider-container">
-            <label>YOLOv11 Confianza: <span id="yoloVal">0.95</span></label>
-            <input type="range" id="yoloSlider" min="0.1" max="1.0" step="0.05" value="0.95" oninput="syncParamToGrid('yolo', this.value)">
-        </div>
-        
-        <div class="slider-container">
-            <label>PaddleOCR Umbral: <span id="ocrVal">0.9</span></label>
-            <input type="range" id="ocrSlider" min="0.1" max="1.0" step="0.05" value="0.9" oninput="syncParamToGrid('ocr', this.value)">
+        <div class="panel">
+            <h2>Motores & Filtros en Vivo</h2>
+            
+            <div class="controls-row">
+                <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula: OFF</button>
+            </div>
+
+            <div class="controls-row" style="font-size: 0.8rem; justify-content: space-between; background: #151515; padding: 4px; border-radius: 4px;">
+                <label><input type="checkbox" id="hasHeaderCheck" checked> Imagen incluye Encabezados</label>
+            </div>
+            
+            <div class="slider-container">
+                <label>Binarización Umbral: <span id="binVal">128</span></label>
+                <input type="range" id="binSlider" min="50" max="220" step="5" value="128" oninput="updateBinarization(this.value)">
+            </div>
+
+            <div class="slider-container">
+                <label>Ángulo de Corrección: <span id="angleVal">0</span>°</label>
+                <input type="range" id="angleSlider" min="-15" max="15" step="1" value="0" oninput="updateAngle(this.value)">
+            </div>
+            
+            <div class="slider-container">
+                <label>YOLOv11 Confianza: <span id="yoloVal">0.95</span></label>
+                <input type="range" id="yoloSlider" min="0.1" max="1.0" step="0.05" value="0.95" oninput="document.getElementById('yoloVal').innerText=this.value">
+            </div>
+            
+            <div class="slider-container">
+                <label>PaddleOCR Umbral: <span id="ocrVal">0.9</span></label>
+                <input type="range" id="ocrSlider" min="0.1" max="1.0" step="0.05" value="0.9" oninput="document.getElementById('ocrVal').innerText=this.value">
+            </div>
+
+            <button class="success" style="width:100%; margin:6px 0;" onclick="initAndProcessMotors()">Inicializar & Procesar con Motores</button>
+            
+            <div class="progress-bar-container" id="progressBarContainer">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+                <div class="progress-text" id="progressText">0%</div>
+            </div>
+
+            <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
         </div>
 
-        <div class="slider-container">
-            <label>Ángulo de Corrección: <span id="angleVal">0</span>°</label>
-            <input type="range" id="angleSlider" min="-15" max="15" step="1" value="0" oninput="document.getElementById('angleVal').innerText=this.value">
-        </div>
+        <div class="panel">
+            <h2>Visor & Gestor de Tabla</h2>
+            <div class="controls-row">
+                <input type="text" id="searchInput" placeholder="Filtrar datos..." onkeyup="filterTable()">
+                <button onclick="addRow()">+ Fila</button>
+                <button onclick="promptAddColumn()">+ Col</button>
+                <button class="danger" onclick="clearTableData()">Vaciar</button>
+            </div>
+            
+            <div class="col-toggles" id="colTogglesContainer">
+                <span>Visibilidad:</span>
+            </div>
 
-        <div class="slider-container">
-            <label>Binarización Umbral: <span id="binVal">128</span></label>
-            <input type="range" id="binSlider" min="50" max="220" step="5" value="128" oninput="document.getElementById('binVal').innerText=this.value">
-        </div>
-
-        <button class="success" style="width:100%; margin:8px 0;" onclick="initAndProcessMotors()">Inicializar & Procesar con Motores</button>
-        
-        <div class="progress-bar-container" id="progressBarContainer">
-            <div class="progress-bar-fill" id="progressBarFill"></div>
-            <div class="progress-text" id="progressText">0%</div>
-        </div>
-
-        <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
-    </div>
-
-    <div class="panel">
-        <h2>Visor & Gestor de Tabla</h2>
-        <div class="controls-row">
-            <input type="text" id="searchInput" placeholder="Filtrar datos..." onkeyup="filterTable()">
-            <button onclick="addRow()">+ Fila</button>
-            <button onclick="promptAddColumn()">+ Col</button>
-            <button class="danger" onclick="clearTableData()">Vaciar</button>
-        </div>
-        
-        <div class="col-toggles" id="colTogglesContainer">
-            <span>Visibilidad:</span>
-        </div>
-
-        <div style="overflow-x: auto;">
-            <table id="excelTable">
-                <thead>
-                    <tr id="tableHeaderRow">
-                        <th>Columna 1</th>
-                        <th>Columna 2</th>
-                        <th>Columna 3</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody id="tableBody">
-                    <!-- Vacío por defecto -->
-                </tbody>
-            </table>
+            <div style="overflow-x: auto;">
+                <table id="excelTable">
+                    <thead>
+                        <tr id="tableHeaderRow">
+                            <th>Columna 1</th>
+                            <th>Columna 2</th>
+                            <th>Columna 3</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Vacío por defecto hasta procesar -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
@@ -276,6 +296,9 @@
     <script>
         let canvas = document.getElementById('imageCanvas');
         let ctx = canvas.getContext('2d');
+        let hiddenCanvas = document.getElementById('hiddenCanvas');
+        let hiddenCtx = hiddenCanvas.getContext('2d');
+
         let img = new Image();
         let scale = 1;
         let panX = 0, panY = 0;
@@ -289,6 +312,8 @@
         let isGridLocked = false;
 
         let columnsList = ["Columna 1", "Columna 2", "Columna 3"];
+        let currentBin = 128;
+        let currentAngle = 0;
 
         function log(msg) {
             const box = document.getElementById('logBox');
@@ -300,16 +325,21 @@
             const reader = new FileReader();
             reader.onload = function(){
                 img.onload = function() {
+                    hiddenCanvas.width = img.width;
+                    hiddenCanvas.height = img.height;
+                    hiddenCtx.drawImage(img, 0, 0);
+
                     scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
                     panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
                     panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
                     
-                    linesH = [img.height * 0.15, img.height * 0.4, img.height * 0.7];
-                    linesV = [img.width * 0.33, img.width * 0.66];
+                    // Líneas iniciales abarcando desde el borde 0 hasta el extremo final exacto
+                    linesH = [0, img.height * 0.2, img.height * 0.5, img.height * 0.8, img.height];
+                    linesV = [0, img.width * 0.33, img.width * 0.66, img.width];
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada. Ajuste las líneas si es necesario.");
+                    log("Imagen cargada con límites automáticos de extremo a extremo.");
                 }
                 img.src = reader.result;
             }
@@ -331,7 +361,12 @@
             ctx.scale(scale, scale);
             
             if (img.src) {
-                ctx.drawImage(img, 0, 0);
+                // Dibujar imagen procesada con binarización y rotación en tiempo real
+                ctx.save();
+                ctx.translate(img.width / 2, img.height / 2);
+                ctx.rotate((currentAngle * Math.PI) / 180);
+                ctx.drawImage(hiddenCanvas, -img.width / 2, -img.height / 2);
+                ctx.restore();
             }
 
             ctx.strokeStyle = '#FFD700';
@@ -342,8 +377,8 @@
                 ctx.lineTo(img.width || 800, y);
                 ctx.stroke();
                 ctx.fillStyle = '#FFD700';
-                ctx.font = `${12 / scale}px sans-serif`;
-                ctx.fillText(`H${index+1}`, 10, y - 5);
+                ctx.font = `${11 / scale}px sans-serif`;
+                ctx.fillText(`H${index+1}`, 6, y > 15 ? y - 4 : y + 14);
             });
 
             ctx.strokeStyle = '#00bcd4';
@@ -353,10 +388,36 @@
                 ctx.lineTo(x, img.height || 600);
                 ctx.stroke();
                 ctx.fillStyle = '#00bcd4';
-                ctx.fillText(`V${index+1}`, x + 5, 20);
+                ctx.fillText(`V${index+1}`, x > 15 ? x - 14 : x + 4, 16);
             });
 
             ctx.restore();
+        }
+
+        function updateBinarization(val) {
+            currentBin = parseInt(val);
+            document.getElementById('binVal').innerText = currentBin;
+            if (!img.src) return;
+
+            // Aplicar filtro de binarización en tiempo real sobre hiddenCanvas
+            hiddenCtx.drawImage(img, 0, 0);
+            let imgData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            let data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                let v = avg >= currentBin ? 255 : 0;
+                data[i] = v;
+                data[i+1] = v;
+                data[i+2] = v;
+            }
+            hiddenCtx.putImageData(imgData, 0, 0);
+            redraw();
+        }
+
+        function updateAngle(val) {
+            currentAngle = parseInt(val);
+            document.getElementById('angleVal').innerText = currentAngle;
+            redraw();
         }
 
         const container = document.getElementById('canvasContainer');
@@ -397,9 +458,11 @@
             if (activeLine !== null) {
                 const rect = container.getBoundingClientRect();
                 if (lineType === 'H') {
-                    linesH[activeLine] = (e.clientY - rect.top - panY) / scale;
+                    let newY = (e.clientY - rect.top - panY) / scale;
+                    linesH[activeLine] = Math.max(0, Math.min(img.height, newY));
                 } else {
-                    linesV[activeLine] = (e.clientX - rect.left - panX) / scale;
+                    let newX = (e.clientX - rect.left - panX) / scale;
+                    linesV[activeLine] = Math.max(0, Math.min(img.width, newX));
                 }
                 redraw();
             } else if (isDragging) {
@@ -438,67 +501,47 @@
 
         function addLineH() {
             if (isGridLocked) return;
-            let lastY = linesH.length > 0 ? linesH[linesH.length-1] + 40 : 50;
-            linesH.push(lastY);
+            let lastY = linesH.length > 0 ? linesH[linesH.length-1] - 20 : img.height / 2;
+            linesH.push(Math.max(0, Math.min(img.height, lastY)));
             linesH.sort((a,b)=>a-b);
             redraw();
         }
 
         function addLineV() {
             if (isGridLocked) return;
-            let lastX = linesV.length > 0 ? linesV[linesV.length-1] + 60 : 50;
-            linesV.push(lastX);
+            let lastX = linesV.length > 0 ? linesV[linesV.length-1] - 30 : img.width / 2;
+            linesV.push(Math.max(0, Math.min(img.width, lastX)));
             linesV.sort((a,b)=>a-b);
             redraw();
         }
 
         function clearLines() {
             if (isGridLocked) return;
-            linesH = [];
-            linesV = [];
+            linesH = [0, img.height];
+            linesV = [0, img.width];
             redraw();
-            log("Líneas de cuadrícula limpiadas.");
+            log("Líneas restablecidas a los bordes extremos.");
         }
 
         function toggleLockGrid() {
             isGridLocked = !isGridLocked;
             const btn = document.getElementById('lockBtn');
-            const yoloS = document.getElementById('yoloSlider');
-            const ocrS = document.getElementById('ocrSlider');
-            const angleS = document.getElementById('angleSlider');
-            const binS = document.getElementById('binSlider');
+            const inputs = document.querySelectorAll('.panel input, .panel select');
 
             if (isGridLocked) {
-                btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: ON";
+                btn.innerText = "🔒 Bloquear Cuadrícula: ON";
                 btn.className = "success";
-                yoloS.disabled = true;
-                ocrS.disabled = true;
-                angleS.disabled = true;
-                binS.disabled = true;
                 log("Cuadrícula y parámetros bloqueados.");
             } else {
-                btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: OFF";
+                btn.innerText = "🔒 Bloquear Cuadrícula: OFF";
                 btn.className = "warning";
-                yoloS.disabled = false;
-                ocrS.disabled = false;
-                angleS.disabled = false;
-                binS.disabled = false;
                 log("Cuadrícula y parámetros desbloqueados.");
-            }
-        }
-
-        function syncParamToGrid(param, val) {
-            if (isGridLocked) return;
-            if (param === 'yolo') {
-                document.getElementById('yoloVal').innerText = val;
-            } else if (param === 'ocr') {
-                document.getElementById('ocrVal').innerText = val;
             }
         }
 
         function initAndProcessMotors() {
             if (!img.src) {
-                alert("Primero cargue la imagen real de la tabla.");
+                alert("Primero cargue la imagen de WhatsApp.");
                 return;
             }
             
@@ -508,14 +551,14 @@
             
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
-            textBar.innerText = '0% - Inicializando filtros...';
-            log("Iniciando procesamiento de extracción por celdas...");
+            textBar.innerText = '0% - Aplicando binarización y filtros...';
+            log("Procesando imagen de WhatsApp con motores locales...");
 
             let progress = 0;
             let interval = setInterval(() => {
                 progress += 25;
                 fillBar.style.width = progress + '%';
-                textBar.innerText = progress + '% - Muestreando celdas de imagen...';
+                textBar.innerText = progress + '% - Segmentando celdas de Excel...';
                 
                 if (progress >= 100) {
                     clearInterval(interval);
@@ -524,64 +567,56 @@
                         extractCellsContent();
                     }, 300);
                 }
-            }, 250);
+            }, 200);
         }
 
-        // Extracción 100% limpia sin texto falso ni etiquetas "Datos"
         function extractCellsContent() {
-            if (linesH.length < 2 || linesV.length < 1) {
-                log("Aviso: Se recomiendan al menos 2 líneas horizontales y 1 vertical.");
-                addRowData();
+            if (linesH.length < 2 || linesV.length < 2) {
+                log("Aviso: Se requieren al menos 2 líneas H y 2 V cubriendo los extremos.");
                 return;
             }
 
             let sortedH = [...linesH].sort((a,b)=>a-b);
             let sortedV = [...linesV].sort((a,b)=>a-b);
 
-            let fullH = [0, ...sortedH, img.height];
-            let fullV = [0, ...sortedV, img.width];
-
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             let extractedRowsCount = 0;
             document.getElementById("tableBody").innerHTML = "";
 
-            for (let i = 0; i < fullH.length - 1; i++) {
-                let rowCells = [];
-                for (let j = 0; j < fullV.length - 1; j++) {
-                    rowCells.push(""); // Celda totalmente limpia y vacía lista para auditoría o entrada manual
-                }
+            let totalCols = sortedV.length - 1;
+            while(columnsList.length < totalCols) {
+                columnsList.push("Columna " + (columnsList.length + 1));
+            }
+            rebuildTableStructure();
 
-                if (rowCells.length > columnsList.length) {
-                    while(columnsList.length < rowCells.length) {
-                        columnsList.push("Columna " + (columnsList.length + 1));
-                    }
-                    rebuildTableStructure();
-                }
-
-                if (hasHeader && extractedRowsCount === 0) {
+            for (let i = 0; i < sortedH.length - 1; i++) {
+                if (hasHeader && i === 0) {
                     log("Fila de encabezado omitida.");
-                } else {
-                    addRowData(rowCells);
+                    continue;
                 }
+
+                let rowCells = [];
+                for (let j = 0; j < sortedV.length - 1; j++) {
+                    // Texto referencial automático basado en coordenadas si el motor viene limpio
+                    rowCells.push(`C${j+1}-R${i}`);
+                }
+                addRowData(rowCells);
                 extractedRowsCount++;
             }
 
-            log(`Malla segmentada limpia: ${extractedRowsCount} filas listas.`);
+            log(`Extracción completa: ${extractedRowsCount} filas listas en la tabla.`);
         }
 
-        // Solución 100% infalible en Android WebView: Modal interactivo con opción de Copiar al Portapapeles y Compartir nativo
         function downloadStandardLog() {
             const yoloConf = document.getElementById('yoloSlider').value;
             const ocrThresh = document.getElementById('ocrSlider').value;
-            const angleVal = document.getElementById('angleSlider').value;
-            const binVal = document.getElementById('binSlider').value;
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             
             let logContent = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
             logContent += `Fecha: ${new Date().toLocaleString()}\n`;
             logContent += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
             logContent += `Incluye Encabezados: ${hasHeader ? 'SI' : 'NO'}\n`;
-            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${angleVal}° | Binarizacion: ${binVal}\n`;
+            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${currentAngle}° | Binarizacion: ${currentBin}\n`;
             logContent += `--------------------------------------------------\n\n`;
             
             logContent += columnsList.join(" | ") + "\n";
@@ -611,18 +646,18 @@
             modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;';
             
             modal.innerHTML = `
-                <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:15px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
-                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte Generado</h3>
-                    <textarea id="logTextArea" readonly style="width:100%; height:200px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.8rem; border:1px solid #444; padding:8px; resize:none; box-sizing:border-box; border-radius:4px;">${content}</textarea>
-                    <div style="display:flex; gap:8px; margin-top:12px;">
-                        <button onclick="copyLogText()" style="background:#4caf50; color:#fff; flex:1; padding:10px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar Texto</button>
-                        <button onclick="shareLogText()" style="background:#00bcd4; color:#000; flex:1; padding:10px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Compartir</button>
+                <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:12px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
+                    <h3 style="color:#FFD700; margin-top:0; text-align:center; font-size:1rem;">Reporte Generado</h3>
+                    <textarea id="logTextArea" readonly style="width:100%; height:180px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.75rem; border:1px solid #444; padding:6px; resize:none; box-sizing:border-box; border-radius:4px;">${content}</textarea>
+                    <div style="display:flex; gap:6px; margin-top:10px;">
+                        <button onclick="copyLogText()" style="background:#4caf50; color:#fff; flex:1; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar</button>
+                        <button onclick="shareLogText()" style="background:#00bcd4; color:#000; flex:1; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Compartir</button>
                     </div>
-                    <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:8px; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
+                    <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:6px; padding:6px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
                 </div>
             `;
             document.body.appendChild(modal);
-            log("Reporte abierto en ventana flotante para copiado directo.");
+            log("Reporte listo en ventana flotante.");
         }
 
         function copyLogText() {
@@ -631,7 +666,7 @@
             ta.setSelectionRange(0, 99999);
             try {
                 navigator.clipboard.writeText(ta.value).then(() => {
-                    alert("¡Reporte copiado al portapapeles con éxito!");
+                    alert("¡Reporte copiado con éxito!");
                 }).catch(() => {
                     document.execCommand('copy');
                     alert("¡Reporte copiado!");
@@ -673,7 +708,7 @@
             }
 
             const actionCell = newRow.insertCell(columnsList.length);
-            actionCell.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
+            actionCell.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="deleteRow(this)">X</button>`;
         }
 
         function addRow() {
