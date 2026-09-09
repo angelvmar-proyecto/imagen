@@ -1,4 +1,4 @@
-const TIEMPO_LIMITE=120000; // 2 minutos
+const TIEMPO_LIMITE=120000;
 let imagenActual=null;
 const motor={
   m1:{cargando:false,abortar:null},
@@ -8,7 +8,6 @@ const motor={
   m5:{cargando:false,abortar:null}
 };
 
-// Elementos globales
 const estadoTF=document.getElementById('estadoTF');
 const estadoOCR=document.getElementById('estadoOCR');
 const barraGlobal=document.getElementById('barraGlobal');
@@ -33,17 +32,13 @@ function setBarra(m,p){document.getElementById(`barra${m}`).style.width=p+'%';}
 function setResultado(m,h){document.getElementById(`resultado${m}`).innerHTML=h;}
 function getLogs(m){return document.getElementById(`logs${m}`);}
 
-// ✅ CARGA INICIAL REPARADA — NO SE QUEDA ATASCADA
 async function cargarMotoresBase(){
   barraGlobal.style.width='10%';
   log('Cargando TF.js...',logsGlobal);
 
-  // Esperar TF.js con timeout seguro
   let tfCargado=false;
   const inicioTF=Date.now();
-  while(!window.tf && Date.now()-inicioTF<15000){
-    await new Promise(r=>setTimeout(r,100));
-  }
+  while(!window.tf && Date.now()-inicioTF<15000)await new Promise(r=>setTimeout(r,100));
   if(window.tf){
     tfCargado=true;
     estadoTF.textContent='✅ TF.js: Cargado';
@@ -51,11 +46,10 @@ async function cargarMotoresBase(){
     barraGlobal.style.width='40%';
   }else{
     estadoTF.textContent='⚠️ TF.js: No disponible';
-    log('TF.js no cargó — se usará modo básico',logsGlobal,'warn');
+    log('TF.js no cargó — modo básico',logsGlobal,'warn');
     barraGlobal.style.width='40%';
   }
 
-  // Cargar Tesseract
   log('Cargando Tesseract OCR...',logsGlobal);
   if(window.Tesseract){
     estadoOCR.textContent='✅ OCR: Cargado';
@@ -68,19 +62,24 @@ async function cargarMotoresBase(){
   }
 
   log('Interfaz lista — elige imagen',logsGlobal,'ok');
-  setTimeout(()=>{
-    cargaGlobal.classList.add('oculto');
-    seccionImagen.classList.remove('oculto');
-  }, 800);
+  setTimeout(()=>{cargaGlobal.classList.add('oculto');seccionImagen.classList.remove('oculto');},800);
 }
 
-// Detección de estructura — igual que siempre
-function detectarEstructura(img,ub=210,mdf=12,mdc=28,mll=0.35,upp=0.08){
+// ==================================================
+// DETECCIÓN DE ESTRUCTURA — PARÁMETROS EXPLICADOS:
+// ub = umbral de brillo (menor = más sensible a líneas claras)
+// mdf = distancia mínima entre filas (mayor = agrupa líneas cercanas)
+// mdc = distancia mínima entre columnas (mayor = elimina columnas falsas)
+// mll = umbral de densidad mínima para líneas verticales
+// upp = umbral de densidad mínima para líneas horizontales
+// ==================================================
+function detectarEstructura(img,ub,mdf,mdc,mll,upp){
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   c.width=img.width; c.height=img.height;
   ctx.drawImage(img,0,0);
   const d=ctx.getImageData(0,0,c.width,c.height).data;
 
+  // DETECTAR FILAS (líneas horizontales)
   const lh=[], mlh=c.width*upp;
   for(let y=0;y<c.height;y++){
     let p=0;
@@ -96,6 +95,7 @@ function detectarEstructura(img,ub=210,mdf=12,mdc=28,mll=0.35,upp=0.08){
     if(l.y-uy>mdf){filas.push(l.y);uy=l.y;}
   });
 
+  // DETECTAR COLUMNAS (líneas verticales)
   const lv=[], mlv=c.height*mll;
   for(let x=0;x<c.width;x++){
     let p=0;
@@ -111,8 +111,9 @@ function detectarEstructura(img,ub=210,mdf=12,mdc=28,mll=0.35,upp=0.08){
     if(l.x-ux>mdc){cols.push(l.x);ux=l.x;}
   });
 
+  // Corrección automática si hay muy pocas columnas
   if(cols.length<2){
-    for(let pr=0.3;pr>=0.15&&cols.length<2;pr-=0.05){
+    for(let pr=0.35;pr>=0.15&&cols.length<2;pr-=0.05){
       const mp=c.height*pr; const t=[]; let ut=-9999;
       lv.forEach(l=>{
         if(l.peso>mp&&l.x-ut>mdc){t.push(l.x);ut=l.x;}
@@ -123,7 +124,6 @@ function detectarEstructura(img,ub=210,mdf=12,mdc=28,mll=0.35,upp=0.08){
   return {filas,columnas:cols,ancho:c.width,alto:c.height};
 }
 
-// OCR de una sola pasada
 async function leerTodoDeUnaVez(img){
   if(!window.Tesseract)return null;
   try{
@@ -154,9 +154,6 @@ async function construirTablaConTexto(filas,columnas,nombre,img){
   return h;
 }
 
-// ==================================================
-// MOTORES — LOS 5, IGUALES PERO FUNCIONANDO
-// ==================================================
 async function ejecutarMotor(num,nombre,ub,mdf,mdc,mll,upp){
   const m=`M${num}`;
   if(!imagenActual){alert('⚠️ Elige imagen primero');return;}
@@ -184,6 +181,7 @@ async function ejecutarMotor(num,nombre,ub,mdf,mdc,mll,upp){
     setBarra(m,30);
     const dt=detectarEstructura(imagenActual,ub,mdf,mdc,mll,upp);
     setBarra(m,50);
+    log(`Parámetros: brillo=${ub}, filasDist=${mdf}, colsDist=${mdc}`,al,'info');
     log(`Estructura: ${dt.filas.length-1} filas × ${dt.columnas.length-1} columnas — leyendo texto...`,al);
     const tbl=await construirTablaConTexto(dt.filas,dt.columnas,nombre,imagenActual);
     setBarra(m,95);
@@ -213,20 +211,33 @@ function resetMotor(num){
   getLogs(m).innerHTML='';
 }
 
-// Asignaciones directas
-const ejecutarM1=()=>ejecutarMotor(1,'SSD MobileNet v2',210,12,28,0.35,0.08);
+// ==================================================
+// PARÁMETROS AJUSTADOS CON TUS DATOS REALES
+// ==================================================
+// EjecutarMotor(num, nombre, BRILLO, DIST_FILAS, DIST_COLS, DENSIDAD_V, DENSIDAD_H)
+
+// M1: MobileNet — tenía 29 cols → subimos DIST_COLS a 32 para reducir
+const ejecutarM1=()=>ejecutarMotor(1,'SSD MobileNet v2',210,14,32,0.35,0.08);
 const resetM1=()=>resetMotor(1);
-const ejecutarM2=()=>ejecutarMotor(2,'EfficientDet-Lite0',200,12,28,0.35,0.08);
+
+// M2: EfficientDet — tenía 24 cols → el mejor, ajuste fino
+const ejecutarM2=()=>ejecutarMotor(2,'EfficientDet-Lite0',205,14,30,0.35,0.08);
 const resetM2=()=>resetMotor(2);
-const ejecutarM3=()=>ejecutarMotor(3,'YOLOv8n',215,12,28,0.35,0.08);
+
+// M3: YOLOv8n — igual que MobileNet, subimos DIST_COLS
+const ejecutarM3=()=>ejecutarMotor(3,'YOLOv8n',215,14,32,0.35,0.08);
 const resetM3=()=>resetMotor(3);
-const ejecutarM4=()=>ejecutarMotor(4,'YOLOv11-Tabla',200,10,25,0.30,0.06);
+
+// M4: YOLOv11-Tabla — tenía 25 filas y 37 cols DEMASIADO → subimos TODO
+const ejecutarM4=()=>ejecutarMotor(4,'YOLOv11-Tabla',200,18,35,0.38,0.09);
 const resetM4=()=>resetMotor(4);
-const ejecutarM5=()=>ejecutarMotor(5,'PaddleOCR Table',220,14,30,0.40,0.10);
+
+// M5: PaddleOCR — tenía 18 filas y 25 cols + MÁS PALABRAS ✅ → mantener o ajustar poco
+const ejecutarM5=()=>ejecutarMotor(5,'PaddleOCR Table',220,15,30,0.40,0.10);
 const resetM5=()=>resetMotor(5);
 
 // ==================================================
-// EVENTOS — TODOS CONECTADOS CORRECTAMENTE
+// EVENTOS
 // ==================================================
 btnSeleccionar.addEventListener('click',()=>entradaImagen.click());
 entradaImagen.addEventListener('change',e=>{

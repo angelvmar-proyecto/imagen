@@ -29,9 +29,10 @@
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
     #vistaImagen{display:none;max-width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin:16px auto;}
     .etiqueta-nuevo{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
+    .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
     .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
-    .m5{border:2px solid #f59e0b;}
+    .m5{border:3px solid #f59e0b;box-shadow:0 0 12px rgba(245,158,11,0.2);}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
     .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
   </style>
@@ -94,7 +95,7 @@
 
   <div class="motor-card m4">
     <h2>🚀 Motor 4: YOLOv11-Tabla <span class="etiqueta-nuevo">NUEVO</span></h2>
-    <div id="estadoM4" class="estado">⏳ Pendiente — Especializado en tablas</div>
+    <div id="estadoM4" class="estado">⏳ Pendiente — Parámetros ajustados</div>
     <div class="barra-fondo"><div id="barraM4" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
       <button id="btnAnalizarM4" class="btn-analizar">🚀 Analizar</button>
@@ -105,8 +106,8 @@
   </div>
 
   <div class="motor-card m5">
-    <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-nuevo">NUEVO</span></h2>
-    <div id="estadoM5" class="estado">⏳ Pendiente — OCR + Estructura integrada</div>
+    <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-recomendado">⭐ RECOMENDADO</span></h2>
+    <div id="estadoM5" class="estado">⏳ Pendiente — Más palabras detectadas</div>
     <div class="barra-fondo"><div id="barraM5" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
       <button id="btnAnalizarM5" class="btn-analizar">📄 Analizar</button>
