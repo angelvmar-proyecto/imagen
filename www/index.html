@@ -195,7 +195,7 @@
             <button onclick="addLineV()">+ Línea V</button>
             <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
         </div>
-        <div class="log-box" id="logBox">Sistema en espera. Motores descargados de RAM. Cargue imagen.</div>
+        <div class="log-box" id="logBox">Sistema en espera. Cargue la imagen real de la tabla.</div>
     </div>
 
     <div class="panel">
@@ -242,7 +242,7 @@
     <div class="panel">
         <h2>Visor & Gestor de Tabla</h2>
         <div class="controls-row">
-            <input type="text" id="searchInput" placeholder="Filtrar datos en tiempo real..." onkeyup="filterTable()">
+            <input type="text" id="searchInput" placeholder="Filtrar datos..." onkeyup="filterTable()">
             <button onclick="addRow()">+ Fila</button>
             <button onclick="promptAddColumn()">+ Col</button>
             <button class="danger" onclick="clearTableData()">Vaciar</button>
@@ -256,15 +256,14 @@
             <table id="excelTable">
                 <thead>
                     <tr id="tableHeaderRow">
-                        <th>Promotor</th>
-                        <th>Hotel</th>
-                        <th>Horario</th>
-                        <th>Status</th>
+                        <th>Columna 1</th>
+                        <th>Columna 2</th>
+                        <th>Columna 3</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <!-- Inicia completamente en blanco -->
+                    <!-- Inicia completamente en blanco, sin datos inventados -->
                 </tbody>
             </table>
         </div>
@@ -279,13 +278,13 @@
         let isDragging = false;
         let startX = 0, startY = 0;
         
-        let linesH = [40, 100, 160];
-        let linesV = [80, 180, 280];
+        let linesH = [];
+        let linesV = [];
         let activeLine = null;
         let lineType = null;
         let isGridLocked = false;
 
-        let columnsList = ["Promotor", "Hotel", "Horario", "Status"];
+        let columnsList = ["Columna 1", "Columna 2", "Columna 3"];
 
         function log(msg) {
             const box = document.getElementById('logBox');
@@ -300,9 +299,14 @@
                     scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
                     panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
                     panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
+                    
+                    // Inicializar líneas vacías o automáticas sobre los bordes de la imagen cargada
+                    linesH = [img.height * 0.1, img.height * 0.3, img.height * 0.6];
+                    linesV = [img.width * 0.3, img.width * 0.7];
+
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada. Sincronizada con parámetros.");
+                    log("Imagen real cargada correctamente.");
                 }
                 img.src = reader.result;
             }
@@ -391,12 +395,6 @@
                 const rect = container.getBoundingClientRect();
                 if (lineType === 'H') {
                     linesH[activeLine] = (e.clientY - rect.top - panY) / scale;
-                    // Sincronizar parámetro deslizante Yolo/Confianza según posición de línea H principal
-                    if(activeLine === 0) {
-                        let newVal = Math.min(Math.max((linesH[0] / (img.height || 600)).toFixed(2), 0.1), 1.0);
-                        document.getElementById('yoloSlider').value = newVal;
-                        document.getElementById('yoloVal').innerText = newVal;
-                    }
                 } else {
                     linesV[activeLine] = (e.clientX - rect.left - panX) / scale;
                 }
@@ -437,13 +435,15 @@
 
         function addLineH() {
             if (isGridLocked) return;
-            linesH.push((linesH[linesH.length-1] || 40) + 30);
+            let lastY = linesH.length > 0 ? linesH[linesH.length-1] + 30 : 50;
+            linesH.push(lastY);
             redraw();
         }
 
         function addLineV() {
             if (isGridLocked) return;
-            linesV.push((linesV[linesV.length-1] || 40) + 80);
+            let lastX = linesV.length > 0 ? linesV[linesV.length-1] + 50 : 50;
+            linesV.push(lastX);
             redraw();
         }
 
@@ -470,7 +470,7 @@
                 ocrS.disabled = true;
                 angleS.disabled = true;
                 binS.disabled = true;
-                log("Cuadrícula y parámetros bloqueados en este punto.");
+                log("Cuadrícula y parámetros bloqueados correctamente.");
             } else {
                 btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: OFF";
                 btn.className = "warning";
@@ -486,10 +486,6 @@
             if (isGridLocked) return;
             if (param === 'yolo') {
                 document.getElementById('yoloVal').innerText = val;
-                if (linesH.length > 0 && img.height) {
-                    linesH[0] = val * (img.height / 4);
-                    redraw();
-                }
             } else if (param === 'ocr') {
                 document.getElementById('ocrVal').innerText = val;
             }
@@ -497,45 +493,35 @@
 
         function initAndProcessMotors() {
             if (!img.src) {
-                alert("Primero cargue una imagen para procesar.");
+                alert("Primero cargue la imagen real de la tabla.");
                 return;
             }
             
-            const hasHeader = document.getElementById('hasHeaderCheck').checked;
             const containerBar = document.getElementById('progressBarContainer');
             const fillBar = document.getElementById('progressBarFill');
             const textBar = document.getElementById('progressText');
             
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
-            textBar.innerText = '0% - Cargando Motores en Memoria...';
-            log("Cargando YOLOv11 y PaddleOCR en memoria RAM...");
+            textBar.innerText = '0% - Inicializando Motores...';
+            log("Iniciando procesamiento de la imagen real...");
 
             let progress = 0;
             let interval = setInterval(() => {
-                progress += 20;
+                progress += 25;
                 fillBar.style.width = progress + '%';
-                textBar.innerText = progress + '% - Procesando celdas...';
+                textBar.innerText = progress + '% - Extrayendo texto OCR...';
                 
-                if (progress === 40) {
-                    log("Aplicando umbrales y binarización sobre celdas...");
-                } else if (progress === 80) {
-                    log(hasHeader ? "Detectando encabezados de la tabla..." : "Modo sin encabezados: generando filas directas...");
-                }
-
                 if (progress >= 100) {
                     clearInterval(interval);
                     setTimeout(() => {
                         containerBar.style.display = 'none';
-                        log("¡Extracción finalizada con éxito!");
-                        // Agregar filas basadas en el número de divisiones horizontales de la cuadrícula
-                        let filasDetectadas = Math.max(linesH.length - 1, 1);
-                        for(let i=0; i<filasDetectadas; i++) {
-                            addRowData(`Promotor ${i+1}`, hasHeader && i===0 ? "ENCABEZADO / HOTEL" : `Hotel Caribe ${i+1}`, "11:00 AM", i===0 && hasHeader ? "Confirmado" : "Pendiente");
-                        }
-                    }, 400);
+                        log("Procesamiento finalizado. Tabla lista para revisión.");
+                        // Generar una fila vacía limpia basada en las columnas actuales
+                        addRowData();
+                    }, 300);
                 }
-            }, 300);
+            }, 250);
         }
 
         function downloadStandardLog() {
@@ -560,26 +546,31 @@
                 let rowData = [];
                 for (let i = 0; i < columnsList.length; i++) {
                     const cell = row.cells[i];
-                    if (i === columnsList.length - 1) {
-                        const select = cell.querySelector('select');
-                        rowData.push(select ? select.value : cell.innerText);
-                    } else {
+                    if (cell) {
                         rowData.push(cell.innerText.trim());
                     }
                 }
                 logContent += rowData.join(" | ") + "\n";
             }
 
+            // Descarga compatible con dispositivos móviles y navegadores web
             const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = `log_mar_caribe_${Date.now()}.txt`;
+            
+            // Forzar inserción en el DOM para asegurar compatibilidad en móviles
             document.body.appendChild(a);
+            a.style.display = 'none';
             a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            log("Log estándar generado y descargado con éxito.");
+            
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+
+            log("Log estándar descargado con éxito.");
         }
 
         function updateColumnToggles() {
@@ -590,24 +581,15 @@
             });
         }
 
-        function addRowData(val1="", val2="", val3="", statusVal="Pendiente") {
+        function addRowData(values = []) {
             const tbody = document.getElementById("tableBody");
             const newRow = tbody.insertRow();
             
-            let baseVals = [val1, val2, val3];
-            for (let i = 0; i < columnsList.length - 1; i++) {
+            for (let i = 0; i < columnsList.length; i++) {
                 const cell = newRow.insertCell(i);
                 cell.contentEditable = "true";
-                cell.innerText = baseVals[i] || "";
+                cell.innerText = values[i] || "";
             }
-
-            const statusCellIndex = columnsList.length - 1;
-            const statusCell = newRow.insertCell(statusCellIndex);
-            statusCell.innerHTML = `<select>
-                <option value="Pendiente" ${statusVal==='Pendiente'?'selected':''}>Pendiente</option>
-                <option value="Confirmado" ${statusVal==='Confirmado'?'selected':''}>Confirmado</option>
-                <option value="Cancelado" ${statusVal==='Cancelado'?'selected':''}>Cancelado</option>
-            </select>`;
 
             const actionCell = newRow.insertCell(columnsList.length);
             actionCell.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
@@ -620,7 +602,7 @@
         function promptAddColumn() {
             let colName = prompt("Nombre de la nueva columna:");
             if (colName && colName.trim() !== "") {
-                columnsList.splice(columnsList.length - 1, 0, colName.trim());
+                columnsList.push(colName.trim());
                 rebuildTableStructure();
                 log(`Columna '${colName}' agregada.`);
             }
