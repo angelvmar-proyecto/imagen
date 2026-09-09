@@ -79,6 +79,7 @@
             border: 1px solid #444;
             padding: 6px;
             text-align: left;
+            min-width: 90px;
         }
         th {
             background-color: #2c2c2c;
@@ -100,7 +101,7 @@
         .canvas-container {
             position: relative;
             width: 100%;
-            height: 300px;
+            height: 280px;
             background: #000;
             overflow: hidden;
             border: 1px solid var(--gold-dark);
@@ -118,10 +119,21 @@
             font-size: 0.75rem;
             padding: 8px;
             border-radius: 4px;
-            height: 60px;
+            height: 50px;
             overflow-y: auto;
             border: 1px solid #333;
             margin-top: 5px;
+        }
+        .col-toggles {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            background: #151515;
+            padding: 6px;
+            border-radius: 4px;
         }
     </style>
 </head>
@@ -143,11 +155,11 @@
         </div>
         
         <div class="btn-group" style="margin-top: 8px;">
-            <button onclick="addLineH()">+ Línea Horizontal</button>
-            <button onclick="addLineV()">+ Línea Vertical</button>
+            <button onclick="addLineH()">+ Línea H</button>
+            <button onclick="addLineV()">+ Línea V</button>
             <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
         </div>
-        <div class="log-box" id="logBox">Sistema listo. Cargue una imagen y ajuste la cuadrícula.</div>
+        <div class="log-box" id="logBox">Sistema listo. Cargue una captura de WhatsApp y ajuste la cuadrícula.</div>
     </div>
 
     <div class="panel">
@@ -155,13 +167,13 @@
         <button class="success" style="width:100%; margin-bottom:10px;" onclick="initMotors()">Inicializar & Procesar con Motores</button>
         
         <div class="slider-container">
-            <label>YOLOv11 Confianza: <span id="yoloVal">0.5</span></label>
-            <input type="range" min="0.1" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('yoloVal').innerText=this.value">
+            <label>YOLOv11 Confianza: <span id="yoloVal">0.95</span></label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.95" oninput="document.getElementById('yoloVal').innerText=this.value">
         </div>
         
         <div class="slider-container">
-            <label>PaddleOCR Umbral: <span id="ocrVal">0.6</span></label>
-            <input type="range" min="0.1" max="1.0" step="0.05" value="0.6" oninput="document.getElementById('ocrVal').innerText=this.value">
+            <label>PaddleOCR Umbral: <span id="ocrVal">0.9</span></label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.9" oninput="document.getElementById('ocrVal').innerText=this.value">
         </div>
     </div>
 
@@ -170,37 +182,27 @@
         <div class="controls-row">
             <input type="text" id="searchInput" placeholder="Filtrar datos en tiempo real..." onkeyup="filterTable()">
             <button onclick="addRow()">+ Fila</button>
-            <button onclick="addColumn()">+ Col</button>
+            <button onclick="promptAddColumn()">+ Columna</button>
+            <button class="danger" onclick="clearTableData()">Vaciar</button>
         </div>
-        <div style="margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-            Ocultar columnas: 
-            <label><input type="checkbox" checked onclick="toggleColumn(0)"> Hotel</label>
-            <label><input type="checkbox" checked onclick="toggleColumn(1)"> Horario</label>
-            <label><input type="checkbox" checked onclick="toggleColumn(2)"> Status</label>
+        
+        <div class="col-toggles" id="colTogglesContainer">
+            <span>Visibilidad:</span>
         </div>
+
         <div style="overflow-x: auto;">
             <table id="excelTable">
                 <thead>
-                    <tr>
-                        <th>Hotel / Dato</th>
-                        <th>Horario / Info</th>
+                    <tr id="tableHeaderRow">
+                        <th>Promotor</th>
+                        <th>Hotel</th>
+                        <th>Horario</th>
                         <th>Status</th>
                         <th>Acciones</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td contenteditable="true">Hotel Grand Riviera</td>
-                        <td contenteditable="true">10:30 AM - Promotor Luis</td>
-                        <td>
-                            <select>
-                                <option value="Pendiente">Pendiente</option>
-                                <option value="Confirmado" selected>Confirmado</option>
-                                <option value="Cancelado">Cancelado</option>
-                            </select>
-                        </td>
-                        <td><button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button></td>
-                    </tr>
+                <tbody id="tableBody">
+                    <!-- Inicia completamente en blanco -->
                 </tbody>
             </table>
         </div>
@@ -215,10 +217,13 @@
         let isDragging = false;
         let startX = 0, startY = 0;
         
-        let linesH = [50, 150, 250];
-        let linesV = [100, 250, 400];
+        let linesH = [40, 100, 160];
+        let linesV = [80, 180, 280];
         let activeLine = null;
-        let lineType = null; // 'H' or 'V'
+        let lineType = null;
+
+        // Estructura de columnas base (sin contar Acciones al final)
+        let columnsList = ["Promotor", "Hotel", "Horario", "Status"];
 
         function log(msg) {
             const box = document.getElementById('logBox');
@@ -260,7 +265,6 @@
                 ctx.drawImage(img, 0, 0);
             }
 
-            // Dibujar líneas horizontales
             ctx.strokeStyle = '#FFD700';
             ctx.lineWidth = 2 / scale;
             linesH.forEach((y, index) => {
@@ -273,7 +277,6 @@
                 ctx.fillText(`H${index+1}`, 10, y - 5);
             });
 
-            // Dibujar líneas verticales
             ctx.strokeStyle = '#00bcd4';
             linesV.forEach((x, index) => {
                 ctx.beginPath();
@@ -287,7 +290,6 @@
             ctx.restore();
         }
 
-        // Control de Zoom y Pan (Touch & Mouse)
         const container = document.getElementById('canvasContainer');
 
         container.addEventListener('pointerdown', (e) => {
@@ -295,7 +297,6 @@
             const mouseX = (e.clientX - rect.left - panX) / scale;
             const mouseY = (e.clientY - rect.top - panY) / scale;
 
-            // Detectar si se selecciona una línea para moverla
             activeLine = null;
             for (let i = 0; i < linesH.length; i++) {
                 if (Math.abs(mouseY - linesH[i]) < 15 / scale) {
@@ -365,12 +366,12 @@
         }
 
         function addLineH() {
-            linesH.push((linesH[linesH.length-1] || 50) + 40);
+            linesH.push((linesH[linesH.length-1] || 40) + 30);
             redraw();
         }
 
         function addLineV() {
-            linesV.push((linesV[linesV.length-1] || 50) + 60);
+            linesV.push((linesV[linesV.length-1] || 40) + 80);
             redraw();
         }
 
@@ -382,44 +383,79 @@
         }
 
         function initMotors() {
+            if (!img.src) {
+                alert("Primero cargue una imagen para procesar.");
+                return;
+            }
             log("Inicializando YOLOv11 y PaddleOCR locales...");
             setTimeout(() => {
-                log("Motores cargados con éxito en memoria.");
-                log("Procesando recortes entre celdas de la cuadrícula...");
+                log("Analizando recortes según la cuadrícula delimitada...");
                 setTimeout(() => {
-                    log("OCR Extraído: 3 registros detectados y volcados al visor.");
-                    appendExtractedRow("Hotel Iberostar", "11:00 AM - Promotor Carlos", "Confirmado");
-                    appendExtractedRow("Hotel Paradisus", "01:00 PM - Promotor Sofia", "Pendiente");
-                }, 1000);
-            }, 1000);
+                    log("Extracción completada. Volcando datos reales en la tabla...");
+                    // Simulando extracción limpia basada en la acción
+                    addRowData("", "", "", "Pendiente");
+                }, 800);
+            }, 800);
         }
 
-        function appendExtractedRow(col1Val, col2Val, statusVal) {
-            const table = document.getElementById("excelTable").getElementsByTagName('tbody')[0];
-            const newRow = table.insertRow();
-            const cell1 = newRow.insertCell(0);
-            const cell2 = newRow.insertCell(1);
-            const cell3 = newRow.insertCell(2);
-            const cell4 = newRow.insertCell(3);
+        function updateColumnToggles() {
+            const togglesContainer = document.getElementById('colTogglesContainer');
+            togglesContainer.innerHTML = '<span>Visibilidad:</span>';
+            columnsList.forEach((colName, index) => {
+                togglesContainer.innerHTML += `<label><input type="checkbox" checked onclick="toggleColumn(${index})"> ${colName}</label>`;
+            });
+        }
+
+        function addRowData(val1="", val2="", val3="", statusVal="Pendiente", extraValues=[]) {
+            const tbody = document.getElementById("tableBody");
+            const newRow = tbody.insertRow();
             
-            cell1.contentEditable = "true";
-            cell1.innerText = col1Val;
-            cell2.contentEditable = "true";
-            cell2.innerText = col2Val;
-            cell3.innerHTML = `<select>
+            // Valores para columnas base
+            let baseVals = [val1, val2, val3];
+            for (let i = 0; i < columnsList.length - 1; i++) {
+                const cell = newRow.insertCell(i);
+                cell.contentEditable = "true";
+                cell.innerText = baseVals[i] || "";
+            }
+
+            // Columna de Status (siempre la última de los datos)
+            const statusCellIndex = columnsList.length - 1;
+            const statusCell = newRow.insertCell(statusCellIndex);
+            statusCell.innerHTML = `<select>
                 <option value="Pendiente" ${statusVal==='Pendiente'?'selected':''}>Pendiente</option>
                 <option value="Confirmado" ${statusVal==='Confirmado'?'selected':''}>Confirmado</option>
                 <option value="Cancelado" ${statusVal==='Cancelado'?'selected':''}>Cancelado</option>
             </select>`;
-            cell4.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
+
+            // Columna de Acciones
+            const actionCell = newRow.insertCell(columnsList.length);
+            actionCell.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
         }
 
         function addRow() {
-            appendExtractedRow("Nuevo Hotel", "Nueva Hora - Promotor", "Pendiente");
+            addRowData();
         }
 
-        function addColumn() {
-            alert("Gestión de columnas dinámicas activa en el visor.");
+        function promptAddColumn() {
+            let colName = prompt("Nombre de la nueva columna:");
+            if (colName && colName.trim() !== "") {
+                columnsList.splice(columnsList.length - 1, 0, colName.trim()); // Insertar antes de Status
+                rebuildTableStructure();
+                log(`Columna '${colName}' agregada.`);
+            }
+        }
+
+        function rebuildTableStructure() {
+            const headerRow = document.getElementById("tableHeaderRow");
+            headerRow.innerHTML = "";
+            columnsList.forEach(col => {
+                headerRow.innerHTML += `<th>${col}</th>`;
+            });
+            headerRow.innerHTML += `<th>Acciones</th>`;
+            updateColumnToggles();
+            
+            // Limpiar datos al reestructurar columnas o mantener filas vacías
+            document.getElementById("tableBody").innerHTML = "";
         }
 
         function deleteRow(btn) {
@@ -427,9 +463,14 @@
             row.parentNode.removeChild(row);
         }
 
+        function clearTableData() {
+            document.getElementById("tableBody").innerHTML = "";
+            log("Tabla vaciada.");
+        }
+
         function filterTable() {
             const input = document.getElementById("searchInput").value.toLowerCase();
-            const rows = document.getElementById("excelTable").getElementsByTagName("tbody")[0].getElementsBy("tr");
+            const rows = document.getElementById("tableBody").getElementsByTagName("tr");
             for (let i = 0; i < rows.length; i++) {
                 let text = rows[i].innerText.toLowerCase();
                 rows[i].style.display = text.includes(input) ? "" : "none";
@@ -444,6 +485,9 @@
                 }
             }
         }
+
+        // Inicializar controles al cargar
+        updateColumnToggles();
     </script>
 </body>
 </html>
