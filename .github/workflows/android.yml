@@ -28,7 +28,7 @@ jobs:
       run: |
         npm install
 
-    - name: Generar y Sincronizar Plataforma Android
+    - name: Agregar y Sincronizar Android
       run: |
         npx cap add android
         npx cap sync android
