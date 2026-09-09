@@ -7,6 +7,7 @@ let arrastrando=false;
 let ultimoToque={x:0,y:0};
 let filasManuales=[];
 let columnasManuales=[];
+let arrastrandoLinea=null;
 const motor={m1:{cargando:false},m2:{cargando:false},m3:{cargando:false},m4:{cargando:false},m5:{cargando:false}};
 
 const estadoTF=document.getElementById('estadoTF');
@@ -50,15 +51,17 @@ async function cargarMotoresBase(){
   barraGlobal.style.width='10%';
   log('Cargando TF.js...',logsGlobal);
   const inicioTF=Date.now();
-  while(!window.tf && Date.now()-inicioTF<15000)await new Promise(r=>setTimeout(r,100));
+  while(!window.tf && Date.now()-inicioTF<20000)await new Promise(r=>setTimeout(r,150));
   estadoTF.textContent=window.tf?'✅ TF.js: Cargado':'⚠️ TF.js: No disponible';
   log(window.tf?'TF.js listo':'TF.js omitido',logsGlobal,window.tf?'ok':'warn');
+
   barraGlobal.style.width='40%';
   log('Cargando Tesseract OCR...',logsGlobal);
   const inicioOCR=Date.now();
-  while(!window.Tesseract && Date.now()-inicioOCR<15000)await new Promise(r=>setTimeout(r,100));
-  estadoOCR.textContent=window.Tesseract?'✅ OCR: Cargado':'⚠️ OCR: No disponible';
-  log(window.Tesseract?'Tesseract listo ✅':'Tesseract no cargó',logsGlobal,window.Tesseract?'ok':'warn');
+  while(!window.Tesseract && Date.now()-inicioOCR<30000)await new Promise(r=>setTimeout(r,150));
+  estadoOCR.textContent=window.Tesseract?'✅ OCR: Cargado':'⚠️ OCR: No disponible — verifica js/tesseract.min.js';
+  log(window.Tesseract?'Tesseract listo ✅':'Tesseract NO cargó — archivo faltante o ruta incorrecta',logsGlobal,window.Tesseract?'ok':'error');
+
   barraGlobal.style.width='100%';
   log('Interfaz lista — arrastra líneas, agrega o elimina',logsGlobal,'ok');
   setTimeout(()=>{cargaGlobal.classList.add('oculto');seccionImagen.classList.remove('oculto');},800);
@@ -122,29 +125,23 @@ function actualizarPrevisualizacion(){
   filasManuales=dt.filas; columnasManuales=dt.columnas;
   logAjuste(`M${num}`,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
 
-  const escalaVista=canvasPrevia.width/imagenActual.width;
-  const escala=escalaVista*escalaZoom;
   ctxPrevia.clearRect(0,0,canvasPrevia.width,canvasPrevia.height);
 
   ctxPrevia.strokeStyle='#ff0000'; ctxPrevia.lineWidth=2;
   dt.filas.forEach((y,idx)=>{
-    const py=y*escala+offsetY;
-    ctxPrevia.beginPath(); ctxPrevia.moveTo(0,py); ctxPrevia.lineTo(canvasPrevia.width,py); ctxPrevia.stroke();
+    ctxPrevia.beginPath(); ctxPrevia.moveTo(0,y); ctxPrevia.lineTo(canvasPrevia.width,y); ctxPrevia.stroke();
     ctxPrevia.fillStyle='#ff0000';
     ctxPrevia.font='10px sans-serif';
-    ctxPrevia.fillText(`F${idx+1}`,4,py+4);
+    ctxPrevia.fillText(`F${idx+1}`,4,y+4);
   });
 
   ctxPrevia.strokeStyle='#0055ff'; ctxPrevia.lineWidth=2;
   dt.columnas.forEach((x,idx)=>{
-    const px=x*escala+offsetX;
-    ctxPrevia.beginPath(); ctxPrevia.moveTo(px,0); ctxPrevia.lineTo(px,canvasPrevia.height); ctxPrevia.stroke();
+    ctxPrevia.beginPath(); ctxPrevia.moveTo(x,0); ctxPrevia.lineTo(x,canvasPrevia.height); ctxPrevia.stroke();
     ctxPrevia.fillStyle='#0055ff';
     ctxPrevia.font='10px sans-serif';
-    ctxPrevia.fillText(`C${idx+1}`,px+4,12);
+    ctxPrevia.fillText(`C${idx+1}`,x+4,12);
   });
-
-  // QUITADA LEYENDA FLOTANTE SOBRE LA IMAGEN — NO SE MUESTRA MÁS
 
   aplicarZoom();
 }
@@ -164,18 +161,18 @@ function eliminarFila(idx){filasManuales.splice(idx,1);actualizarPrevisualizacio
 function eliminarColumna(idx){columnasManuales.splice(idx,1);actualizarPrevisualizacion();}
 function resetLineasManuales(){filasManuales=[];columnasManuales=[];actualizarPrevisualizacion();}
 
-function obtenerPosicionLineas(clientX,clientY){
+function obtenerCoordenadasImagen(clientX,clientY){
   const rect=canvasPrevia.getBoundingClientRect();
-  const x=(clientX-rect.left-offsetX)/escalaZoom;
-  const y=(clientY-rect.top-offsetY)/escalaZoom;
-  const escalaVista=canvasPrevia.width/imagenActual.width;
-  return {imgX:x/escalaVista,imgY:y/escalaVista};
+  const xVista=(clientX-rect.left-offsetX)/escalaZoom;
+  const yVista=(clientY-rect.top-offsetY)/escalaZoom;
+  const escalaVista=canvasPrevia.width/rect.width;
+  return {imgX: xVista*escalaVista, imgY: yVista*escalaVista};
 }
-function encontrarLineaCercana(imgX,imgY,umbral=8){
-  const escalaVista=canvasPrevia.width/imagenActual.width;
+
+function encontrarLineaCercana(imgX,imgY,umbral=15){
   let minD=umbral*2,tipo=null,idx=-1;
-  filasManuales.forEach((fy,i)=>{const d=Math.abs(imgY-fy)*escalaVista;if(d<minD&&d<20){minD=d;tipo='fila';idx=i;}});
-  columnasManuales.forEach((cx,i)=>{const d=Math.abs(imgX-cx)*escalaVista;if(d<minD&&d<20){minD=d;tipo='columna';idx=i;}});
+  filasManuales.forEach((fy,i)=>{const d=Math.abs(imgY-fy);if(d<minD&&d<umbral){minD=d;tipo='fila';idx=i;}});
+  columnasManuales.forEach((cx,i)=>{const d=Math.abs(imgX-cx);if(d<minD&&d<umbral){minD=d;tipo='columna';idx=i;}});
   return {tipo,idx};
 }
 
@@ -295,51 +292,69 @@ window.addEventListener('load',()=>{
   document.getElementById('btnZoomMenos').addEventListener('click',zoomMenos);
   document.getElementById('btnZoomReset').addEventListener('click',zoomReset);
 
-  let arrastrandoLinea=null;
   visorWrapper.addEventListener('mousedown',e=>{
     if(!imagenActual)return;
-    const {imgX,imgY}=obtenerPosicionLineas(e.clientX,e.clientY);
+    const {imgX,imgY}=obtenerCoordenadasImagen(e.clientX,e.clientY);
     const linea=encontrarLineaCercana(imgX,imgY);
-    if(linea.tipo){arrastrandoLinea=linea;}
+    if(linea.tipo){arrastrandoLinea=linea;e.preventDefault();}
     else if(e.shiftKey){
       const rect=canvasPrevia.getBoundingClientRect();
-      if(Math.abs(e.clientX-rect.left)<20||Math.abs(e.clientX-rect.right)<20)agregarFilaManual(imgY);
-      else if(Math.abs(e.clientY-rect.top)<20||Math.abs(e.clientY-rect.bottom)<20)agregarColumnaManual(imgX);
+      const xBorde=Math.min(e.clientX-rect.left,rect.right-e.clientX);
+      const yBorde=Math.min(e.clientY-rect.top,rect.bottom-e.clientY);
+      if(yBorde<20)agregarFilaManual(imgY);
+      else if(xBorde<20)agregarColumnaManual(imgX);
     }else if((e.ctrlKey||e.metaKey)&&linea.tipo){
       if(linea.tipo==='fila')filasManuales.splice(linea.idx,1);
       else columnasManuales.splice(linea.idx,1);
       actualizarPrevisualizacion();
     }
   });
+
   visorWrapper.addEventListener('mousemove',e=>{
     if(!arrastrandoLinea||!imagenActual)return;
-    const {imgX,imgY}=obtenerPosicionLineas(e.clientX,e.clientY);
+    const {imgX,imgY}=obtenerCoordenadasImagen(e.clientX,e.clientY);
     if(arrastrandoLinea.tipo==='fila')filasManuales[arrastrandoLinea.idx]=imgY;
     else columnasManuales[arrastrandoLinea.idx]=imgX;
     actualizarPrevisualizacion();
   });
+
   visorWrapper.addEventListener('mouseup',()=>{arrastrandoLinea=null;});
+  visorWrapper.addEventListener('mouseleave',()=>{arrastrandoLinea=null;});
 
   visorWrapper.addEventListener('touchstart',e=>{
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       visorWrapper.dataset.distancia=d;
     }else if(e.touches.length===1){
-      arrastrando=true; ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY;
+      const t=e.touches[0];
+      const {imgX,imgY}=obtenerCoordenadasImagen(t.clientX,t.clientY);
+      const linea=encontrarLineaCercana(imgX,imgY);
+      if(linea.tipo){arrastrandoLinea=linea;}
+      arrastrando=true; ultimoToque.x=t.pageX; ultimoToque.y=t.pageY;
     }
-  });
+  },{passive:false});
+
   visorWrapper.addEventListener('touchmove',e=>{
     e.preventDefault();
     if(e.touches.length===2){
       const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       const ant=parseFloat(visorWrapper.dataset.distancia);
       if(ant){escalaZoom*=d/ant;escalaZoom=Math.max(escalaOriginal,Math.min(escalaZoom,4));visorWrapper.dataset.distancia=d;aplicarZoom();}
-    }else if(e.touches.length===1&&arrastrando){
-      offsetX+=e.touches[0].pageX-ultimoToque.x;
-      offsetY+=e.touches[0].pageY-ultimoToque.y;
-      ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY; aplicarZoom();
+    }else if(e.touches.length===1){
+      const t=e.touches[0];
+      if(arrastrandoLinea){
+        const {imgX,imgY}=obtenerCoordenadasImagen(t.clientX,t.clientY);
+        if(arrastrandoLinea.tipo==='fila')filasManuales[arrastrandoLinea.idx]=imgY;
+        else columnasManuales[arrastrandoLinea.idx]=imgX;
+        actualizarPrevisualizacion();
+      }else if(arrastrando){
+        offsetX+=t.pageX-ultimoToque.x;
+        offsetY+=t.pageY-ultimoToque.y;
+        ultimoToque.x=t.pageX; ultimoToque.y=t.pageY; aplicarZoom();
+      }
     }
   },{passive:false});
+
   visorWrapper.addEventListener('touchend',()=>{arrastrando=false;visorWrapper.dataset.distancia='';arrastrandoLinea=null;});
   visorWrapper.addEventListener('dblclick',zoomReset);
 
@@ -350,8 +365,8 @@ window.addEventListener('load',()=>{
       imagenActual=new Image();imagenActual.onload=()=>{
         filasManuales=[];columnasManuales=[];
         vistaImagen.src=ev.target.result;vistaImagen.onload=()=>{
-          canvasPrevia.width=vistaImagen.naturalWidth;
-          canvasPrevia.height=vistaImagen.naturalHeight;
+          canvasPrevia.width=imagenActual.width;
+          canvasPrevia.height=imagenActual.height;
           escalaOriginal=1;escalaZoom=1;offsetX=0;offsetY=0;
           setTimeout(actualizarPrevisualizacion,100);
           log('Imagen cargada — arrastra, agrega o elimina líneas',logsGlobal,'ok');
