@@ -2,102 +2,117 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>MAR Caribe — OCR de Tablas</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
-    body{background:#f0f2f5;padding:16px;max-width:1200px;margin:0 auto;}
-    h1,h2,h3{text-align:center;color:#1a1a1a;margin-bottom:16px;}
+    body{background:#f0f2f5;padding:12px;max-width:100%;margin:0 auto;}
+    h1,h2,h3{text-align:center;color:#1a1a1a;margin-bottom:12px;}
+    h1{font-size:1.3rem;}
+    h2{font-size:1.1rem;}
 
-    .visor-imagen{position:relative;width:100%;max-width:900px;margin:0 auto 24px auto;}
-    #vistaImagen{display:block;width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
-    #canvasPrevia{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px;pointer-events:none;}
+    .visor-fijo{position:sticky;top:0;background:#f0f2f5;z-index:100;padding:8px 0 12px 0;}
+    #visorWrapper{width:100%;max-height:45vh;overflow:hidden;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);background:#fff;}
+    #visorInterior{position:relative;width:100%;height:100%;transform-origin:0 0;}
+    #vistaImagen{display:block;width:100%;height:auto;pointer-events:none;}
+    #canvasPrevia{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+    .controles-zoom{display:flex;justify-content:center;gap:8px;margin-top:8px;}
+    .btn-zoom{width:40px;height:40px;padding:0;border-radius:50%;background:#fff;border:1px solid #d1d5db;font-size:18px;font-weight:bold;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    .btn-zoom:active{background:#e5e7eb;}
 
-    .selector-motor{max-width:900px;margin:0 auto 16px auto;display:flex;align-items:center;gap:12px;}
-    .selector-motor label{font-weight:600;color:#1f2937;}
-    .selector-motor select{flex:1;padding:12px;border-radius:10px;border:1px solid #d1d5db;font-size:16px;}
+    .selector-motor{display:flex;align-items:center;gap:8px;margin:12px 0;flex-wrap:wrap;}
+    .selector-motor label{font-weight:600;color:#1f2937;font-size:14px;}
+    .selector-motor select{flex:1;min-width:180px;padding:8px;border-radius:8px;border:1px solid #d1d5db;font-size:14px;}
 
-    .motor-card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:20px;margin-bottom:24px;}
+    .fila-log-ajustes{display:flex;align-items:center;gap:8px;margin:12px 0;flex-wrap:wrap;background:#2a2a1a;padding:8px;border-radius:8px;}
+    #logsAjustes{flex:1;color:#ffd700;font-family:monospace;font-size:11px;white-space:nowrap;overflow-x:auto;}
+    .btn-copiar{padding:6px 12px;border-radius:6px;background:#10b981;color:#fff;border:none;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+
+    .motor-card{background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);padding:14px;margin-bottom:16px;}
     .motor-card:not(.activo){display:none;}
+    .estado{padding:8px 12px;border-radius:8px;font-weight:600;margin-bottom:10px;background:#e9ecef;font-size:14px;}
+    .barra-fondo{width:100%;height:8px;background:#e9ecef;border-radius:4px;overflow:hidden;margin-bottom:12px;}
+    .barra-progreso{height:100%;background:linear-gradient(90deg,#28a745,#20c997);border-radius:4px;transition:width 0.3s ease;}
 
-    .estado{padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:12px;background:#e9ecef;}
-    .barra-fondo{width:100%;height:12px;background:#e9ecef;border-radius:6px;overflow:hidden;margin-bottom:16px;}
-    .barra-progreso{height:100%;background:linear-gradient(90deg,#28a745,#20c997);border-radius:6px;transition:width 0.3s ease;}
+    .grupo-sliders{background:#f8f9fa;border-radius:10px;padding:12px;margin-bottom:12px;}
+    .slider-fila{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+    .slider-fila label{width:120px;font-size:13px;font-weight:500;color:#374151;flex-shrink:0;}
+    .slider-fila input[type="range"]{flex:1;min-width:100px;height:6px;border-radius:3px;background:#d1d5db;outline:none;-webkit-appearance:none;}
+    .slider-fila input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#007bff;cursor:pointer;}
+    .slider-fila input[type="range"]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#007bff;border:none;}
+    .slider-valor{width:60px;text-align:right;font-weight:600;font-family:monospace;font-size:12px;color:#1f2937;}
 
-    .grupo-sliders{background:#f8f9fa;border-radius:12px;padding:14px;margin-bottom:16px;}
-    .slider-fila{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
-    .slider-fila label{width:140px;font-size:14px;font-weight:500;color:#374151;flex-shrink:0;}
-    .slider-fila input[type="range"]{flex:1;min-width:120px;height:8px;border-radius:4px;background:#d1d5db;outline:none;-webkit-appearance:none;}
-    .slider-fila input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#007bff;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
-    .slider-fila input[type="range"]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#007bff;cursor:pointer;border:none;}
-    .slider-valor{width:70px;text-align:right;font-weight:600;font-family:monospace;font-size:14px;color:#1f2937;}
-
-    .btn-group{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
-    button{padding:14px 24px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.15s;}
-    button:active{transform:scale(0.97);}
+    .btn-group{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+    button{padding:10px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transform:scale(0.7);transform-origin:left top;}
+    button:active{transform:scale(0.68);}
     .btn-analizar{background:#007bff;color:#fff;}
     .btn-reset{background:#dc3545;color:#fff;}
-    .btn-copiar{background:#10b981;color:#fff;padding:10px 16px;font-size:14px;}
 
-    .logs{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:10px;font-family:monospace;font-size:12px;max-height:160px;overflow-y:auto;margin-top:12px;}
-    .logs-ajustes{background:#2a2a1a;color:#ffd700;padding:14px;border-radius:10px;font-family:monospace;font-size:11px;max-height:200px;overflow-y:auto;margin:16px 0;line-height:1.5;}
-    .resultado{margin-top:16px;overflow-x:auto;}
-    table{border-collapse:collapse;width:100%;margin-top:8px;}
-    th,td{border:1px solid #dee2e6;padding:8px 10px;text-align:left;font-size:14px;}
+    .logs{background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:8px;font-family:monospace;font-size:11px;max-height:120px;overflow-y:auto;margin-top:10px;}
+    .resultado{margin-top:12px;overflow-x:auto;}
+    table{border-collapse:collapse;width:100%;margin-top:6px;}
+    th,td{border:1px solid #dee2e6;padding:6px 8px;text-align:left;font-size:13px;}
     th{background:#212529;color:#fff;}
     tr:nth-child(even){background:#f8f9fa;}
 
     .oculto{display:none !important;}
-    .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:20px;padding:20px;}
-    .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
+    .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:16px;padding:20px;}
+    .seccion-imagen{border:2px dashed #ccc;border-radius:10px;padding:15px;text-align:center;margin-bottom:12px;cursor:pointer;transform:scale(0.5);transform-origin:center top;}
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
+    .seccion-imagen p{font-size:14px;color:#666;}
 
-    .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
-    .etiqueta-sliders{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
-    .leyenda-lineas{max-width:900px;margin:-8px auto 16px auto;font-size:14px;color:#6b7280;display:flex;gap:18px;flex-wrap:wrap;}
-    .leyenda-lineas span{display:flex;align-items:center;gap:6px;}
-    .linea-roja{width:18px;height:3px;background:#ff0000;border-radius:2px;}
-    .linea-azul{width:18px;height:3px;background:#0055ff;border-radius:2px;}
+    .leyenda-lineas{display:flex;gap:14px;justify-content:center;margin-top:6px;font-size:12px;color:#6b7280;}
+    .leyenda-lineas span{display:flex;align-items:center;gap:4px;}
+    .linea-roja{width:16px;height:2px;background:#ff0000;}
+    .linea-azul{width:16px;height:2px;background:#0055ff;}
 
+    .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;}
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
     .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
-    .m5{border:3px solid #f59e0b;box-shadow:0 0 12px rgba(245,158,11,0.2);}
+    .m5{border:2px solid #f59e0b;}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
     .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
-
-    .info-param{font-size:11px;color:#6b7280;margin-top:-8px;margin-bottom:8px;}
+    .info-param{font-size:11px;color:#6b7280;margin-bottom:8px;}
   </style>
 </head>
 <body>
 
 <div id="cargaGlobal" class="carga-pantalla">
   <h2>Iniciando MAR Caribe...</h2>
-  <div class="barra-fondo" style="width:280px;"><div id="barraGlobal" class="barra-progreso" style="width:0%"></div></div>
+  <div class="barra-fondo" style="width:240px;"><div id="barraGlobal" class="barra-progreso" style="width:0%"></div></div>
   <p id="estadoTF">TF.js: ⏳ Pendiente</p>
   <p id="estadoOCR">OCR: ⏳ Pendiente</p>
-  <div id="logsGlobal" class="logs" style="width:90%;max-width:500px;max-height:200px;"></div>
+  <div id="logsGlobal" class="logs" style="width:90%;max-width:480px;"></div>
 </div>
 
 <div id="seccionImagen" class="oculto">
-  <h1>📊 MAR Caribe — OCR de Tablas <span class="etiqueta-sliders">Previsualización en vivo</span></h1>
+  <h1>📊 MAR Caribe — OCR de Tablas</h1>
 
   <div id="btnSeleccionar" class="seccion-imagen">
-    <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
+    <p>📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
   </div>
 
-  <div class="visor-imagen">
-    <img id="vistaImagen" alt="Vista previa de la tabla">
-    <canvas id="canvasPrevia"></canvas>
-  </div>
-
-  <div class="leyenda-lineas">
-    <span><span class="linea-roja"></span> Filas detectadas</span>
-    <span><span class="linea-azul"></span> Columnas detectadas</span>
+  <div class="visor-fijo">
+    <div id="visorWrapper">
+      <div id="visorInterior">
+        <img id="vistaImagen" alt="Vista previa de la tabla">
+        <canvas id="canvasPrevia"></canvas>
+      </div>
+    </div>
+    <div class="controles-zoom">
+      <button id="btnZoomMenos" class="btn-zoom">−</button>
+      <button id="btnZoomReset" class="btn-zoom">⟲</button>
+      <button id="btnZoomMas" class="btn-zoom">+</button>
+    </div>
+    <div class="leyenda-lineas">
+      <span><span class="linea-roja"></span> Filas</span>
+      <span><span class="linea-azul"></span> Columnas</span>
+    </div>
   </div>
 
   <div class="selector-motor">
-    <label>Motor activo para previsualizar:</label>
+    <label>Motor activo:</label>
     <select id="selectorMotor">
       <option value="1">1 — SSD MobileNet v2</option>
       <option value="2">2 — EfficientDet-Lite0</option>
@@ -107,15 +122,10 @@
     </select>
   </div>
 
-  <h3>📋 Log de Ajustes</h3>
-  <div style="max-width:900px;margin:0 auto 8px auto;">
-    <button id="btnCopiarLog" class="btn-copiar">📋 Copiar log de ajustes</button>
-  </div>
-  <div id="logsAjustes" class="logs-ajustes" style="max-width:900px;margin:0 auto;">
-    === INICIO DEL LOG DE AJUSTES ===<br>
-    Mueve cualquier control deslizante y se registrará aquí automáticamente.<br>
-    Cada línea: [hora] Motor | brillo:XX | distFilas:YY | distCols:ZZ | denV:0.XX | denH:0.XX<br>
-    === COPIA TODO ESTE BLOQUE CUANDO TERMINES DE AJUSTAR ===
+  <div class="fila-log-ajustes">
+    <span style="color:#ffd700;font-size:12px;font-weight:600;">📋 Log:</span>
+    <div id="logsAjustes">Carga una imagen para ver valores</div>
+    <button id="btnCopiarLog" class="btn-copiar">Copiar</button>
   </div>
 
   <!-- MOTOR 1 -->
@@ -123,36 +133,34 @@
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
     <div class="estado" id="estadoM1">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM1" class="barra-progreso" style="width:0%"></div></div>
-
     <div class="grupo-sliders">
-      <p class="info-param">🔧 Ajusta los parámetros y ve las líneas en la imagen</p>
+      <p class="info-param">🔧 Ajusta y ve cambios en vivo</p>
       <div class="slider-fila">
         <label>Brillo umbral:</label>
         <input type="range" id="sliderBrilloM1" min="150" max="255" value="210">
         <span class="slider-valor" id="valBrilloM1">210</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima filas:</label>
+        <label>Dist. filas:</label>
         <input type="range" id="sliderFilasM1" min="6" max="40" value="12">
         <span class="slider-valor" id="valFilasM1">12</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima cols:</label>
+        <label>Dist. cols:</label>
         <input type="range" id="sliderColsM1" min="15" max="60" value="28">
         <span class="slider-valor" id="valColsM1">28</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima V:</label>
+        <label>Densidad V:</label>
         <input type="range" id="sliderDenVM1" min="0.10" max="0.60" step="0.01" value="0.35">
         <span class="slider-valor" id="valDenVM1">0.35</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima H:</label>
+        <label>Densidad H:</label>
         <input type="range" id="sliderDenHM1" min="0.03" max="0.25" step="0.01" value="0.08">
         <span class="slider-valor" id="valDenHM1">0.08</span>
       </div>
     </div>
-
     <div class="btn-group">
       <button id="btnAnalizarM1" class="btn-analizar">🔍 Analizar y extraer texto</button>
       <button id="btnResetM1" class="btn-reset">🔄 Reset</button>
@@ -166,7 +174,6 @@
     <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
     <div class="estado" id="estadoM2">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM2" class="barra-progreso" style="width:0%"></div></div>
-
     <div class="grupo-sliders">
       <div class="slider-fila">
         <label>Brillo umbral:</label>
@@ -174,27 +181,26 @@
         <span class="slider-valor" id="valBrilloM2">205</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima filas:</label>
+        <label>Dist. filas:</label>
         <input type="range" id="sliderFilasM2" min="6" max="40" value="12">
         <span class="slider-valor" id="valFilasM2">12</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima cols:</label>
+        <label>Dist. cols:</label>
         <input type="range" id="sliderColsM2" min="15" max="60" value="28">
         <span class="slider-valor" id="valColsM2">28</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima V:</label>
+        <label>Densidad V:</label>
         <input type="range" id="sliderDenVM2" min="0.10" max="0.60" step="0.01" value="0.35">
         <span class="slider-valor" id="valDenVM2">0.35</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima H:</label>
+        <label>Densidad H:</label>
         <input type="range" id="sliderDenHM2" min="0.03" max="0.25" step="0.01" value="0.08">
         <span class="slider-valor" id="valDenHM2">0.08</span>
       </div>
     </div>
-
     <div class="btn-group">
       <button id="btnAnalizarM2" class="btn-analizar">⚡ Analizar y extraer texto</button>
       <button id="btnResetM2" class="btn-reset">🔄 Reset</button>
@@ -208,7 +214,6 @@
     <h2>🎯 Motor 3: YOLOv8n</h2>
     <div class="estado" id="estadoM3">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM3" class="barra-progreso" style="width:0%"></div></div>
-
     <div class="grupo-sliders">
       <div class="slider-fila">
         <label>Brillo umbral:</label>
@@ -216,27 +221,26 @@
         <span class="slider-valor" id="valBrilloM3">215</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima filas:</label>
+        <label>Dist. filas:</label>
         <input type="range" id="sliderFilasM3" min="6" max="40" value="12">
         <span class="slider-valor" id="valFilasM3">12</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima cols:</label>
+        <label>Dist. cols:</label>
         <input type="range" id="sliderColsM3" min="15" max="60" value="28">
         <span class="slider-valor" id="valColsM3">28</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima V:</label>
+        <label>Densidad V:</label>
         <input type="range" id="sliderDenVM3" min="0.10" max="0.60" step="0.01" value="0.35">
         <span class="slider-valor" id="valDenVM3">0.35</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima H:</label>
+        <label>Densidad H:</label>
         <input type="range" id="sliderDenHM3" min="0.03" max="0.25" step="0.01" value="0.08">
         <span class="slider-valor" id="valDenHM3">0.08</span>
       </div>
     </div>
-
     <div class="btn-group">
       <button id="btnAnalizarM3" class="btn-analizar">🎯 Analizar y extraer texto</button>
       <button id="btnResetM3" class="btn-reset">🔄 Reset</button>
@@ -250,7 +254,6 @@
     <h2>🚀 Motor 4: YOLOv11-Tabla</h2>
     <div class="estado" id="estadoM4">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM4" class="barra-progreso" style="width:0%"></div></div>
-
     <div class="grupo-sliders">
       <div class="slider-fila">
         <label>Brillo umbral:</label>
@@ -258,27 +261,26 @@
         <span class="slider-valor" id="valBrilloM4">200</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima filas:</label>
+        <label>Dist. filas:</label>
         <input type="range" id="sliderFilasM4" min="6" max="40" value="14">
         <span class="slider-valor" id="valFilasM4">14</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima cols:</label>
+        <label>Dist. cols:</label>
         <input type="range" id="sliderColsM4" min="15" max="60" value="30">
         <span class="slider-valor" id="valColsM4">30</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima V:</label>
+        <label>Densidad V:</label>
         <input type="range" id="sliderDenVM4" min="0.10" max="0.60" step="0.01" value="0.38">
         <span class="slider-valor" id="valDenVM4">0.38</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima H:</label>
+        <label>Densidad H:</label>
         <input type="range" id="sliderDenHM4" min="0.03" max="0.25" step="0.01" value="0.09">
         <span class="slider-valor" id="valDenHM4">0.09</span>
       </div>
     </div>
-
     <div class="btn-group">
       <button id="btnAnalizarM4" class="btn-analizar">🚀 Analizar y extraer texto</button>
       <button id="btnResetM4" class="btn-reset">🔄 Reset</button>
@@ -292,7 +294,6 @@
     <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-recomendado">⭐ RECOMENDADO</span></h2>
     <div class="estado" id="estadoM5">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM5" class="barra-progreso" style="width:0%"></div></div>
-
     <div class="grupo-sliders">
       <div class="slider-fila">
         <label>Brillo umbral:</label>
@@ -300,27 +301,26 @@
         <span class="slider-valor" id="valBrilloM5">220</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima filas:</label>
+        <label>Dist. filas:</label>
         <input type="range" id="sliderFilasM5" min="6" max="40" value="12">
         <span class="slider-valor" id="valFilasM5">12</span>
       </div>
       <div class="slider-fila">
-        <label>Dist. mínima cols:</label>
+        <label>Dist. cols:</label>
         <input type="range" id="sliderColsM5" min="15" max="60" value="28">
         <span class="slider-valor" id="valColsM5">28</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima V:</label>
+        <label>Densidad V:</label>
         <input type="range" id="sliderDenVM5" min="0.10" max="0.60" step="0.01" value="0.40">
         <span class="slider-valor" id="valDenVM5">0.40</span>
       </div>
       <div class="slider-fila">
-        <label>Densidad mínima H:</label>
+        <label>Densidad H:</label>
         <input type="range" id="sliderDenHM5" min="0.03" max="0.25" step="0.01" value="0.10">
         <span class="slider-valor" id="valDenHM5">0.10</span>
       </div>
     </div>
-
     <div class="btn-group">
       <button id="btnAnalizarM5" class="btn-analizar">📄 Analizar y extraer texto</button>
       <button id="btnResetM5" class="btn-reset">🔄 Reset</button>
