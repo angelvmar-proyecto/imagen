@@ -24,19 +24,27 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Instalar Dependencias y Sincronizar Capacitor
+    - name: Instalar Dependencias y Capacitor CLI
       run: |
         npm install
+        npm install -D @capacitor/cli @capacitor/android
+
+    - name: Inicializar Plataforma Android localmente
+      run: |
+        npx cap add android || true
         npx cap sync android
 
-    - name: Compilar APK de Depuración
+    - name: Compilar APK de Depuración con Gradle
       run: |
         cd android
         chmod +x gradlew
         ./gradlew assembleDebug
 
-    - name: Subir APK Generado
+    - name: Verificar y Subir APK Generado
       uses: actions/upload-artifact@v4
       with:
         name: app-debug-apk
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        path: |
+          android/app/build/outputs/apk/debug/app-debug.apk
+          android/app/build/outputs/apk/**/*.apk
+        if-no-files-found: error
