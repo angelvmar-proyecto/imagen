@@ -5,11 +5,8 @@ let offsetX=0, offsetY=0;
 let escalaOriginal=1;
 let arrastrando=false;
 let ultimoToque={x:0,y:0};
-let lineasFilas=[];
-let lineasColumnas=[];
-let lineaSeleccionada=null;
-let modoEdicion=false;
-let modoAgregar=null;
+let filasManuales=[];
+let columnasManuales=[];
 const motor={m1:{cargando:false},m2:{cargando:false},m3:{cargando:false},m4:{cargando:false},m5:{cargando:false}};
 
 const estadoTF=document.getElementById('estadoTF');
@@ -19,8 +16,8 @@ const logsGlobal=document.getElementById('logsGlobal');
 const logsAjustes=document.getElementById('logsAjustes');
 const cargaGlobal=document.getElementById('cargaGlobal');
 const seccionImagen=document.getElementById('seccionImagen');
-const btnSeleccionar=document.getElementById('btnSeleccionar');
 const entradaImagen=document.getElementById('entradaImagen');
+const btnSeleccionar=document.getElementById('btnSeleccionar');
 const vistaImagen=document.getElementById('vistaImagen');
 const canvasPrevia=document.getElementById('canvasPrevia');
 const ctxPrevia=canvasPrevia.getContext('2d');
@@ -28,18 +25,10 @@ const selectorMotor=document.getElementById('selectorMotor');
 const btnCopiarLog=document.getElementById('btnCopiarLog');
 const visorWrapper=document.getElementById('visorWrapper');
 const visorInterior=document.getElementById('visorInterior');
-const sensibilidad=document.getElementById('sensibilidad');
-const espaciadoMinimo=document.getElementById('espaciadoMinimo');
-const btnModoEditar=document.getElementById('btnModoEditar');
-const btnAgregarFila=document.getElementById('btnAgregarFila');
-const btnAgregarColumna=document.getElementById('btnAgregarColumna');
-const btnBorrarLinea=document.getElementById('btnBorrarLinea');
-const btnGuardarConfig=document.getElementById('btnGuardarConfig');
-const btnCargarConfig=document.getElementById('btnCargarConfig');
 
 function log(t,a,tp='info'){
   const h=new Date().toLocaleTimeString();
-  const c={info:'#00ccff',ok:'#00ff00',error:'#ff4444',warn:'#ffcc00'};
+  const c={info:'#0ff',ok:'#0f0',error:'#f55',warn:'#ff0'};
   const d=document.createElement('div');
   d.style.color=c[tp];
   d.textContent=`[${h}] ${t}`;
@@ -47,9 +36,9 @@ function log(t,a,tp='info'){
   a.scrollTop=a.scrollHeight;
 }
 
-function logAjuste(sens,esp,filas,cols){
+function logAjuste(motor,brillo,distFilas,distCols,denV,denH){
   const h=new Date().toLocaleTimeString();
-  logsAjustes.textContent=`${h} | Sensibilidad:${sens} | Espaciado:${esp} | Filas:${filas.length} | Columnas:${cols.length}`;
+  logsAjustes.textContent=`${h} | ${motor} | brillo:${brillo} | filas:${filasManuales.length} | cols:${columnasManuales.length} | denV:${denV.toFixed(2)} | denH:${denH.toFixed(2)}`;
 }
 
 function setEstado(m,t){document.getElementById(`estado${m}`).textContent=t;}
@@ -57,152 +46,139 @@ function setBarra(m,p){document.getElementById(`barra${m}`).style.width=p+'%';}
 function setResultado(m,h){document.getElementById(`resultado${m}`).innerHTML=h;}
 function getLogs(m){return document.getElementById(`logs${m}`);}
 
-// ✅ FUNCIÓN ORIGINAL RESTAURADA — cargarMotoresBase()
 async function cargarMotoresBase(){
   barraGlobal.style.width='10%';
-  log('Verificando TF.js...',logsGlobal);
-
+  log('Cargando TF.js...',logsGlobal);
   const inicioTF=Date.now();
-  while(!window.tf && Date.now()-inicioTF<15000){
-    await new Promise(r=>setTimeout(r,50));
-  }
-  if(window.tf){
-    estadoTF.textContent='✅ TF.js: Cargado';
-    log('TF.js cargado correctamente',logsGlobal,'ok');
-  }else{
-    estadoTF.textContent='⚠️ TF.js: No disponible';
-    log('TF.js no disponible',logsGlobal,'warn');
-  }
-
+  while(!window.tf && Date.now()-inicioTF<15000)await new Promise(r=>setTimeout(r,100));
+  estadoTF.textContent=window.tf?'✅ TF.js: Cargado':'⚠️ TF.js: No disponible';
+  log(window.tf?'TF.js listo':'TF.js omitido',logsGlobal,window.tf?'ok':'warn');
   barraGlobal.style.width='40%';
-  log('Verificando Tesseract/OCR...',logsGlobal);
-
-  const inicioOCR=Date.now();
-  while(!window.Tesseract && Date.now()-inicioOCR<15000){
-    await new Promise(r=>setTimeout(r,50));
-  }
-  if(window.Tesseract){
-    estadoOCR.textContent='✅ OCR: Cargado';
-    log('OCR cargado correctamente',logsGlobal,'ok');
-  }else{
-    estadoOCR.textContent='⚠️ OCR: No disponible';
-    log('OCR no disponible',logsGlobal,'warn');
-  }
-
+  log('Cargando Tesseract OCR...',logsGlobal);
+  estadoOCR.textContent=window.Tesseract?'✅ OCR: Cargado':'⚠️ OCR: No disponible';
+  log(window.Tesseract?'Tesseract listo ✅':'Tesseract no cargó',logsGlobal,window.Tesseract?'ok':'warn');
   barraGlobal.style.width='100%';
-  log('Sistema listo — carga imagen para comenzar',logsGlobal,'ok');
-
-  setTimeout(()=>{
-    cargaGlobal.classList.add('oculto');
-    seccionImagen.classList.remove('oculto');
-  },800);
+  log('Interfaz lista — arrastra líneas, agrega o elimina',logsGlobal,'ok');
+  setTimeout(()=>{cargaGlobal.classList.add('oculto');seccionImagen.classList.remove('oculto');},800);
 }
 
-function mapearSensibilidad(valor){
-  const mapa={
-    bajo: {brillo:220,denV:0.45,denH:0.12},
-    medio:{brillo:200,denV:0.35,denH:0.08},
-    alto: {brillo:180,denV:0.25,denH:0.05}
-  };
-  return mapa[valor]||mapa.medio;
-}
-
-function mapearEspaciado(valor){return parseInt(valor);}
-
-function detectarEstructuraAutomatica(img){
-  const sensVal=sensibilidad.value;
-  const espVal=mapearEspaciado(espaciadoMinimo.value);
-  const params=mapearSensibilidad(sensVal);
-
+function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,minDensidadH){
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
-  c.width=img.width;c.height=img.height;
+  c.width=img.width; c.height=img.height;
   ctx.drawImage(img,0,0);
   const d=ctx.getImageData(0,0,c.width,c.height).data;
 
-  const lh=[], umbralFila=c.width*params.denH;
+  const lh=[], umbralPixelesFila=c.width*minDensidadH;
   for(let y=0;y<c.height;y++){
-    let pix=0;
+    let pixelesOscuros=0;
     for(let x=0;x<c.width;x++){
       const i=(y*c.width+x)*4;
-      if((d[i]+d[i+1]+d[i+2])/3<params.brillo)pix++;
+      if((d[i]+d[i+1]+d[i+2])/3<brillo)pixelesOscuros++;
     }
-    if(pix>umbralFila)lh.push({y,peso:pix});
+    if(pixelesOscuros>umbralPixelesFila)lh.push({y,peso:pixelesOscuros});
   }
-  const filas=[];let ultimaY=-9999;
-  lh.sort((a,b)=>a.y-b.y).forEach(l=>{if(l.y-ultimaY>espVal){filas.push(l.y);ultimaY=l.y;}});
+  let filas=[]; let ultimaY=-9999;
+  lh.sort((a,b)=>a.y-b.y).forEach(linea=>{
+    if(linea.y-ultimaY>minDistFilas){filas.push(linea.y);ultimaY=linea.y;}
+  });
 
-  const lv=[], umbralCol=c.height*params.denV;
+  const lv=[], umbralPixelesColumna=c.height*minDensidadV;
   for(let x=0;x<c.width;x++){
-    let pix=0;
+    let pixelesOscuros=0;
     for(let y=0;y<c.height;y++){
       const i=(y*c.width+x)*4;
-      if((d[i]+d[i+1]+d[i+2])/3<params.brillo)pix++;
+      if((d[i]+d[i+1]+d[i+2])/3<brillo)pixelesOscuros++;
     }
-    if(pix>umbralCol)lv.push({x,peso:pix});
+    if(pixelesOscuros>umbralPixelesColumna)lv.push({x,peso:pixelesOscuros});
   }
-  const columnas=[];let ultimaX=-9999;
-  lv.sort((a,b)=>a.x-b.x).forEach(l=>{if(l.x-ultimaX>espVal){columnas.push(l.x);ultimaX=l.x;}});
+  let columnas=[]; let ultimaX=-9999;
+  lv.sort((a,b)=>a.x-b.x).forEach(linea=>{
+    if(linea.x-ultimaX>minDistCols){columnas.push(linea.x);ultimaX=linea.x;}
+  });
 
   if(columnas.length<2){
-    for(let dd=0.30;dd>=0.12&&columnas.length<2;dd-=0.03){
-      const ub=c.height*dd, cols=[];let ux=-9999;
-      lv.forEach(l=>{if(l.peso>ub&&l.x-ux>espVal){cols.push(l.x);ux=l.x;}});
+    for(let dd=0.35;dd>=0.15&&columnas.length<2;dd-=0.05){
+      const ub=c.height*dd, cols=[], ux=-9999;
+      lv.forEach(l=>{if(l.peso>ub&&l.x-ux>minDistCols){cols.push(l.x);ux=l.x;}});
       if(cols.length>=2){columnas.splice(0,0,...cols);break;}
     }
   }
+
+  filas=[...filas,...filasManuales].sort((a,b)=>a-b);
+  columnas=[...columnas,...columnasManuales].sort((a,b)=>a-b);
+  filas=filas.filter((y,i,a)=>i===0||y-a[i-1]>3);
+  columnas=columnas.filter((x,i,a)=>i===0||x-a[i-1]>3);
+
   return {filas,columnas};
 }
 
 function actualizarPrevisualizacion(){
   if(!imagenActual)return;
-  const sensVal=sensibilidad.value;
-  const espVal=espaciadoMinimo.value;
-  const rect=vistaImagen.getBoundingClientRect();
-  const escalaVista=rect.width/imagenActual.width;
+  const num=parseInt(selectorMotor.value);
+  const v=getValoresMotor(num);
+  const dt=detectarEstructura(imagenActual,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
+  filasManuales=dt.filas; columnasManuales=dt.columnas;
+  logAjuste(`M${num}`,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
 
-  canvasPrevia.width=vistaImagen.clientWidth;
-  canvasPrevia.height=vistaImagen.clientHeight;
-
+  const escalaVista=canvasPrevia.width/imagenActual.width;
+  const escala=escalaVista*escalaZoom;
   ctxPrevia.clearRect(0,0,canvasPrevia.width,canvasPrevia.height);
 
-  lineasFilas.forEach(y=>{
-    const py=y*escalaVista*escalaZoom+offsetY;
-    ctxPrevia.beginPath();
-    ctxPrevia.moveTo(0,py);
-    ctxPrevia.lineTo(canvasPrevia.width,py);
-    ctxPrevia.strokeStyle=(lineaSeleccionada?.tipo==='fila'&&lineaSeleccionada.valor===y)?'#ffff00':'#ff0000';
-    ctxPrevia.lineWidth=2;
-    ctxPrevia.stroke();
+  ctxPrevia.strokeStyle='#ff0000'; ctxPrevia.lineWidth=2;
+  dt.filas.forEach((y,idx)=>{
+    const py=y*escala+offsetY;
+    ctxPrevia.beginPath(); ctxPrevia.moveTo(0,py); ctxPrevia.lineTo(canvasPrevia.width,py); ctxPrevia.stroke();
+    ctxPrevia.fillStyle='#ff0000';
+    ctxPrevia.font='10px sans-serif';
+    ctxPrevia.fillText(`F${idx+1}`,4,py+4);
   });
 
-  lineasColumnas.forEach(x=>{
-    const px=x*escalaVista*escalaZoom+offsetX;
-    ctxPrevia.beginPath();
-    ctxPrevia.moveTo(px,0);
-    ctxPrevia.lineTo(px,canvasPrevia.height);
-    ctxPrevia.strokeStyle=(lineaSeleccionada?.tipo==='columna'&&lineaSeleccionada.valor===x)?'#ffff00':'#0055ff';
-    ctxPrevia.lineWidth=2;
-    ctxPrevia.stroke();
+  ctxPrevia.strokeStyle='#0055ff'; ctxPrevia.lineWidth=2;
+  dt.columnas.forEach((x,idx)=>{
+    const px=x*escala+offsetX;
+    ctxPrevia.beginPath(); ctxPrevia.moveTo(px,0); ctxPrevia.lineTo(px,canvasPrevia.height); ctxPrevia.stroke();
+    ctxPrevia.fillStyle='#0055ff';
+    ctxPrevia.font='10px sans-serif';
+    ctxPrevia.fillText(`C${idx+1}`,px+4,12);
   });
 
   ctxPrevia.fillStyle='rgba(0,0,0,0.75)';
   ctxPrevia.fillRect(8,8,220,28);
   ctxPrevia.font='bold 13px monospace';
   ctxPrevia.fillStyle='#fff';
-  ctxPrevia.fillText(`Filas: ${lineasFilas.length}  Columnas: ${lineasColumnas.length}`,14,26);
-
-  logAjuste(sensVal,espVal,lineasFilas,lineasColumnas);
+  ctxPrevia.fillText(`Filas: ${dt.filas.length-1}  Columnas: ${dt.columnas.length-1}`,14,26);
 }
 
 function aplicarZoom(){
   visorInterior.style.transformOrigin='0 0';
-  visorInterior.style.transform=`translate(${offsetX}px,${offsetY}px) scale(${escalaZoom})`;
+  visorInterior.style.transform=`translate(${offsetX}px, ${offsetY}px) scale(${escalaZoom})`;
   actualizarPrevisualizacion();
 }
 
 function zoomMas(){escalaZoom=Math.min(escalaZoom+0.25,4);aplicarZoom();}
 function zoomMenos(){escalaZoom=Math.max(escalaZoom-0.25,escalaOriginal);aplicarZoom();}
 function zoomReset(){escalaZoom=escalaOriginal;offsetX=0;offsetY=0;aplicarZoom();}
+
+function agregarFilaManual(y){filasManuales.push(y);filasManuales.sort((a,b)=>a-b);actualizarPrevisualizacion();}
+function agregarColumnaManual(x){columnasManuales.push(x);columnasManuales.sort((a,b)=>a-b);actualizarPrevisualizacion();}
+function eliminarFila(idx){filasManuales.splice(idx,1);actualizarPrevisualizacion();}
+function eliminarColumna(idx){columnasManuales.splice(idx,1);actualizarPrevisualizacion();}
+function resetLineasManuales(){filasManuales=[];columnasManuales=[];actualizarPrevisualizacion();}
+
+function obtenerPosicionLineas(clientX,clientY){
+  const rect=canvasPrevia.getBoundingClientRect();
+  const x=(clientX-rect.left-offsetX)/escalaZoom;
+  const y=(clientY-rect.top-offsetY)/escalaZoom;
+  const escalaVista=canvasPrevia.width/imagenActual.width;
+  return {imgX:x/escalaVista,imgY:y/escalaVista};
+}
+function encontrarLineaCercana(imgX,imgY,umbral=8){
+  const escalaVista=canvasPrevia.width/imagenActual.width;
+  let minD=umbral*2,tipo=null,idx=-1;
+  filasManuales.forEach((fy,i)=>{const d=Math.abs(imgY-fy)*escalaVista;if(d<minD&&d<20){minD=d;tipo='fila';idx=i;}});
+  columnasManuales.forEach((cx,i)=>{const d=Math.abs(imgX-cx)*escalaVista;if(d<minD&&d<20){minD=d;tipo='columna';idx=i;}});
+  return {tipo,idx};
+}
 
 async function leerTodoDeUnaVez(img){
   if(!window.Tesseract)return null;
@@ -212,243 +188,177 @@ async function leerTodoDeUnaVez(img){
   }catch{return null;}
 }
 function buscarTextoEnCelda(palabras,x1,y1,x2,y2){
-  if(!palabras)return '—';
+  if(!palabras)return '';
   const c=palabras.filter(p=>p.x>=x1&&p.y>=y1&&p.x2<=x2&&p.y2<=y2);
-  return c.length?c.map(p=>p.texto).join(' '):'—';
+  return c.length?c.map(p=>p.texto).join(' '):'';
 }
+
 async function construirTablaConTexto(filas,columnas,nombre,img){
   if(filas.length<2||columnas.length<2)
-    return`<p style="color:red">⚠️ Defina al menos 2 filas y 2 columnas</p>`;
-  let h=`<p><strong>${nombre}</strong> — ${filas.length-1} filas × ${columnas.length-1} columnas</p><table><thead><tr>`;
-  for(let i=0;i<columnas.length-1;i++)h+=`<th>C${i+1}</th>`;
-  h+='</tr></thead><tbody>';
+    return`<p style="color:red">⚠️ Filas:${filas.length} Columnas:${columnas.length} — necesitas al menos 2 de cada una</p>`;
+  
   const palabras=await leerTodoDeUnaVez(img);
-  filas.sort((a,b)=>a-b);columnas.sort((a,b)=>a-b);
+  const datos=[];
   for(let f=0;f<filas.length-1;f++){
-    h+='<tr>';
+    const fila=[];
     for(let c=0;c<columnas.length-1;c++)
-      h+=`<td>${buscarTextoEnCelda(palabras,columnas[c],filas[f],columnas[c+1],filas[f+1])}</td>`;
-    h+='</tr>';
+      fila.push(buscarTextoEnCelda(palabras,columnas[c],filas[f],columnas[c+1],filas[f+1]));
+    datos.push(fila);
   }
-  return h+'</tbody></table>';
+
+  let html=`<div class="resultado-tabla"><h3>📋 ${nombre}</h3>`;
+  html+=`<p><strong>${filas.length-1} filas × ${columnas.length-1} columnas</strong></p>`;
+  html+=`<div class="acciones-tabla"><button class="btn-csv" onclick="copiarCSV(this)">📋 Copiar CSV</button> <button class="btn-csv" onclick="descargarCSV(this)">💾 Descargar CSV</button></div>`;
+  html+=`<table class="tabla-estandar"><thead><tr>`;
+  for(let i=0;i<columnas.length-1;i++)html+=`<th>C${i+1}</th>`;
+  html+='</tr></thead><tbody>';
+  datos.forEach(fila=>{html+='<tr>';fila.forEach(celda=>html+=`<td>${celda}</td>`);html+='</tr>';});
+  html+='</tbody></table>';
+
+  const csv=datos.map(f=>f.map(c=>`"${c.replace(/"/g,'""')}"`).join(',')).join('\n');
+  html+=`<pre class="csv-oculto">${csv}</pre></div>`;
+  return html;
 }
 
+window.copiarCSV=function(btn){
+  const csv=btn.closest('.resultado-tabla').querySelector('.csv-oculto').textContent;
+  navigator.clipboard.writeText(csv).then(()=>{const t=btn.textContent;btn.textContent='✅ Copiado!';setTimeout(()=>btn.textContent=t,2000);});
+};
+window.descargarCSV=function(btn){
+  const csv=btn.closest('.resultado-tabla').querySelector('.csv-oculto').textContent;
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='tabla_extraida.csv';a.click();URL.revokeObjectURL(url);
+};
+
+function getValoresMotor(num){
+  return {
+    brillo:parseInt(document.getElementById(`sliderBrilloM${num}`).value),
+    distFilas:parseInt(document.getElementById(`sliderFilasM${num}`).value),
+    distCols:parseInt(document.getElementById(`sliderColsM${num}`).value),
+    denV:parseFloat(document.getElementById(`sliderDenVM${num}`).value),
+    denH:parseFloat(document.getElementById(`sliderDenHM${num}`).value)
+  };
+}
+function conectarSliders(num){
+  const actualizar=()=>{
+    const v=getValoresMotor(num);
+    document.getElementById(`valBrilloM${num}`).textContent=v.brillo;
+    document.getElementById(`valFilasM${num}`).textContent=v.distFilas;
+    document.getElementById(`valColsM${num}`).textContent=v.distCols;
+    document.getElementById(`valDenVM${num}`).textContent=v.denV.toFixed(2);
+    document.getElementById(`valDenHM${num}`).textContent=v.denH.toFixed(2);
+    actualizarPrevisualizacion();
+  };
+  [`sliderBrilloM${num}`,`sliderFilasM${num}`,`sliderColsM${num}`,`sliderDenVM${num}`,`sliderDenHM${num}`].forEach(id=>{
+    document.getElementById(id).addEventListener('input',actualizar);
+  });
+  actualizar();
+}
 async function ejecutarMotor(num,nombre){
   const m=`M${num}`;
-  if(!imagenActual){alert('⚠️ Cargue una imagen primero');return;}
-  if(lineasFilas.length<2||lineasColumnas.length<2){alert('⚠️ Defina al menos 2 filas y 2 columnas');return;}
+  if(!imagenActual){alert('⚠️ Elige imagen primero');return;}
   if(motor[`m${num}`].cargando)return;
-
+  const v=getValoresMotor(num);
   motor[`m${num}`].cargando=true;
   setEstado(m,'🔄 Procesando...');setBarra(m,10);setResultado(m,'');
-  const al=getLogs(m);log(`${nombre} usando líneas definidas`,al);
-
-  const t=setTimeout(()=>{motor[`m${num}`].cargando=false;setEstado(m,'❌ Tiempo agotado');setBarra(m,0);},TIEMPO_LIMITE);
+  const al=getLogs(m); log(`${nombre}`,al);
+  const t=setTimeout(()=>{motor[`m${num}`].cargando=false;setEstado(m,'❌ Tiempo');setBarra(m,0);},TIEMPO_LIMITE);
   try{
     setBarra(m,30);
-    const filasOrd=[...lineasFilas].sort((a,b)=>a-b);
-    const colsOrd=[...lineasColumnas].sort((a,b)=>a-b);
-    setBarra(m,50);log(`→ ${filasOrd.length-1}×${colsOrd.length-1} celdas`,al,'ok');
-    setResultado(m,await construirTablaConTexto(filasOrd,colsOrd,nombre,imagenActual));
+    const dt=detectarEstructura(imagenActual,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
+    filasManuales=dt.filas; columnasManuales=dt.columnas;
+    setBarra(m,50); log(`→ ${dt.filas.length-1}×${dt.columnas.length-1}`,al,'ok');
+    setResultado(m,await construirTablaConTexto(dt.filas,dt.columnas,nombre,imagenActual));
     setEstado(m,'✅ Completado');setBarra(m,100);
   }catch(e){setEstado(m,'❌ Error');log(`Error:${e.message}`,al,'error');}
   finally{clearTimeout(t);motor[`m${num}`].cargando=false;}
 }
-function resetMotor(num){setEstado(`M${num}`,'⏳ Pendiente');setBarra(`M${num}`,0);setResultado(`M${num}`,'');getLogs(`M${num}`).innerHTML='';}
-
-function recalcularLineas(){
-  if(!imagenActual)return;
-  const dt=detectarEstructuraAutomatica(imagenActual);
-  lineasFilas=dt.filas;lineasColumnas=dt.columnas;
-  lineaSeleccionada=null;
-  actualizarPrevisualizacion();
-}
-
-function guardarConfiguracion(){
-  const config={sensibilidad:sensibilidad.value,espaciado:espaciadoMinimo.value,filas:lineasFilas,columnas:lineasColumnas};
-  localStorage.setItem('marCaribeConfig',JSON.stringify(config));
-  alert('✅ Configuración guardada como estándar');
-}
-
-function cargarConfiguracion(){
-  const g=localStorage.getItem('marCaribeConfig');
-  if(!g){alert('⚠️ No hay configuración guardada');return;}
-  try{
-    const c=JSON.parse(g);
-    sensibilidad.value=c.sensibilidad;
-    espaciadoMinimo.value=c.espaciado;
-    lineasFilas=c.filas||[];
-    lineasColumnas=c.columnas||[];
-    actualizarPrevisualizacion();
-    alert('✅ Configuración cargada');
-  }catch{alert('❌ Error al cargar configuración');}
-}
-
-function iniciarAgregarFila(){modoAgregar='fila';alert('Toque la imagen para agregar fila horizontal');}
-function iniciarAgregarColumna(){modoAgregar='columna';alert('Toque la imagen para agregar columna vertical');}
-
-function obtenerCoordenadaImagen(x,y){
-  const r=vistaImagen.getBoundingClientRect();
-  const escalaVista=imagenActual?imagenActual.width/r.width:1;
-  return {
-    x:Math.max(0,Math.min(imagenActual.width,(x-offsetX)/escalaZoom*escalaVista)),
-    y:Math.max(0,Math.min(imagenActual.height,(y-offsetY)/escalaZoom*escalaVista))
-  };
-}
-
-function manejarToqueEdicion(x,y){
-  if(!modoEdicion||!imagenActual)return false;
-  const {x:imgX,y:imgY}=obtenerCoordenadaImagen(x,y);
-
-  if(modoAgregar==='fila'){
-    lineasFilas.push(imgY);lineasFilas.sort((a,b)=>a-b);modoAgregar=null;actualizarPrevisualizacion();return true;
-  }
-  if(modoAgregar==='columna'){
-    lineasColumnas.push(imgX);lineasColumnas.sort((a,b)=>a-b);modoAgregar=null;actualizarPrevisualizacion();return true;
-  }
-
-  const umbral=10/escalaZoom;
-  let masCerca=null,minD=umbral;
-  lineasFilas.forEach((v,i)=>{const d=Math.abs(imgY-v);if(d<minD){minD=d;masCerca={tipo:'fila',indice:i,valor:v}}});
-  lineasColumnas.forEach((v,i)=>{const d=Math.abs(imgX-v);if(d<minD){minD=d;masCerca={tipo:'columna',indice:i,valor:v}}});
-
-  lineaSeleccionada=masCerca;
-  if(masCerca)ultimoToque={x:imgX,y:imgY,valor:masCerca.valor};
-  actualizarPrevisualizacion();
-  return !!masCerca;
-}
-
-function moverLinea(x,y){
-  if(!lineaSeleccionada||!modoEdicion||!imagenActual)return;
-  const {x:imgX,y:imgY}=obtenerCoordenadaImagen(x,y);
-  if(lineaSeleccionada.tipo==='fila'){
-    lineasFilas[lineaSeleccionada.indice]=imgY;
-    lineasFilas.sort((a,b)=>a-b);
-  }else{
-    lineasColumnas[lineaSeleccionada.indice]=imgX;
-    lineasColumnas.sort((a,b)=>a-b);
-  }
-  actualizarPrevisualizacion();
-}
-
-function borrarLineaSeleccionada(){
-  if(!lineaSeleccionada){alert('Seleccione primero una línea tocándola');return;}
-  if(lineaSeleccionada.tipo==='fila')lineasFilas.splice(lineaSeleccionada.indice,1);
-  else lineasColumnas.splice(lineaSeleccionada.indice,1);
-  lineaSeleccionada=null;
-  actualizarPrevisualizacion();
-}
-
-function toggleModoEdicion(){
-  modoEdicion=!modoEdicion;
-  btnModoEditar.textContent=modoEdicion?'✅ Bloquear Líneas':'✏️ Editar Líneas';
-  btnAgregarFila.disabled=!modoEdicion;
-  btnAgregarColumna.disabled=!modoEdicion;
-  btnBorrarLinea.disabled=!modoEdicion;
-  if(!modoEdicion){lineaSeleccionada=null;modoAgregar=null;actualizarPrevisualizacion();}
+function resetMotor(num){
+  setEstado(`M${num}`,'⏳ Pendiente');setBarra(`M${num}`,0);setResultado(`M${num}`,'');
+  getLogs(`M${num}`).innerHTML='';
 }
 
 window.addEventListener('load',()=>{
-  // ✅ BOTÓN SELECCIONAR IMAGEN — RESTAURADO
-  btnSeleccionar.addEventListener('click',()=>entradaImagen.click());
-
-  entradaImagen.addEventListener('change',e=>{
-    const f=e.target.files[0];if(!f)return;
-    const r=new FileReader();
-    r.onload=ev=>{
-      imagenActual=new Image();
-      imagenActual.onload=()=>{
-        const wrapperWidth=visorWrapper.clientWidth;
-        escalaOriginal=wrapperWidth/imagenActual.width;
-        escalaZoom=escalaOriginal;
-        offsetX=0;offsetY=0;
-        vistaImagen.src=ev.target.result;
-        vistaImagen.onload=()=>{
-          recalcularLineas();
-          log('Imagen cargada — ajuste sensibilidad o edite líneas',logsGlobal,'ok');
-        };
-      };
-      imagenActual.src=ev.target.result;
-    };
-    r.readAsDataURL(f);
+  for(let i=1;i<=5;i++)conectarSliders(i);
+  selectorMotor.addEventListener('change',()=>{
+    document.querySelectorAll('.motor-card').forEach((c,i)=>c.classList.toggle('activo',i+1===parseInt(selectorMotor.value)));
+    actualizarPrevisualizacion();
   });
-
-  sensibilidad.addEventListener('change',recalcularLineas);
-  espaciadoMinimo.addEventListener('input',recalcularLineas);
-
-  btnModoEditar.addEventListener('click',toggleModoEdicion);
-  btnAgregarFila.addEventListener('click',iniciarAgregarFila);
-  btnAgregarColumna.addEventListener('click',iniciarAgregarColumna);
-  btnBorrarLinea.addEventListener('click',borrarLineaSeleccionada);
-  btnGuardarConfig.addEventListener('click',guardarConfiguracion);
-  btnCargarConfig.addEventListener('click',cargarConfiguracion);
-
   btnCopiarLog.addEventListener('click',()=>{
     navigator.clipboard.writeText(logsAjustes.textContent).then(()=>{
-      const t=btnCopiarLog.textContent;
-      btnCopiarLog.textContent='✅ Copiado!';
+      const t=btnCopiarLog.textContent;btnCopiarLog.textContent='✅ Copiado!';
       setTimeout(()=>btnCopiarLog.textContent=t,2000);
     });
   });
-
+  document.getElementById('btnResetLineas').addEventListener('click',resetLineasManuales);
+  document.getElementById('btnZoomMas').addEventListener('click',zoomMas);
   document.getElementById('btnZoomMenos').addEventListener('click',zoomMenos);
   document.getElementById('btnZoomReset').addEventListener('click',zoomReset);
-  document.getElementById('btnZoomMas').addEventListener('click',zoomMas);
+
+  let arrastrandoLinea=null;
+  visorWrapper.addEventListener('mousedown',e=>{
+    if(!imagenActual)return;
+    const {imgX,imgY}=obtenerPosicionLineas(e.clientX,e.clientY);
+    const linea=encontrarLineaCercana(imgX,imgY);
+    if(linea.tipo){arrastrandoLinea=linea;}
+    else if(e.shiftKey){
+      const rect=canvasPrevia.getBoundingClientRect();
+      if(Math.abs(e.clientX-rect.left)<20||Math.abs(e.clientX-rect.right)<20)agregarFilaManual(imgY);
+      else if(Math.abs(e.clientY-rect.top)<20||Math.abs(e.clientY-rect.bottom)<20)agregarColumnaManual(imgX);
+    }else if((e.ctrlKey||e.metaKey)&&linea.tipo){
+      if(linea.tipo==='fila')filasManuales.splice(linea.idx,1);
+      else columnasManuales.splice(linea.idx,1);
+      actualizarPrevisualizacion();
+    }
+  });
+  visorWrapper.addEventListener('mousemove',e=>{
+    if(!arrastrandoLinea||!imagenActual)return;
+    const {imgX,imgY}=obtenerPosicionLineas(e.clientX,e.clientY);
+    if(arrastrandoLinea.tipo==='fila')filasManuales[arrastrandoLinea.idx]=imgY;
+    else columnasManuales[arrastrandoLinea.idx]=imgX;
+    actualizarPrevisualizacion();
+  });
+  visorWrapper.addEventListener('mouseup',()=>{arrastrandoLinea=null;});
 
   visorWrapper.addEventListener('touchstart',e=>{
-    const t=e.touches[0];
-    if(modoEdicion){
-      manejarToqueEdicion(t.clientX,t.clientY);
-      return;
-    }
     if(e.touches.length===2){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       visorWrapper.dataset.distancia=d;
     }else if(e.touches.length===1){
-      arrastrando=true;
-      ultimoToque.x=t.clientX;
-      ultimoToque.y=t.clientY;
+      arrastrando=true; ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY;
     }
-  },{passive:false});
-
+  });
   visorWrapper.addEventListener('touchmove',e=>{
     e.preventDefault();
-    const t=e.touches[0];
-    if(modoEdicion&&lineaSeleccionada){
-      moverLinea(t.clientX,t.clientY);
-      return;
-    }
-    if(modoEdicion&&modoAgregar){
-      manejarToqueEdicion(t.clientX,t.clientY);
-      return;
-    }
     if(e.touches.length===2){
-      const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+      const d=Math.hypot(e.touches[0].pageX-e.touches[1].pageX,e.touches[0].pageY-e.touches[1].pageY);
       const ant=parseFloat(visorWrapper.dataset.distancia);
-      if(ant){
-        escalaZoom*=d/ant;
-        escalaZoom=Math.max(escalaOriginal,Math.min(escalaZoom,4));
-        visorWrapper.dataset.distancia=d;
-        aplicarZoom();
-      }
+      if(ant){escalaZoom*=d/ant;escalaZoom=Math.max(escalaOriginal,Math.min(escalaZoom,4));visorWrapper.dataset.distancia=d;aplicarZoom();}
     }else if(e.touches.length===1&&arrastrando){
-      offsetX+=t.clientX-ultimoToque.x;
-      offsetY+=t.clientY-ultimoToque.y;
-      ultimoToque.x=t.clientX;
-      ultimoToque.y=t.clientY;
-      aplicarZoom();
+      offsetX+=e.touches[0].pageX-ultimoToque.x;
+      offsetY+=e.touches[0].pageY-ultimoToque.y;
+      ultimoToque.x=e.touches[0].pageX; ultimoToque.y=e.touches[0].pageY; aplicarZoom();
     }
   },{passive:false});
+  visorWrapper.addEventListener('touchend',()=>{arrastrando=false;visorWrapper.dataset.distancia='';arrastrandoLinea=null;});
+  visorWrapper.addEventListener('dblclick',zoomReset);
 
-  visorWrapper.addEventListener('touchend',()=>{
-    arrastrando=false;
-    visorWrapper.dataset.distancia='';
-  });
-
-  visorWrapper.addEventListener('click',e=>{
-    if(modoEdicion&&modoAgregar){
-      manejarToqueEdicion(e.clientX,e.clientY);
-    }
+  btnSeleccionar.addEventListener('click',()=>entradaImagen.click());
+  entradaImagen.addEventListener('change',e=>{
+    const f=e.target.files[0];if(!f)return;
+    const r=new FileReader();r.onload=ev=>{
+      imagenActual=new Image();imagenActual.onload=()=>{
+        filasManuales=[];columnasManuales=[];
+        vistaImagen.src=ev.target.result;vistaImagen.onload=()=>{
+          canvasPrevia.width=vistaImagen.clientWidth;
+          canvasPrevia.height=vistaImagen.clientHeight;
+          escalaOriginal=1;escalaZoom=1;offsetX=0;offsetY=0;
+          setTimeout(actualizarPrevisualizacion,100);
+          log('Imagen cargada — arrastra, agrega o elimina líneas',logsGlobal,'ok');
+        };
+      };imagenActual.src=ev.target.result;
+    };r.readAsDataURL(f);
   });
 
   document.getElementById('btnAnalizarM1').addEventListener('click',()=>ejecutarMotor(1,'SSD MobileNet v2'));
@@ -462,6 +372,5 @@ window.addEventListener('load',()=>{
   document.getElementById('btnAnalizarM5').addEventListener('click',()=>ejecutarMotor(5,'PaddleOCR Table'));
   document.getElementById('btnResetM5').addEventListener('click',()=>resetMotor(5));
 
-  // ✅ FUNCIÓN ORIGINAL — cargarMotoresBase()
   cargarMotoresBase();
 });
