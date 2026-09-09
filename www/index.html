@@ -4,11 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>MAR Caribe — OCR de Tablas</title>
-  <!-- ✅ RUTAS LOCALES — TAL COMO ESTABAN ANTES -->
+  <!-- ✅ RUTAS LOCALES ORIGINALES — SIN CAMBIOS -->
   <script src="lib/tesseract/tesseract.min.js"></script>
   <script src="lib/tfjs/tf.min.js"></script>
   <style>
-    /* TODO el MISMO estilo que te di antes — NO se cambia nada */
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
     body{background:#f0f2f5;padding:12px;max-width:100%;margin:0 auto;}
     h1,h2,h3{text-align:center;color:#1a1a1a;margin-bottom:12px;}
@@ -39,7 +38,8 @@
 
     .controles-edicion{background:#fff;border-radius:12px;padding:14px;margin:12px 0;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
     .fila-botones-editar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-    .btn-editar{padding:10px 14px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;}
+    .btn-editar{padding:10px 14px;border-radius:8px;border:none;font-size:14px;font-weight:600;cursor:pointer;transform:scale(0.9);transform-origin:left top;}
+    .btn-editar:active{transform:scale(0.88);}
     .btn-editar:disabled{opacity:0.4;cursor:not-allowed;}
     .btn-editar.primario{background:#007bff;color:#fff;}
     .btn-editar.exito{background:#10b981;color:#fff;}
@@ -82,12 +82,12 @@
     .linea-azul{width:16px;height:2px;background:#0055ff;}
     .linea-amarilla{width:16px;height:2px;background:#ffff00;border:1px solid #999;}
 
-    .etiqueta-recomendado{background:linear-gradient(90deg,#10b981,#059669);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;}
+    .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;}
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
-    .m4 .btn-analizar{background:linear-gradient(90deg,#667eea,#764ba2);}
+    .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
     .m5{border:2px solid #f59e0b;}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
-    .m5 .btn-analizar{background:linear-gradient(90deg,#f59e0b,#eab308);color:#1a1a1a;}
+    .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
     .info-tip{font-size:12px;color:#6b7280;margin-top:6px;}
   </style>
 </head>
@@ -105,7 +105,8 @@
   <h1>📊 MAR Caribe — OCR de Tablas</h1>
 
   <div class="carga-imagen">
-    <label class="btn-cargar-img">📁 Toca para elegir imagen de tabla</label>
+    <!-- ✅ BOTÓN ORIGINAL RESTAURADO -->
+    <button id="btnSeleccionar" class="btn-cargar-img">📁 Toca para elegir imagen de tabla</button>
     <input type="file" id="entradaImagen" accept="image/*">
   </div>
 
@@ -147,17 +148,15 @@
   </div>
 
   <div class="controles-edicion">
-    <h3>✏️ Edición de Líneas (se aplica a TODOS los motores)</h3>
+    <h3>✏️ Edición de Líneas</h3>
     <button id="btnModoEditar" class="btn-editar primario">✏️ Editar Líneas</button>
     <div class="fila-botones-editar">
       <button id="btnAgregarFila" class="btn-editar exito" disabled>➕ Fila</button>
       <button id="btnAgregarColumna" class="btn-editar exito" disabled>➕ Columna</button>
       <button id="btnBorrarLinea" class="btn-editar peligro" disabled>🗑️ Borrar</button>
-      <button id="btnBloquear" class="btn-editar aviso" disabled>🔒 Bloquear</button>
       <button id="btnGuardarConfig" class="btn-editar exito">💾 Guardar Estándar</button>
       <button id="btnCargarConfig" class="btn-editar aviso">📂 Cargar</button>
     </div>
-    <p class="info-tip">💡 Toca una línea para seleccionarla → arrastra para moverla → toca fuera para deseleccionar</p>
   </div>
 
   <div class="selector-motor">
