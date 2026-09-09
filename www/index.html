@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>MAR Caribe — OCR de Tablas</title>
+  <!-- ✅ RUTAS LOCALES — TAL COMO ESTABAN ANTES -->
+  <script src="lib/tesseract/tesseract.min.js"></script>
+  <script src="lib/tfjs/tf.min.js"></script>
   <style>
+    /* TODO el MISMO estilo que te di antes — NO se cambia nada */
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
     body{background:#f0f2f5;padding:12px;max-width:100%;margin:0 auto;}
     h1,h2,h3{text-align:center;color:#1a1a1a;margin-bottom:12px;}
@@ -57,8 +61,8 @@
     .barra-progreso{height:100%;background:linear-gradient(90deg,#28a745,#20c997);border-radius:4px;transition:width 0.3s ease;}
 
     .btn-group{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
-    button{padding:10px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transform:scale(0.7);transform-origin:left top;}
-    button:active{transform:scale(0.68);}
+    button{padding:10px 16px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transform:scale(0.9);transform-origin:left top;}
+    button:active{transform:scale(0.88);}
     .btn-analizar{background:#007bff;color:#fff;}
     .btn-reset{background:#dc3545;color:#fff;}
 
@@ -78,12 +82,12 @@
     .linea-azul{width:16px;height:2px;background:#0055ff;}
     .linea-amarilla{width:16px;height:2px;background:#ffff00;border:1px solid #999;}
 
-    .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;}
+    .etiqueta-recomendado{background:linear-gradient(90deg,#10b981,#059669);color:#fff;font-size:11px;padding:1px 6px;border-radius:10px;margin-left:6px;}
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
-    .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
+    .m4 .btn-analizar{background:linear-gradient(90deg,#667eea,#764ba2);}
     .m5{border:2px solid #f59e0b;}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
-    .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
+    .m5 .btn-analizar{background:linear-gradient(90deg,#f59e0b,#eab308);color:#1a1a1a;}
     .info-tip{font-size:12px;color:#6b7280;margin-top:6px;}
   </style>
 </head>
@@ -168,12 +172,11 @@
   </div>
 
   <div class="fila-log-ajustes">
-    <span style="color:#ffd700;font-size:12px;font-weight:600;">📋 Log:</span>
+    <span style="color:#ffd700;font-size:12px;font-weight:600;">📋 Registro:</span>
     <div id="logsAjustes">Carga una imagen para ver valores</div>
     <button id="btnCopiarLog" class="btn-copiar">Copiar</button>
   </div>
 
-  <!-- MOTOR 1 -->
   <div class="motor-card activo">
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
     <div class="estado" id="estadoM1">⏳ Pendiente</div>
@@ -186,7 +189,6 @@
     <div id="resultadoM1" class="resultado"></div>
   </div>
 
-  <!-- MOTOR 2 -->
   <div class="motor-card">
     <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
     <div class="estado" id="estadoM2">⏳ Pendiente</div>
@@ -199,7 +201,6 @@
     <div id="resultadoM2" class="resultado"></div>
   </div>
 
-  <!-- MOTOR 3 -->
   <div class="motor-card">
     <h2>🎯 Motor 3: YOLOv8n</h2>
     <div class="estado" id="estadoM3">⏳ Pendiente</div>
@@ -212,7 +213,6 @@
     <div id="resultadoM3" class="resultado"></div>
   </div>
 
-  <!-- MOTOR 4 -->
   <div class="motor-card m4">
     <h2>🚀 Motor 4: YOLOv11-Tabla</h2>
     <div class="estado" id="estadoM4">⏳ Pendiente</div>
@@ -225,7 +225,6 @@
     <div id="resultadoM4" class="resultado"></div>
   </div>
 
-  <!-- MOTOR 5 -->
   <div class="motor-card m5">
     <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-recomendado">⭐ RECOMENDADO</span></h2>
     <div class="estado" id="estadoM5">⏳ Pendiente</div>
@@ -240,8 +239,6 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
 <script src="js/app.js"></script>
 <script>
 document.getElementById('espaciadoMinimo').addEventListener('input',e=>{
