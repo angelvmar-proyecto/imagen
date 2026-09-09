@@ -22,15 +22,15 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Instalar dependencias y Sincronizar Capacitor
-        run: |
-          npm install
-          npx cap sync android
+      - name: Instalar dependencias
+        run: npm install
 
-      - name: Limpiar formato y Compilar APK
+      - name: Crear plataforma Android limpia
+        run: npx cap add android
+
+      - name: Compilar APK con Gradle
         run: |
           cd android
-          tr -d '\r' < gradlew > gradlew_clean && mv gradlew_clean gradlew
           chmod +x gradlew
           ./gradlew assembleDebug
 
