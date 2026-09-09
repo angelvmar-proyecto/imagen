@@ -1,8 +1,14 @@
 const TIEMPO_LIMITE=120000;
 let imagenActual=null;
-const motor={m1:{cargando:false},m2:{cargando:false},m3:{cargando:false},m4:{cargando:false},m5:{cargando:false}};
+let lienzoPrevia=null;
+const motor={
+  m1:{cargando:false},
+  m2:{cargando:false},
+  m3:{cargando:false},
+  m4:{cargando:false},
+  m5:{cargando:false}
+};
 
-// Elementos globales
 const estadoTF=document.getElementById('estadoTF');
 const estadoOCR=document.getElementById('estadoOCR');
 const barraGlobal=document.getElementById('barraGlobal');
@@ -13,10 +19,11 @@ const seccionImagen=document.getElementById('seccionImagen');
 const entradaImagen=document.getElementById('entradaImagen');
 const btnSeleccionar=document.getElementById('btnSeleccionar');
 const vistaImagen=document.getElementById('vistaImagen');
+const canvasPrevia=document.getElementById('canvasPrevia');
+const ctxPrevia=canvasPrevia.getContext('2d');
+const selectorMotor=document.getElementById('selectorMotor');
+const btnCopiarLog=document.getElementById('btnCopiarLog');
 
-// ==================================================
-// SISTEMA DE LOGS — 2 CANALES: General + AJUSTES
-// ==================================================
 function log(t,a,tp='info'){
   const h=new Date().toLocaleTimeString();
   const c={info:'#0ff',ok:'#0f0',error:'#f55',warn:'#ff0'};
@@ -27,7 +34,6 @@ function log(t,a,tp='info'){
   a.scrollTop=a.scrollHeight;
 }
 
-// 📋 LOG DE AJUSTES — CADA CAMBIO SE REGISTRA AQUÍ
 function logAjuste(motor,brillo,distFilas,distCols,denV,denH){
   const h=new Date().toLocaleTimeString();
   const d=document.createElement('div');
@@ -63,16 +69,12 @@ async function cargarMotoresBase(){
   setTimeout(()=>{cargaGlobal.classList.add('oculto');seccionImagen.classList.remove('oculto');},800);
 }
 
-// ==================================================
-// DETECCIÓN DE ESTRUCTURA — TOMA VALORES DE LOS SLIDERS
-// ==================================================
 function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,minDensidadH){
   const c=document.createElement('canvas'),ctx=c.getContext('2d');
   c.width=img.width; c.height=img.height;
   ctx.drawImage(img,0,0);
   const d=ctx.getImageData(0,0,c.width,c.height).data;
 
-  // DETECTAR FILAS
   const lh=[], umbralPixelesFila=c.width*minDensidadH;
   for(let y=0;y<c.height;y++){
     let pixelesOscuros=0;
@@ -91,7 +93,6 @@ function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,min
     }
   });
 
-  // DETECTAR COLUMNAS
   const lv=[], umbralPixelesColumna=c.height*minDensidadV;
   for(let x=0;x<c.width;x++){
     let pixelesOscuros=0;
@@ -110,7 +111,6 @@ function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,min
     }
   });
 
-  // Respaldo si hay pocas columnas
   if(columnas.length<2){
     for(let densidadBajar=0.35;densidadBajar>=0.15&&columnas.length<2;densidadBajar-=0.05){
       const umbralBajo=c.height*densidadBajar;
@@ -128,19 +128,75 @@ function detectarEstructura(img,brillo,minDistFilas,minDistCols,minDensidadV,min
   return {filas,columnas,brillo,minDistFilas,minDistCols,minDensidadV,minDensidadH,ancho:c.width,alto:c.height};
 }
 
-// OCR
+// ==================================================
+// 🎯 PREVISUALIZACIÓN EN VIVO SOBRE LA IMAGEN
+// ==================================================
+function actualizarPrevisualizacion(){
+  if(!imagenActual)return;
+
+  const num=parseInt(selectorMotor.value);
+  const v=getValoresMotor(num);
+  const escala=canvasPrevia.width / imagenActual.width;
+
+  const dt=detectarEstructura(
+    imagenActual,
+    v.brillo,
+    v.distFilas,
+    v.distCols,
+    v.denV,
+    v.denH
+  );
+
+  logAjuste(`M${num}`,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
+
+  ctxPrevia.clearRect(0,0,canvasPrevia.width,canvasPrevia.height);
+
+  // Dibujar filas en rojo
+  ctxPrevia.strokeStyle='#ff0000';
+  ctxPrevia.lineWidth=2;
+  dt.filas.forEach(y=>{
+    ctxPrevia.beginPath();
+    ctxPrevia.moveTo(0,y*escala);
+    ctxPrevia.lineTo(canvasPrevia.width,y*escala);
+    ctxPrevia.stroke();
+  });
+
+  // Dibujar columnas en azul
+  ctxPrevia.strokeStyle='#0055ff';
+  ctxPrevia.lineWidth=2;
+  dt.columnas.forEach(x=>{
+    ctxPrevia.beginPath();
+    ctxPrevia.moveTo(x*escala,0);
+    ctxPrevia.lineTo(x*escala,canvasPrevia.height);
+    ctxPrevia.stroke();
+  });
+
+  // Mostrar conteo en la esquina
+  ctxPrevia.fillStyle='rgba(0,0,0,0.75)';
+  ctxPrevia.fillRect(8,8,260,32);
+  ctxPrevia.font='bold 14px monospace';
+  ctxPrevia.fillStyle='#ffffff';
+  ctxPrevia.fillText(`Filas: ${dt.filas.length-1}  Columnas: ${dt.columnas.length-1}`,16,28);
+}
+
 async function leerTodoDeUnaVez(img){
   if(!window.Tesseract)return null;
   try{
     const r=await Tesseract.recognize(img,'spa+eng',{logger:()=>{}});
-    return r.data.words.map(w=>({texto:w.text.trim(),x:w.bbox.x0,y:w.bbox.y0,x2:w.bbox.x1,y2:w.bbox.y1}));
+    return r.data.words.map(w=>({
+      texto:w.text.trim(),
+      x:w.bbox.x0,y:w.bbox.y0,
+      x2:w.bbox.x1,y2:w.bbox.y1
+    }));
   }catch{return null;}
 }
+
 function buscarTextoEnCelda(palabras,x1,y1,x2,y2){
   if(!palabras)return '—';
   const c=palabras.filter(p=>p.x>=x1&&p.y>=y1&&p.x2<=x2&&p.y2<=y2);
   return c.length?c.map(p=>p.texto).join(' '):'—';
 }
+
 async function construirTablaConTexto(filas,columnas,nombre,img){
   if(filas.length<2||columnas.length<2)
     return`<p style="color:red">⚠️ Estructura incompleta<br>Filas detectadas: ${filas.length} — Columnas detectadas: ${columnas.length}</p>`;
@@ -159,9 +215,6 @@ async function construirTablaConTexto(filas,columnas,nombre,img){
   return h;
 }
 
-// ==================================================
-// OBTENER VALORES DIRECTO DE LOS SLIDERS DE CADA MOTOR
-// ==================================================
 function getValoresMotor(num){
   return {
     brillo: parseInt(document.getElementById(`sliderBrilloM${num}`).value),
@@ -172,7 +225,6 @@ function getValoresMotor(num){
   };
 }
 
-// Actualizar etiquetas de valores en vivo
 function conectarSliders(num){
   const actualizar=()=>{
     const v=getValoresMotor(num);
@@ -181,24 +233,21 @@ function conectarSliders(num){
     document.getElementById(`valColsM${num}`).textContent=v.distCols;
     document.getElementById(`valDenVM${num}`).textContent=v.denV.toFixed(2);
     document.getElementById(`valDenHM${num}`).textContent=v.denH.toFixed(2);
-    // Registrar cada cambio en el log de ajustes
-    logAjuste(`M${num}`,v.brillo,v.distFilas,v.distCols,v.denV,v.denH);
+    actualizarPrevisualizacion();
   };
+
   [`sliderBrilloM${num}`,`sliderFilasM${num}`,`sliderColsM${num}`,`sliderDenVM${num}`,`sliderDenHM${num}`].forEach(id=>{
     document.getElementById(id).addEventListener('input',actualizar);
   });
-  actualizar(); // Mostrar valores iniciales
+
+  actualizar();
 }
 
-// ==================================================
-// EJECUTOR — USA LOS VALORES ACTUALES DE LOS SLIDERS
-// ==================================================
 async function ejecutarMotor(num,nombre){
   const m=`M${num}`;
   if(!imagenActual){alert('⚠️ Elige imagen primero');return;}
   if(motor[`m${num}`].cargando)return;
 
-  // TOMAR VALORES DIRECTO DE LOS SLIDERS
   const v=getValoresMotor(num);
 
   motor[`m${num}`].cargando=true;
@@ -244,14 +293,26 @@ function resetMotor(num){
   getLogs(m).innerHTML='';
 }
 
-// ==================================================
-// INICIALIZAR SLIDERS Y CONECTAR EVENTOS
-// ==================================================
 window.addEventListener('load',()=>{
-  // Conectar sliders de los 5 motores para que registren cambios
   for(let i=1;i<=5;i++)conectarSliders(i);
 
-  // Eventos de imagen
+  selectorMotor.addEventListener('change',()=>{
+    document.querySelectorAll('.motor-card').forEach((card,index)=>{
+      const numero=index+1;
+      card.classList.toggle('activo',numero===parseInt(selectorMotor.value));
+    });
+    actualizarPrevisualizacion();
+  });
+
+  btnCopiarLog.addEventListener('click',()=>{
+    const texto=logsAjustes.innerText;
+    navigator.clipboard.writeText(texto).then(()=>{
+      const original=btnCopiarLog.textContent;
+      btnCopiarLog.textContent='✅ Copiado!';
+      setTimeout(()=>btnCopiarLog.textContent=original,2000);
+    });
+  });
+
   btnSeleccionar.addEventListener('click',()=>entradaImagen.click());
   entradaImagen.addEventListener('change',e=>{
     const f=e.target.files[0];
@@ -262,14 +323,20 @@ window.addEventListener('load',()=>{
       imagenActual.onload=()=>{
         vistaImagen.src=ev.target.result;
         vistaImagen.style.display='block';
-        log('Imagen cargada — ajusta sliders y presiona Analizar',logsGlobal,'ok');
+
+        canvasPrevia.width=vistaImagen.clientWidth;
+        canvasPrevia.height=vistaImagen.clientHeight;
+
+        setTimeout(()=>{
+          actualizarPrevisualizacion();
+          log('Imagen cargada — ajusta sliders y ve las líneas en vivo',logsGlobal,'ok');
+        },300);
       };
       imagenActual.src=ev.target.result;
     };
     r.readAsDataURL(f);
   });
 
-  // Botones de cada motor
   document.getElementById('btnAnalizarM1').addEventListener('click',()=>ejecutarMotor(1,'SSD MobileNet v2'));
   document.getElementById('btnResetM1').addEventListener('click',()=>resetMotor(1));
   document.getElementById('btnAnalizarM2').addEventListener('click',()=>ejecutarMotor(2,'EfficientDet-Lite0'));
