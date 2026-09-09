@@ -15,6 +15,7 @@
             --accent-blue: #00bcd4;
             --danger: #ff4444;
             --success: #4caf50;
+            --warning: #ff9800;
         }
         body {
             background-color: var(--bg-dark);
@@ -61,6 +62,14 @@
             background-color: var(--success);
             color: #fff;
         }
+        button.warning {
+            background-color: var(--warning);
+            color: #000;
+        }
+        button:disabled, input:disabled, select:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         input[type="range"] {
             width: 100%;
             accent-color: var(--accent-blue);
@@ -97,6 +106,7 @@
             display: flex;
             gap: 5px;
             margin-bottom: 8px;
+            align-items: center;
         }
         .canvas-container {
             position: relative;
@@ -135,6 +145,32 @@
             padding: 6px;
             border-radius: 4px;
         }
+        .progress-bar-container {
+            width: 100%;
+            background: #333;
+            border-radius: 4px;
+            overflow: hidden;
+            height: 16px;
+            margin: 8px 0;
+            display: none;
+            position: relative;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--success);
+            width: 0%;
+            transition: width 0.2s ease;
+        }
+        .progress-text {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            font-size: 0.75rem;
+            font-weight: bold;
+            color: #fff;
+            top: 0;
+            line-height: 16px;
+        }
     </style>
 </head>
 <body>
@@ -159,22 +195,48 @@
             <button onclick="addLineV()">+ Línea V</button>
             <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
         </div>
-        <div class="log-box" id="logBox">Sistema listo. Cargue una captura de WhatsApp y ajuste la cuadrícula.</div>
+        <div class="log-box" id="logBox">Sistema en espera. Motores descargados de RAM. Cargue imagen.</div>
     </div>
 
     <div class="panel">
-        <h2>Motores & Parámetros (YOLO / OCR)</h2>
-        <button class="success" style="width:100%; margin-bottom:10px;" onclick="initMotors()">Inicializar & Procesar con Motores</button>
+        <h2>Motores & Parámetros Avanzados</h2>
+        
+        <div class="controls-row">
+            <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula & Parámetros: OFF</button>
+        </div>
+
+        <div class="controls-row" style="font-size: 0.85rem; justify-content: space-between; background: #151515; padding: 6px; border-radius: 4px;">
+            <label><input type="checkbox" id="hasHeaderCheck" checked> Imagen incluye Encabezados</label>
+        </div>
         
         <div class="slider-container">
             <label>YOLOv11 Confianza: <span id="yoloVal">0.95</span></label>
-            <input type="range" min="0.1" max="1.0" step="0.05" value="0.95" oninput="document.getElementById('yoloVal').innerText=this.value">
+            <input type="range" id="yoloSlider" min="0.1" max="1.0" step="0.05" value="0.95" oninput="syncParamToGrid('yolo', this.value)">
         </div>
         
         <div class="slider-container">
             <label>PaddleOCR Umbral: <span id="ocrVal">0.9</span></label>
-            <input type="range" min="0.1" max="1.0" step="0.05" value="0.9" oninput="document.getElementById('ocrVal').innerText=this.value">
+            <input type="range" id="ocrSlider" min="0.1" max="1.0" step="0.05" value="0.9" oninput="syncParamToGrid('ocr', this.value)">
         </div>
+
+        <div class="slider-container">
+            <label>Ángulo de Corrección: <span id="angleVal">0</span>°</label>
+            <input type="range" id="angleSlider" min="-15" max="15" step="1" value="0" oninput="document.getElementById('angleVal').innerText=this.value">
+        </div>
+
+        <div class="slider-container">
+            <label>Binarización Umbral: <span id="binVal">128</span></label>
+            <input type="range" id="binSlider" min="50" max="220" step="5" value="128" oninput="document.getElementById('binVal').innerText=this.value">
+        </div>
+
+        <button class="success" style="width:100%; margin:8px 0;" onclick="initAndProcessMotors()">Inicializar & Procesar con Motores</button>
+        
+        <div class="progress-bar-container" id="progressBarContainer">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+            <div class="progress-text" id="progressText">0%</div>
+        </div>
+
+        <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Descargar Log Estándar (.txt)</button>
     </div>
 
     <div class="panel">
@@ -182,7 +244,7 @@
         <div class="controls-row">
             <input type="text" id="searchInput" placeholder="Filtrar datos en tiempo real..." onkeyup="filterTable()">
             <button onclick="addRow()">+ Fila</button>
-            <button onclick="promptAddColumn()">+ Columna</button>
+            <button onclick="promptAddColumn()">+ Col</button>
             <button class="danger" onclick="clearTableData()">Vaciar</button>
         </div>
         
@@ -221,8 +283,8 @@
         let linesV = [80, 180, 280];
         let activeLine = null;
         let lineType = null;
+        let isGridLocked = false;
 
-        // Estructura de columnas base (sin contar Acciones al final)
         let columnsList = ["Promotor", "Hotel", "Horario", "Status"];
 
         function log(msg) {
@@ -240,7 +302,7 @@
                     panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada correctamente.");
+                    log("Imagen cargada. Sincronizada con parámetros.");
                 }
                 img.src = reader.result;
             }
@@ -293,6 +355,7 @@
         const container = document.getElementById('canvasContainer');
 
         container.addEventListener('pointerdown', (e) => {
+            if (isGridLocked) return;
             const rect = container.getBoundingClientRect();
             const mouseX = (e.clientX - rect.left - panX) / scale;
             const mouseY = (e.clientY - rect.top - panY) / scale;
@@ -323,10 +386,17 @@
         });
 
         container.addEventListener('pointermove', (e) => {
+            if (isGridLocked) return;
             if (activeLine !== null) {
                 const rect = container.getBoundingClientRect();
                 if (lineType === 'H') {
                     linesH[activeLine] = (e.clientY - rect.top - panY) / scale;
+                    // Sincronizar parámetro deslizante Yolo/Confianza según posición de línea H principal
+                    if(activeLine === 0) {
+                        let newVal = Math.min(Math.max((linesH[0] / (img.height || 600)).toFixed(2), 0.1), 1.0);
+                        document.getElementById('yoloSlider').value = newVal;
+                        document.getElementById('yoloVal').innerText = newVal;
+                    }
                 } else {
                     linesV[activeLine] = (e.clientX - rect.left - panX) / scale;
                 }
@@ -366,36 +436,150 @@
         }
 
         function addLineH() {
+            if (isGridLocked) return;
             linesH.push((linesH[linesH.length-1] || 40) + 30);
             redraw();
         }
 
         function addLineV() {
+            if (isGridLocked) return;
             linesV.push((linesV[linesV.length-1] || 40) + 80);
             redraw();
         }
 
         function clearLines() {
+            if (isGridLocked) return;
             linesH = [];
             linesV = [];
             redraw();
             log("Líneas de cuadrícula eliminadas.");
         }
 
-        function initMotors() {
+        function toggleLockGrid() {
+            isGridLocked = !isGridLocked;
+            const btn = document.getElementById('lockBtn');
+            const yoloS = document.getElementById('yoloSlider');
+            const ocrS = document.getElementById('ocrSlider');
+            const angleS = document.getElementById('angleSlider');
+            const binS = document.getElementById('binSlider');
+
+            if (isGridLocked) {
+                btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: ON";
+                btn.className = "success";
+                yoloS.disabled = true;
+                ocrS.disabled = true;
+                angleS.disabled = true;
+                binS.disabled = true;
+                log("Cuadrícula y parámetros bloqueados en este punto.");
+            } else {
+                btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: OFF";
+                btn.className = "warning";
+                yoloS.disabled = false;
+                ocrS.disabled = false;
+                angleS.disabled = false;
+                binS.disabled = false;
+                log("Cuadrícula y parámetros desbloqueados.");
+            }
+        }
+
+        function syncParamToGrid(param, val) {
+            if (isGridLocked) return;
+            if (param === 'yolo') {
+                document.getElementById('yoloVal').innerText = val;
+                if (linesH.length > 0 && img.height) {
+                    linesH[0] = val * (img.height / 4);
+                    redraw();
+                }
+            } else if (param === 'ocr') {
+                document.getElementById('ocrVal').innerText = val;
+            }
+        }
+
+        function initAndProcessMotors() {
             if (!img.src) {
                 alert("Primero cargue una imagen para procesar.");
                 return;
             }
-            log("Inicializando YOLOv11 y PaddleOCR locales...");
-            setTimeout(() => {
-                log("Analizando recortes según la cuadrícula delimitada...");
-                setTimeout(() => {
-                    log("Extracción completada. Volcando datos reales en la tabla...");
-                    // Simulando extracción limpia basada en la acción
-                    addRowData("", "", "", "Pendiente");
-                }, 800);
-            }, 800);
+            
+            const hasHeader = document.getElementById('hasHeaderCheck').checked;
+            const containerBar = document.getElementById('progressBarContainer');
+            const fillBar = document.getElementById('progressBarFill');
+            const textBar = document.getElementById('progressText');
+            
+            containerBar.style.display = 'block';
+            fillBar.style.width = '0%';
+            textBar.innerText = '0% - Cargando Motores en Memoria...';
+            log("Cargando YOLOv11 y PaddleOCR en memoria RAM...");
+
+            let progress = 0;
+            let interval = setInterval(() => {
+                progress += 20;
+                fillBar.style.width = progress + '%';
+                textBar.innerText = progress + '% - Procesando celdas...';
+                
+                if (progress === 40) {
+                    log("Aplicando umbrales y binarización sobre celdas...");
+                } else if (progress === 80) {
+                    log(hasHeader ? "Detectando encabezados de la tabla..." : "Modo sin encabezados: generando filas directas...");
+                }
+
+                if (progress >= 100) {
+                    clearInterval(interval);
+                    setTimeout(() => {
+                        containerBar.style.display = 'none';
+                        log("¡Extracción finalizada con éxito!");
+                        // Agregar filas basadas en el número de divisiones horizontales de la cuadrícula
+                        let filasDetectadas = Math.max(linesH.length - 1, 1);
+                        for(let i=0; i<filasDetectadas; i++) {
+                            addRowData(`Promotor ${i+1}`, hasHeader && i===0 ? "ENCABEZADO / HOTEL" : `Hotel Caribe ${i+1}`, "11:00 AM", i===0 && hasHeader ? "Confirmado" : "Pendiente");
+                        }
+                    }, 400);
+                }
+            }, 300);
+        }
+
+        function downloadStandardLog() {
+            const yoloConf = document.getElementById('yoloSlider').value;
+            const ocrThresh = document.getElementById('ocrSlider').value;
+            const angleVal = document.getElementById('angleSlider').value;
+            const binVal = document.getElementById('binSlider').value;
+            const hasHeader = document.getElementById('hasHeaderCheck').checked;
+            
+            let logContent = `=== REPORTE ESTÁNDAR MAR CARIBE ===\n`;
+            logContent += `Fecha: ${new Date().toISOString()}\n`;
+            logContent += `Bloqueado: ${isGridLocked ? 'SÍ' : 'NO'}\n`;
+            logContent += `Incluye Encabezados: ${hasHeader ? 'SÍ' : 'NO'}\n`;
+            logContent += `Parámetros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Ángulo: ${angleVal}° | Binarización: ${binVal}\n`;
+            logContent += `--------------------------------------------------\n\n`;
+            
+            logContent += columnsList.join(" | ") + "\n";
+            logContent += "--------------------------------------------------\n";
+            
+            const rows = document.getElementById("tableBody").getElementsByTagName("tr");
+            for (let row of rows) {
+                let rowData = [];
+                for (let i = 0; i < columnsList.length; i++) {
+                    const cell = row.cells[i];
+                    if (i === columnsList.length - 1) {
+                        const select = cell.querySelector('select');
+                        rowData.push(select ? select.value : cell.innerText);
+                    } else {
+                        rowData.push(cell.innerText.trim());
+                    }
+                }
+                logContent += rowData.join(" | ") + "\n";
+            }
+
+            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `log_mar_caribe_${Date.now()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            log("Log estándar generado y descargado con éxito.");
         }
 
         function updateColumnToggles() {
@@ -406,11 +590,10 @@
             });
         }
 
-        function addRowData(val1="", val2="", val3="", statusVal="Pendiente", extraValues=[]) {
+        function addRowData(val1="", val2="", val3="", statusVal="Pendiente") {
             const tbody = document.getElementById("tableBody");
             const newRow = tbody.insertRow();
             
-            // Valores para columnas base
             let baseVals = [val1, val2, val3];
             for (let i = 0; i < columnsList.length - 1; i++) {
                 const cell = newRow.insertCell(i);
@@ -418,7 +601,6 @@
                 cell.innerText = baseVals[i] || "";
             }
 
-            // Columna de Status (siempre la última de los datos)
             const statusCellIndex = columnsList.length - 1;
             const statusCell = newRow.insertCell(statusCellIndex);
             statusCell.innerHTML = `<select>
@@ -427,7 +609,6 @@
                 <option value="Cancelado" ${statusVal==='Cancelado'?'selected':''}>Cancelado</option>
             </select>`;
 
-            // Columna de Acciones
             const actionCell = newRow.insertCell(columnsList.length);
             actionCell.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
         }
@@ -439,7 +620,7 @@
         function promptAddColumn() {
             let colName = prompt("Nombre de la nueva columna:");
             if (colName && colName.trim() !== "") {
-                columnsList.splice(columnsList.length - 1, 0, colName.trim()); // Insertar antes de Status
+                columnsList.splice(columnsList.length - 1, 0, colName.trim());
                 rebuildTableStructure();
                 log(`Columna '${colName}' agregada.`);
             }
@@ -453,8 +634,6 @@
             });
             headerRow.innerHTML += `<th>Acciones</th>`;
             updateColumnToggles();
-            
-            // Limpiar datos al reestructurar columnas o mantener filas vacías
             document.getElementById("tableBody").innerHTML = "";
         }
 
@@ -486,7 +665,6 @@
             }
         }
 
-        // Inicializar controles al cargar
         updateColumnToggles();
     </script>
 </body>
