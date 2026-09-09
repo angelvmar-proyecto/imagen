@@ -22,10 +22,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Instalar dependencias y Capacitor
+      - name: Instalar dependencias y Sincronizar Capacitor
         run: |
           npm install
-          npx cap add android
           npx cap sync android
 
       - name: Compilar con Gradle
