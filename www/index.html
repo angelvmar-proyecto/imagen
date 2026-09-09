@@ -144,6 +144,8 @@
             background: #151515;
             padding: 6px;
             border-radius: 4px;
+            max-height: 100px;
+            overflow-y: auto;
         }
         .progress-bar-container {
             width: 100%;
@@ -263,7 +265,7 @@
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <!-- Vacío por defecto -->
+                    <!-- Vacío por defecto para llenado limpio -->
                 </tbody>
             </table>
         </div>
@@ -525,10 +527,11 @@
             }, 250);
         }
 
+        // Alternativa limpia: Segmenta las celdas según las líneas ajustadas, pero deja el espacio listo en blanco para edición manual limpia sin texto falso.
         function extractCellsContent() {
             if (linesH.length < 2 || linesV.length < 1) {
-                log("Aviso: Se recomiendan al menos 2 líneas horizontales y 1 vertical para segmentar celdas.");
-                addRowData(["Celda detectada 1", "Celda detectada 2", "Celda detectada 3"]);
+                log("Aviso: Se recomiendan al menos 2 líneas horizontales y 1 vertical.");
+                addRowData(["", "", ""]);
                 return;
             }
 
@@ -544,9 +547,7 @@
             hiddenCanvas.height = img.height;
             hCtx.drawImage(img, 0, 0);
 
-            const binThreshold = parseInt(document.getElementById('binSlider').value);
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
-
             let extractedRowsCount = 0;
             document.getElementById("tableBody").innerHTML = "";
 
@@ -562,17 +563,8 @@
                     let h = y2 - y1;
 
                     if (w > 5 && h > 5) {
-                        let imgData = hCtx.getImageData(x1, y1, w, h);
-                        let pixels = imgData.data;
-                        let darkPixels = 0;
-                        for (let p = 0; p < pixels.length; p += 4) {
-                            let avg = (pixels[p] + pixels[p+1] + pixels[p+2]) / 3;
-                            if (avg < binThreshold) darkPixels++;
-                        }
-
-                        let density = darkPixels / (w * h);
-                        let cellText = density > 0.02 ? `[F${i+1}, C${j+1}] Datos` : "";
-                        rowCells.push(cellText);
+                        // Celda limpia vacía lista para captura manual o auditoría de datos reales
+                        rowCells.push("");
                     }
                 }
 
@@ -583,25 +575,18 @@
                     rebuildTableStructure();
                 }
 
-                if (rowCells.some(c => c !== "")) {
-                    if (hasHeader && extractedRowsCount === 0) {
-                        log("Encabezado detectado en fila 1.");
-                    } else {
-                        addRowData(rowCells);
-                    }
-                    extractedRowsCount++;
+                if (hasHeader && extractedRowsCount === 0) {
+                    log("Fila de encabezado omitida para datos limpios.");
+                } else {
+                    addRowData(rowCells);
                 }
+                extractedRowsCount++;
             }
 
-            if(extractedRowsCount === 0) {
-                log("No se detectó suficiente contraste. Agregando fila editable predeterminada.");
-                addRowData(["Dato 1", "Dato 2", "Dato 3"]);
-            } else {
-                log(`Extracción completada: ${extractedRowsCount} filas procesadas.`);
-            }
+            log(`Malla segmentada limpia con éxito: ${extractedRowsCount} filas listas para rellenar.`);
         }
 
-        // Descarga optimizada compatible de forma nativa con Android / WebView / Termux / Capacitor sin bloqueos de seguridad
+        // Descarga optimizada infalible mediante Data URI nativa compatible con Android y WebView sin bloqueos de Blob
         function downloadStandardLog() {
             const yoloConf = document.getElementById('yoloSlider').value;
             const ocrThresh = document.getElementById('ocrSlider').value;
@@ -609,11 +594,11 @@
             const binVal = document.getElementById('binSlider').value;
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             
-            let logContent = `=== REPORTE ESTÁNDAR MAR CARIBE ===\n`;
+            let logContent = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
             logContent += `Fecha: ${new Date().toISOString()}\n`;
-            logContent += `Bloqueado: ${isGridLocked ? 'SÍ' : 'NO'}\n`;
-            logContent += `Incluye Encabezados: ${hasHeader ? 'SÍ' : 'NO'}\n`;
-            logContent += `Parámetros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Ángulo: ${angleVal}° | Binarización: ${binVal}\n`;
+            logContent += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
+            logContent += `Incluye Encabezados: ${hasHeader ? 'SI' : 'NO'}\n`;
+            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${angleVal} | Binarizacion: ${binVal}\n`;
             logContent += `--------------------------------------------------\n\n`;
             
             logContent += columnsList.join(" | ") + "\n";
@@ -632,33 +617,25 @@
             }
 
             const filename = `log_mar_caribe_${Date.now()}.txt`;
-            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
-
-            // Método robusto para WebView y Android (Capacitor / Termux)
-            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
-                window.navigator.msSaveOrOpenBlob(blob, filename);
-                log("Log descargado mediante msSaveOrOpenBlob.");
-                return;
-            }
-
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-
+            
+            // Método definitivo Data URI para Android / Termux / WebView móvil
+            const encodedUri = "data:text/plain;charset=utf-8," + encodeURIComponent(logContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", filename);
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            
             try {
-                a.click();
-                log("Log descargado con éxito.");
+                link.click();
+                log("Log descargado y enviado al sistema (Carpeta Descargas).");
             } catch (err) {
-                log("Error en evento click automático. Abriendo enlace directo...");
-                window.open(url, '_blank');
+                window.open(encodedUri, '_blank');
+                log("Log abierto en pestaña alternativa de emergencia.");
             }
-
+            
             setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                document.body.removeChild(link);
             }, 500);
         }
 
