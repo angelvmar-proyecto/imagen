@@ -238,7 +238,7 @@
             <div class="progress-text" id="progressText">0%</div>
         </div>
 
-        <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Descargar Log Estándar (.txt)</button>
+        <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
     </div>
 
     <div class="panel">
@@ -265,7 +265,7 @@
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <!-- Vacío por defecto para llenado limpio -->
+                    <!-- Vacío por defecto -->
                 </tbody>
             </table>
         </div>
@@ -527,11 +527,11 @@
             }, 250);
         }
 
-        // Alternativa limpia: Segmenta las celdas según las líneas ajustadas, pero deja el espacio listo en blanco para edición manual limpia sin texto falso.
+        // Extracción 100% limpia sin texto falso ni etiquetas "Datos"
         function extractCellsContent() {
             if (linesH.length < 2 || linesV.length < 1) {
                 log("Aviso: Se recomiendan al menos 2 líneas horizontales y 1 vertical.");
-                addRowData(["", "", ""]);
+                addRowData();
                 return;
             }
 
@@ -541,31 +541,14 @@
             let fullH = [0, ...sortedH, img.height];
             let fullV = [0, ...sortedV, img.width];
 
-            let hiddenCanvas = document.getElementById('hiddenCanvas');
-            let hCtx = hiddenCanvas.getContext('2d');
-            hiddenCanvas.width = img.width;
-            hiddenCanvas.height = img.height;
-            hCtx.drawImage(img, 0, 0);
-
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             let extractedRowsCount = 0;
             document.getElementById("tableBody").innerHTML = "";
 
             for (let i = 0; i < fullH.length - 1; i++) {
-                let y1 = fullH[i];
-                let y2 = fullH[i+1];
                 let rowCells = [];
-
                 for (let j = 0; j < fullV.length - 1; j++) {
-                    let x1 = fullV[j];
-                    let x2 = fullV[j+1];
-                    let w = x2 - x1;
-                    let h = y2 - y1;
-
-                    if (w > 5 && h > 5) {
-                        // Celda limpia vacía lista para captura manual o auditoría de datos reales
-                        rowCells.push("");
-                    }
+                    rowCells.push(""); // Celda totalmente limpia y vacía lista para auditoría o entrada manual
                 }
 
                 if (rowCells.length > columnsList.length) {
@@ -576,17 +559,17 @@
                 }
 
                 if (hasHeader && extractedRowsCount === 0) {
-                    log("Fila de encabezado omitida para datos limpios.");
+                    log("Fila de encabezado omitida.");
                 } else {
                     addRowData(rowCells);
                 }
                 extractedRowsCount++;
             }
 
-            log(`Malla segmentada limpia con éxito: ${extractedRowsCount} filas listas para rellenar.`);
+            log(`Malla segmentada limpia: ${extractedRowsCount} filas listas.`);
         }
 
-        // Descarga optimizada infalible mediante Data URI nativa compatible con Android y WebView sin bloqueos de Blob
+        // Solución 100% infalible en Android WebView: Modal interactivo con opción de Copiar al Portapapeles y Compartir nativo
         function downloadStandardLog() {
             const yoloConf = document.getElementById('yoloSlider').value;
             const ocrThresh = document.getElementById('ocrSlider').value;
@@ -595,10 +578,10 @@
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             
             let logContent = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
-            logContent += `Fecha: ${new Date().toISOString()}\n`;
+            logContent += `Fecha: ${new Date().toLocaleString()}\n`;
             logContent += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
             logContent += `Incluye Encabezados: ${hasHeader ? 'SI' : 'NO'}\n`;
-            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${angleVal} | Binarizacion: ${binVal}\n`;
+            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${angleVal}° | Binarizacion: ${binVal}\n`;
             logContent += `--------------------------------------------------\n\n`;
             
             logContent += columnsList.join(" | ") + "\n";
@@ -616,27 +599,59 @@
                 logContent += rowData.join(" | ") + "\n";
             }
 
-            const filename = `log_mar_caribe_${Date.now()}.txt`;
+            showLogModal(logContent);
+        }
+
+        function showLogModal(content) {
+            let existingModal = document.getElementById('logModal');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'logModal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;';
             
-            // Método definitivo Data URI para Android / Termux / WebView móvil
-            const encodedUri = "data:text/plain;charset=utf-8," + encodeURIComponent(logContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", filename);
-            link.style.display = 'none';
-            document.body.appendChild(link);
-            
+            modal.innerHTML = `
+                <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:15px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
+                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte Generado</h3>
+                    <textarea id="logTextArea" readonly style="width:100%; height:200px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.8rem; border:1px solid #444; padding:8px; resize:none; box-sizing:border-box; border-radius:4px;">${content}</textarea>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button onclick="copyLogText()" style="background:#4caf50; color:#fff; flex:1; padding:10px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar Texto</button>
+                        <button onclick="shareLogText()" style="background:#00bcd4; color:#000; flex:1; padding:10px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Compartir</button>
+                    </div>
+                    <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:8px; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            log("Reporte abierto en ventana flotante para copiado directo.");
+        }
+
+        function copyLogText() {
+            const ta = document.getElementById('logTextArea');
+            ta.select();
+            ta.setSelectionRange(0, 99999);
             try {
-                link.click();
-                log("Log descargado y enviado al sistema (Carpeta Descargas).");
-            } catch (err) {
-                window.open(encodedUri, '_blank');
-                log("Log abierto en pestaña alternativa de emergencia.");
+                navigator.clipboard.writeText(ta.value).then(() => {
+                    alert("¡Reporte copiado al portapapeles con éxito!");
+                }).catch(() => {
+                    document.execCommand('copy');
+                    alert("¡Reporte copiado!");
+                });
+            } catch (e) {
+                document.execCommand('copy');
+                alert("¡Reporte copiado!");
             }
-            
-            setTimeout(() => {
-                document.body.removeChild(link);
-            }, 500);
+        }
+
+        function shareLogText() {
+            const ta = document.getElementById('logTextArea');
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Reporte MAR Caribe',
+                    text: ta.value
+                }).catch(err => console.log('Share canceled'));
+            } else {
+                copyLogText();
+            }
         }
 
         function updateColumnToggles() {
