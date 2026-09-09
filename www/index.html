@@ -28,29 +28,28 @@
     .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
     #vistaImagen{display:none;max-width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin:16px auto;}
-    .etiqueta-nuevo{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
+    .etiqueta-auto{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
     .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
     .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
     .m5{border:3px solid #f59e0b;box-shadow:0 0 12px rgba(245,158,11,0.2);}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
     .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
+    .info-auto{font-size:12px;color:#6b7280;margin-top:4px;}
   </style>
 </head>
 <body>
 
 <div id="cargaGlobal" class="carga-pantalla">
   <h2>Iniciando MAR Caribe...</h2>
-  <div class="barra-fondo" style="width:280px;">
-    <div id="barraGlobal" class="barra-progreso" style="width:0%"></div>
-  </div>
+  <div class="barra-fondo" style="width:280px;"><div id="barraGlobal" class="barra-progreso" style="width:0%"></div></div>
   <p id="estadoTF">TF.js: ⏳ Pendiente</p>
   <p id="estadoOCR">OCR: ⏳ Pendiente</p>
   <div id="logsGlobal" class="logs" style="width:90%;max-width:500px;max-height:200px;"></div>
 </div>
 
 <div id="seccionImagen" class="oculto">
-  <h1>📊 MAR Caribe — OCR de Tablas</h1>
+  <h1>📊 MAR Caribe — OCR de Tablas <span class="etiqueta-auto">Auto-Calibración</span></h1>
   <div id="btnSeleccionar" class="seccion-imagen">
     <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
@@ -59,6 +58,7 @@
 
   <div class="motor-card">
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
+    <div class="estado">⏳ Meta: 18×26</div>
     <div id="estadoM1" class="estado">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM1" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
@@ -71,6 +71,7 @@
 
   <div class="motor-card">
     <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
+    <div class="estado">⏳ Meta: 18×25</div>
     <div id="estadoM2" class="estado">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM2" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
@@ -83,6 +84,7 @@
 
   <div class="motor-card">
     <h2>🎯 Motor 3: YOLOv8n</h2>
+    <div class="estado">⏳ Meta: 18×26</div>
     <div id="estadoM3" class="estado">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM3" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
@@ -95,7 +97,8 @@
 
   <div class="motor-card m4">
     <h2>🚀 Motor 4: YOLOv11-Tabla <span class="etiqueta-nuevo">NUEVO</span></h2>
-    <div id="estadoM4" class="estado">⏳ Pendiente — Parámetros ajustados</div>
+    <div class="estado">⏳ Meta: 17×25</div>
+    <div id="estadoM4" class="estado">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM4" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
       <button id="btnAnalizarM4" class="btn-analizar">🚀 Analizar</button>
@@ -107,7 +110,8 @@
 
   <div class="motor-card m5">
     <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-recomendado">⭐ RECOMENDADO</span></h2>
-    <div id="estadoM5" class="estado">⏳ Pendiente — Más palabras detectadas</div>
+    <div class="estado">⏳ Meta: 18×25 + más palabras</div>
+    <div id="estadoM5" class="estado">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM5" class="barra-progreso" style="width:0%"></div></div>
     <div class="btn-group">
       <button id="btnAnalizarM5" class="btn-analizar">📄 Analizar</button>
