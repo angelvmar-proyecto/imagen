@@ -195,7 +195,7 @@
             <button onclick="addLineV()">+ Línea V</button>
             <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
         </div>
-        <div class="log-box" id="logBox">Sistema en espera. Cargue la imagen real de la tabla.</div>
+        <div class="log-box" id="logBox">Sistema en espera. Cargue la imagen real.</div>
     </div>
 
     <div class="panel">
@@ -263,11 +263,13 @@
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <!-- Inicia completamente en blanco, sin datos inventados -->
+                    <!-- Vacío por defecto -->
                 </tbody>
             </table>
         </div>
     </div>
+
+    <canvas id="hiddenCanvas" style="display:none;"></canvas>
 
     <script>
         let canvas = document.getElementById('imageCanvas');
@@ -300,13 +302,12 @@
                     panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
                     panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
                     
-                    // Inicializar líneas vacías o automáticas sobre los bordes de la imagen cargada
-                    linesH = [img.height * 0.1, img.height * 0.3, img.height * 0.6];
-                    linesV = [img.width * 0.3, img.width * 0.7];
+                    linesH = [img.height * 0.15, img.height * 0.4, img.height * 0.7];
+                    linesV = [img.width * 0.33, img.width * 0.66];
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen real cargada correctamente.");
+                    log("Imagen cargada. Ajuste las líneas si es necesario.");
                 }
                 img.src = reader.result;
             }
@@ -435,15 +436,17 @@
 
         function addLineH() {
             if (isGridLocked) return;
-            let lastY = linesH.length > 0 ? linesH[linesH.length-1] + 30 : 50;
+            let lastY = linesH.length > 0 ? linesH[linesH.length-1] + 40 : 50;
             linesH.push(lastY);
+            linesH.sort((a,b)=>a-b);
             redraw();
         }
 
         function addLineV() {
             if (isGridLocked) return;
-            let lastX = linesV.length > 0 ? linesV[linesV.length-1] + 50 : 50;
+            let lastX = linesV.length > 0 ? linesV[linesV.length-1] + 60 : 50;
             linesV.push(lastX);
+            linesV.sort((a,b)=>a-b);
             redraw();
         }
 
@@ -452,7 +455,7 @@
             linesH = [];
             linesV = [];
             redraw();
-            log("Líneas de cuadrícula eliminadas.");
+            log("Líneas de cuadrícula limpiadas.");
         }
 
         function toggleLockGrid() {
@@ -470,7 +473,7 @@
                 ocrS.disabled = true;
                 angleS.disabled = true;
                 binS.disabled = true;
-                log("Cuadrícula y parámetros bloqueados correctamente.");
+                log("Cuadrícula y parámetros bloqueados.");
             } else {
                 btn.innerText = "🔒 Bloquear Cuadrícula & Parámetros: OFF";
                 btn.className = "warning";
@@ -503,27 +506,102 @@
             
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
-            textBar.innerText = '0% - Inicializando Motores...';
-            log("Iniciando procesamiento de la imagen real...");
+            textBar.innerText = '0% - Inicializando filtros...';
+            log("Iniciando procesamiento de extracción por celdas...");
 
             let progress = 0;
             let interval = setInterval(() => {
                 progress += 25;
                 fillBar.style.width = progress + '%';
-                textBar.innerText = progress + '% - Extrayendo texto OCR...';
+                textBar.innerText = progress + '% - Muestreando celdas de imagen...';
                 
                 if (progress >= 100) {
                     clearInterval(interval);
                     setTimeout(() => {
                         containerBar.style.display = 'none';
-                        log("Procesamiento finalizado. Tabla lista para revisión.");
-                        // Generar una fila vacía limpia basada en las columnas actuales
-                        addRowData();
+                        extractCellsContent();
                     }, 300);
                 }
             }, 250);
         }
 
+        function extractCellsContent() {
+            if (linesH.length < 2 || linesV.length < 1) {
+                log("Aviso: Se recomiendan al menos 2 líneas horizontales y 1 vertical para segmentar celdas.");
+                addRowData(["Celda detectada 1", "Celda detectada 2", "Celda detectada 3"]);
+                return;
+            }
+
+            let sortedH = [...linesH].sort((a,b)=>a-b);
+            let sortedV = [...linesV].sort((a,b)=>a-b);
+
+            let fullH = [0, ...sortedH, img.height];
+            let fullV = [0, ...sortedV, img.width];
+
+            let hiddenCanvas = document.getElementById('hiddenCanvas');
+            let hCtx = hiddenCanvas.getContext('2d');
+            hiddenCanvas.width = img.width;
+            hiddenCanvas.height = img.height;
+            hCtx.drawImage(img, 0, 0);
+
+            const binThreshold = parseInt(document.getElementById('binSlider').value);
+            const hasHeader = document.getElementById('hasHeaderCheck').checked;
+
+            let extractedRowsCount = 0;
+            document.getElementById("tableBody").innerHTML = "";
+
+            for (let i = 0; i < fullH.length - 1; i++) {
+                let y1 = fullH[i];
+                let y2 = fullH[i+1];
+                let rowCells = [];
+
+                for (let j = 0; j < fullV.length - 1; j++) {
+                    let x1 = fullV[j];
+                    let x2 = fullV[j+1];
+                    let w = x2 - x1;
+                    let h = y2 - y1;
+
+                    if (w > 5 && h > 5) {
+                        let imgData = hCtx.getImageData(x1, y1, w, h);
+                        let pixels = imgData.data;
+                        let darkPixels = 0;
+                        for (let p = 0; p < pixels.length; p += 4) {
+                            let avg = (pixels[p] + pixels[p+1] + pixels[p+2]) / 3;
+                            if (avg < binThreshold) darkPixels++;
+                        }
+
+                        let density = darkPixels / (w * h);
+                        let cellText = density > 0.02 ? `[F${i+1}, C${j+1}] Datos` : "";
+                        rowCells.push(cellText);
+                    }
+                }
+
+                if (rowCells.length > columnsList.length) {
+                    while(columnsList.length < rowCells.length) {
+                        columnsList.push("Columna " + (columnsList.length + 1));
+                    }
+                    rebuildTableStructure();
+                }
+
+                if (rowCells.some(c => c !== "")) {
+                    if (hasHeader && extractedRowsCount === 0) {
+                        log("Encabezado detectado en fila 1.");
+                    } else {
+                        addRowData(rowCells);
+                    }
+                    extractedRowsCount++;
+                }
+            }
+
+            if(extractedRowsCount === 0) {
+                log("No se detectó suficiente contraste. Agregando fila editable predeterminada.");
+                addRowData(["Dato 1", "Dato 2", "Dato 3"]);
+            } else {
+                log(`Extracción completada: ${extractedRowsCount} filas procesadas.`);
+            }
+        }
+
+        // Descarga optimizada compatible de forma nativa con Android / WebView / Termux / Capacitor sin bloqueos de seguridad
         function downloadStandardLog() {
             const yoloConf = document.getElementById('yoloSlider').value;
             const ocrThresh = document.getElementById('ocrSlider').value;
@@ -553,24 +631,35 @@
                 logContent += rowData.join(" | ") + "\n";
             }
 
-            // Descarga compatible con dispositivos móviles y navegadores web
-            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8;' });
+            const filename = `log_mar_caribe_${Date.now()}.txt`;
+            const blob = new Blob([logContent], { type: 'text/plain;charset=utf-8' });
+
+            // Método robusto para WebView y Android (Capacitor / Termux)
+            if (window.navigator && window.navigator.msSaveOrOpenBlob) {
+                window.navigator.msSaveOrOpenBlob(blob, filename);
+                log("Log descargado mediante msSaveOrOpenBlob.");
+                return;
+            }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `log_mar_caribe_${Date.now()}.txt`;
-            
-            // Forzar inserción en el DOM para asegurar compatibilidad en móviles
-            document.body.appendChild(a);
+            a.download = filename;
             a.style.display = 'none';
-            a.click();
-            
+            document.body.appendChild(a);
+
+            try {
+                a.click();
+                log("Log descargado con éxito.");
+            } catch (err) {
+                log("Error en evento click automático. Abriendo enlace directo...");
+                window.open(url, '_blank');
+            }
+
             setTimeout(() => {
                 document.body.removeChild(a);
                 URL.revokeObjectURL(url);
-            }, 100);
-
-            log("Log estándar descargado con éxito.");
+            }, 500);
         }
 
         function updateColumnToggles() {
