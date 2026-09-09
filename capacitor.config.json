@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "appId": "com.angelvmar.imagen",
   "appName": "imagen",
   "webDir": "www",
@@ -7,5 +8,15 @@
     "buildOptions": {
       "releaseType": "signed"
     }
+=======
+  "appId": "com.marcaribe.app",
+  "appName": "MAR Caribe",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "file"
+  },
+  "android": {
+    "allowMixedContent": true
+>>>>>>> 8c9f207716760862311961da3e09f92be1ddff6f
   }
 }

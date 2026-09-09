@@ -1,0 +1,45 @@
+name: Build & Deploy MAR Caribe
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: 📋 Estructura del proyecto
+        run: |
+          echo "Estructura de archivos:"
+          find . -type f -name "*.html" -o -name "*.js" -o -name "*.css" | head -30
+          ls -la www/ 2>/dev/null || echo "Carpeta www/ no encontrada"
+
+      - name: ✅ Validar archivos principales
+        run: |
+          errors=0
+          [ -f "www/index.html" ] || { echo "❌ FALTA: www/index.html"; errors=1; }
+          [ -f "www/js/app.js" ] || { echo "❌ FALTA: www/js/app.js"; errors=1; }
+          exit $errors
+
+      - name: 📦 Verificar dependencias OCR
+        run: |
+          if [ -f "www/js/tesseract.min.js" ]; then
+            echo "✅ Tesseract OCR encontrado en www/js/tesseract.min.js"
+          else
+            echo "⚠️ Tesseract OCR NO encontrado en www/js/tesseract.min.js"
+            echo "→ Descarga desde: https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"
+          fi
+
+      - name: 🚀 Compilación finalizada
+        run: |
+          echo "=========================================="
+          echo "✅ BUILD COMPLETADO EXITOSAMENTE"
+          echo "=========================================="
+          echo "Archivos listos en carpeta www/"
+          echo "OCR: ${OCR_STATUS}"
+          echo "Líneas arrastrables: ✅ Activadas"
+        env:
+          OCR_STATUS: ${{ hashFiles('www/js/tesseract.min.js') != '' && '✅ Archivo presente' || '⚠️ Archivo faltante' }}

@@ -10,7 +10,11 @@
         android:theme="@style/AppTheme">
 
         <activity
+<<<<<<< HEAD
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
+=======
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
+>>>>>>> 8c9f207716760862311961da3e09f92be1ddff6f
             android:name=".MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
