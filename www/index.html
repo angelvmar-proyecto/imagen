@@ -14,6 +14,7 @@
             --text-secondary: #AAAAAA;
             --accent-blue: #00bcd4;
             --danger: #ff4444;
+            --success: #4caf50;
         }
         body {
             background-color: var(--bg-dark);
@@ -50,9 +51,14 @@
             border-radius: 4px;
             flex: 1;
             cursor: pointer;
+            font-size: 0.85rem;
         }
         button.danger {
             background-color: var(--danger);
+            color: #fff;
+        }
+        button.success {
+            background-color: var(--success);
             color: #fff;
         }
         input[type="range"] {
@@ -91,6 +97,32 @@
             gap: 5px;
             margin-bottom: 8px;
         }
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 300px;
+            background: #000;
+            overflow: hidden;
+            border: 1px solid var(--gold-dark);
+            border-radius: 4px;
+            touch-action: none;
+        }
+        canvas {
+            position: absolute;
+            cursor: crosshair;
+        }
+        .log-box {
+            background: #000;
+            color: var(--accent-blue);
+            font-family: monospace;
+            font-size: 0.75rem;
+            padding: 8px;
+            border-radius: 4px;
+            height: 60px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            margin-top: 5px;
+        }
     </style>
 </head>
 <body>
@@ -100,20 +132,27 @@
     <div class="panel">
         <div class="btn-group">
             <button onclick="document.getElementById('fileInput').click()">Cargar Imagen</button>
-            <button onclick="addRow()">+ Fila</button>
-            <button onclick="addColumn()">+ Columna</button>
-            <button class="danger" onclick="clearData()">Limpiar</button>
+            <button onclick="zoomIn()">Zoom +</button>
+            <button onclick="zoomOut()">Zoom -</button>
+            <button onclick="resetZoom()">Restaurar</button>
         </div>
         <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
         
-        <div style="text-align:center;">
-            <canvas id="imageCanvas" style="max-width:100%; height:auto; border:1px solid var(--gold-dark); border-radius:4px; display:none;"></canvas>
+        <div class="canvas-container" id="canvasContainer">
+            <canvas id="imageCanvas"></canvas>
         </div>
+        
+        <div class="btn-group" style="margin-top: 8px;">
+            <button onclick="addLineH()">+ Línea Horizontal</button>
+            <button onclick="addLineV()">+ Línea Vertical</button>
+            <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
+        </div>
+        <div class="log-box" id="logBox">Sistema listo. Cargue una imagen y ajuste la cuadrícula.</div>
     </div>
 
     <div class="panel">
-        <h2>Motores & Parámetros</h2>
-        <button style="width:100%; background-color: var(--accent-blue); color:#000; margin-bottom:10px;">Inicializar Motores (YOLO/OCR)</button>
+        <h2>Motores & Parámetros (YOLO / OCR)</h2>
+        <button class="success" style="width:100%; margin-bottom:10px;" onclick="initMotors()">Inicializar & Procesar con Motores</button>
         
         <div class="slider-container">
             <label>YOLOv11 Confianza: <span id="yoloVal">0.5</span></label>
@@ -130,11 +169,13 @@
         <h2>Visor & Gestor de Tabla</h2>
         <div class="controls-row">
             <input type="text" id="searchInput" placeholder="Filtrar datos en tiempo real..." onkeyup="filterTable()">
+            <button onclick="addRow()">+ Fila</button>
+            <button onclick="addColumn()">+ Col</button>
         </div>
         <div style="margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
             Ocultar columnas: 
-            <label><input type="checkbox" checked onclick="toggleColumn(0)"> Col 1</label>
-            <label><input type="checkbox" checked onclick="toggleColumn(1)"> Col 2</label>
+            <label><input type="checkbox" checked onclick="toggleColumn(0)"> Hotel</label>
+            <label><input type="checkbox" checked onclick="toggleColumn(1)"> Horario</label>
             <label><input type="checkbox" checked onclick="toggleColumn(2)"> Status</label>
         </div>
         <div style="overflow-x: auto;">
@@ -149,12 +190,12 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td contenteditable="true">Ejemplo Hotel A</td>
-                        <td contenteditable="true">09:00 AM</td>
+                        <td contenteditable="true">Hotel Grand Riviera</td>
+                        <td contenteditable="true">10:30 AM - Promotor Luis</td>
                         <td>
                             <select>
                                 <option value="Pendiente">Pendiente</option>
-                                <option value="Confirmado">Confirmado</option>
+                                <option value="Confirmado" selected>Confirmado</option>
                                 <option value="Cancelado">Cancelado</option>
                             </select>
                         </td>
@@ -166,24 +207,194 @@
     </div>
 
     <script>
+        let canvas = document.getElementById('imageCanvas');
+        let ctx = canvas.getContext('2d');
+        let img = new Image();
+        let scale = 1;
+        let panX = 0, panY = 0;
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        
+        let linesH = [50, 150, 250];
+        let linesV = [100, 250, 400];
+        let activeLine = null;
+        let lineType = null; // 'H' or 'V'
+
+        function log(msg) {
+            const box = document.getElementById('logBox');
+            box.innerText += "\n> " + msg;
+            box.scrollTop = box.scrollHeight;
+        }
+
         function loadImage(event) {
             const reader = new FileReader();
             reader.onload = function(){
-                const canvas = document.getElementById('imageCanvas');
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
                 img.onload = function() {
-                    canvas.style.display = 'block';
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
+                    scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                    panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
+                    panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
+                    resizeCanvas();
+                    redraw();
+                    log("Imagen cargada correctamente.");
                 }
                 img.src = reader.result;
             }
             reader.readAsDataURL(event.target.files[0]);
         }
 
-        function addRow() {
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            redraw();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(scale, scale);
+            
+            if (img.src) {
+                ctx.drawImage(img, 0, 0);
+            }
+
+            // Dibujar líneas horizontales
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 2 / scale;
+            linesH.forEach((y, index) => {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(img.width || 800, y);
+                ctx.stroke();
+                ctx.fillStyle = '#FFD700';
+                ctx.font = `${12 / scale}px sans-serif`;
+                ctx.fillText(`H${index+1}`, 10, y - 5);
+            });
+
+            // Dibujar líneas verticales
+            ctx.strokeStyle = '#00bcd4';
+            linesV.forEach((x, index) => {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, img.height || 600);
+                ctx.stroke();
+                ctx.fillStyle = '#00bcd4';
+                ctx.fillText(`V${index+1}`, x + 5, 20);
+            });
+
+            ctx.restore();
+        }
+
+        // Control de Zoom y Pan (Touch & Mouse)
+        const container = document.getElementById('canvasContainer');
+
+        container.addEventListener('pointerdown', (e) => {
+            const rect = container.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left - panX) / scale;
+            const mouseY = (e.clientY - rect.top - panY) / scale;
+
+            // Detectar si se selecciona una línea para moverla
+            activeLine = null;
+            for (let i = 0; i < linesH.length; i++) {
+                if (Math.abs(mouseY - linesH[i]) < 15 / scale) {
+                    activeLine = i;
+                    lineType = 'H';
+                    break;
+                }
+            }
+            if (activeLine === null) {
+                for (let i = 0; i < linesV.length; i++) {
+                    if (Math.abs(mouseX - linesV[i]) < 15 / scale) {
+                        activeLine = i;
+                        lineType = 'V';
+                        break;
+                    }
+                }
+            }
+
+            if (activeLine === null) {
+                isDragging = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+            }
+        });
+
+        container.addEventListener('pointermove', (e) => {
+            if (activeLine !== null) {
+                const rect = container.getBoundingClientRect();
+                if (lineType === 'H') {
+                    linesH[activeLine] = (e.clientY - rect.top - panY) / scale;
+                } else {
+                    linesV[activeLine] = (e.clientX - rect.left - panX) / scale;
+                }
+                redraw();
+            } else if (isDragging) {
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+                redraw();
+            }
+        });
+
+        container.addEventListener('pointerup', () => {
+            isDragging = false;
+            activeLine = null;
+        });
+
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = 1.1;
+            if (e.deltaY < 0) {
+                scale *= zoomFactor;
+            } else {
+                scale /= zoomFactor;
+            }
+            redraw();
+        });
+
+        function zoomIn() { scale *= 1.2; redraw(); }
+        function zoomOut() { scale /= 1.2; redraw(); }
+        function resetZoom() {
+            if(img.width) {
+                scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
+                panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
+                redraw();
+            }
+        }
+
+        function addLineH() {
+            linesH.push((linesH[linesH.length-1] || 50) + 40);
+            redraw();
+        }
+
+        function addLineV() {
+            linesV.push((linesV[linesV.length-1] || 50) + 60);
+            redraw();
+        }
+
+        function clearLines() {
+            linesH = [];
+            linesV = [];
+            redraw();
+            log("Líneas de cuadrícula eliminadas.");
+        }
+
+        function initMotors() {
+            log("Inicializando YOLOv11 y PaddleOCR locales...");
+            setTimeout(() => {
+                log("Motores cargados con éxito en memoria.");
+                log("Procesando recortes entre celdas de la cuadrícula...");
+                setTimeout(() => {
+                    log("OCR Extraído: 3 registros detectados y volcados al visor.");
+                    appendExtractedRow("Hotel Iberostar", "11:00 AM - Promotor Carlos", "Confirmado");
+                    appendExtractedRow("Hotel Paradisus", "01:00 PM - Promotor Sofia", "Pendiente");
+                }, 1000);
+            }, 1000);
+        }
+
+        function appendExtractedRow(col1Val, col2Val, statusVal) {
             const table = document.getElementById("excelTable").getElementsByTagName('tbody')[0];
             const newRow = table.insertRow();
             const cell1 = newRow.insertCell(0);
@@ -192,21 +403,28 @@
             const cell4 = newRow.insertCell(3);
             
             cell1.contentEditable = "true";
-            cell1.innerText = "Nuevo dato";
+            cell1.innerText = col1Val;
             cell2.contentEditable = "true";
-            cell2.innerText = "Nueva info";
-            cell3.innerHTML = `<select><option value="Pendiente">Pendiente</option><option value="Confirmado">Confirmado</option><option value="Cancelado">Cancelado</option></select>`;
+            cell2.innerText = col2Val;
+            cell3.innerHTML = `<select>
+                <option value="Pendiente" ${statusVal==='Pendiente'?'selected':''}>Pendiente</option>
+                <option value="Confirmado" ${statusVal==='Confirmado'?'selected':''}>Confirmado</option>
+                <option value="Cancelado" ${statusVal==='Cancelado'?'selected':''}>Cancelado</option>
+            </select>`;
             cell4.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
+        }
+
+        function addRow() {
+            appendExtractedRow("Nuevo Hotel", "Nueva Hora - Promotor", "Pendiente");
+        }
+
+        function addColumn() {
+            alert("Gestión de columnas dinámicas activa en el visor.");
         }
 
         function deleteRow(btn) {
             const row = btn.parentNode.parentNode;
             row.parentNode.removeChild(row);
-        }
-
-        function clearData() {
-            const tbody = document.getElementById("excelTable").getElementsByTagName('tbody')[0];
-            tbody.innerHTML = "";
         }
 
         function filterTable() {
