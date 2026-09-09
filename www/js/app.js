@@ -55,6 +55,8 @@ async function cargarMotoresBase(){
   log(window.tf?'TF.js listo':'TF.js omitido',logsGlobal,window.tf?'ok':'warn');
   barraGlobal.style.width='40%';
   log('Cargando Tesseract OCR...',logsGlobal);
+  const inicioOCR=Date.now();
+  while(!window.Tesseract && Date.now()-inicioOCR<15000)await new Promise(r=>setTimeout(r,100));
   estadoOCR.textContent=window.Tesseract?'✅ OCR: Cargado':'⚠️ OCR: No disponible';
   log(window.Tesseract?'Tesseract listo ✅':'Tesseract no cargó',logsGlobal,window.Tesseract?'ok':'warn');
   barraGlobal.style.width='100%';
@@ -142,17 +144,14 @@ function actualizarPrevisualizacion(){
     ctxPrevia.fillText(`C${idx+1}`,px+4,12);
   });
 
-  ctxPrevia.fillStyle='rgba(0,0,0,0.75)';
-  ctxPrevia.fillRect(8,8,220,28);
-  ctxPrevia.font='bold 13px monospace';
-  ctxPrevia.fillStyle='#fff';
-  ctxPrevia.fillText(`Filas: ${dt.filas.length-1}  Columnas: ${dt.columnas.length-1}`,14,26);
+  // QUITADA LEYENDA FLOTANTE SOBRE LA IMAGEN — NO SE MUESTRA MÁS
+
+  aplicarZoom();
 }
 
 function aplicarZoom(){
   visorInterior.style.transformOrigin='0 0';
   visorInterior.style.transform=`translate(${offsetX}px, ${offsetY}px) scale(${escalaZoom})`;
-  actualizarPrevisualizacion();
 }
 
 function zoomMas(){escalaZoom=Math.min(escalaZoom+0.25,4);aplicarZoom();}
@@ -351,8 +350,8 @@ window.addEventListener('load',()=>{
       imagenActual=new Image();imagenActual.onload=()=>{
         filasManuales=[];columnasManuales=[];
         vistaImagen.src=ev.target.result;vistaImagen.onload=()=>{
-          canvasPrevia.width=vistaImagen.clientWidth;
-          canvasPrevia.height=vistaImagen.clientHeight;
+          canvasPrevia.width=vistaImagen.naturalWidth;
+          canvasPrevia.height=vistaImagen.naturalHeight;
           escalaOriginal=1;escalaZoom=1;offsetX=0;offsetY=0;
           setTimeout(actualizarPrevisualizacion,100);
           log('Imagen cargada — arrastra, agrega o elimina líneas',logsGlobal,'ok');
