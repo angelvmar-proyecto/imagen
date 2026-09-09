@@ -1,22 +1,6 @@
 {
-<<<<<<< HEAD
   "appId": "com.angelvmar.imagen",
-  "appName": "imagen",
+  "appName": "MAR Caribe OCR",
   "webDir": "www",
-  "bundledWebRuntime": false,
-  "android": {
-    "buildOptions": {
-      "releaseType": "signed"
-    }
-=======
-  "appId": "com.marcaribe.app",
-  "appName": "MAR Caribe",
-  "webDir": "www",
-  "server": {
-    "androidScheme": "file"
-  },
-  "android": {
-    "allowMixedContent": true
->>>>>>> 8c9f207716760862311961da3e09f92be1ddff6f
-  }
+  "bundledWebRuntime": false
 }
