@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>MAR Caribe — Tabla OCR</title>
+  <title>MAR Caribe — OCR de Tablas</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
     body{background:#f0f2f5;padding:16px;max-width:1200px;margin:0 auto;}
@@ -24,10 +24,10 @@
     th{background:#212529;color:#fff;}
     tr:nth-child(even){background:#f8f9fa;}
     .oculto{display:none !important;}
-    .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:20px;}
+    .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:20px;padding:20px;}
     .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
-    #vistaImagen{margin-top:20px;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+    #vistaImagen{display:none;max-width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin:16px auto;}
   </style>
 </head>
 <body>
@@ -38,7 +38,7 @@
     <div id="barraGlobal" class="barra-progreso" style="width:0%"></div>
   </div>
   <p id="estadoTF">TF.js: ⏳ Pendiente</p>
-  <p id="estadoTFLite">TFLite: ⏳ Pendiente</p>
+  <p id="estadoTFLite">OCR: ⏳ Pendiente</p>
   <div id="logsGlobal" class="logs" style="width:90%;max-width:500px;max-height:200px;"></div>
 </div>
 
@@ -48,7 +48,7 @@
     <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
   </div>
-  <img id="vistaImagen" class="oculto" alt="Vista previa de la tabla">
+  <img id="vistaImagen" alt="Vista previa de la tabla — ¡YA SE VE!">
 
   <div class="motor-card">
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
