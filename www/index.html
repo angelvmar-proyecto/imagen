@@ -2,41 +2,230 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe - Visor y OCR Local</title>
-    <link rel="stylesheet" href="css/styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAR Caribe - Procesador Local</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --card-bg: #1e1e1e;
+            --gold: #FFD700;
+            --gold-dark: #C5A059;
+            --text-main: #FFFFFF;
+            --text-secondary: #AAAAAA;
+            --accent-blue: #00bcd4;
+            --danger: #ff4444;
+        }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: sans-serif;
+            margin: 0;
+            padding: 10px;
+        }
+        h1, h2 {
+            color: var(--gold);
+            text-align: center;
+            font-size: 1.2rem;
+            margin: 10px 0;
+        }
+        .panel {
+            background-color: var(--card-bg);
+            border: 1px solid var(--gold-dark);
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-group {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: var(--gold);
+            color: #000;
+            border: none;
+            padding: 8px 12px;
+            font-weight: bold;
+            border-radius: 4px;
+            flex: 1;
+            cursor: pointer;
+        }
+        button.danger {
+            background-color: var(--danger);
+            color: #fff;
+        }
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-blue);
+        }
+        .slider-container {
+            margin: 8px 0;
+            font-size: 0.9rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.85rem;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 6px;
+            text-align: left;
+        }
+        th {
+            background-color: #2c2c2c;
+            color: var(--gold);
+        }
+        input[type="text"], select {
+            background: #2a2a2a;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 4px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .controls-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+    </style>
 </head>
 <body>
-    <div id="app-container">
-        <header>
-            <h2>Procesador Local - Tablas & Texto</h2>
-        </header>
-        <main>
-            <div id="toolbar">
-                <input type="file" id="imageInput" accept="image/*" style="display: none;">
-                <button id="btnLoadImage">Cargar Imagen</button>
-                <button id="btnAddHLine">+ Fila</button>
-                <button id="btnAddVLine">+ Columna</button>
-                <button id="btnClearLines">Limpiar</button>
-            </div>
-            <div id="viewer-container">
-                <canvas id="imageCanvas"></canvas>
-            </div>
-            <div id="controls-container">
-                <h3>Motores & Parámetros</h3>
-                <button id="btnInitModels" style="background-color: #00ffcc; color: #000; margin-bottom: 8px;">Inicializar Motores (YOLO/OCR)</button>
-                <div class="control-group">
-                    <label>YOLOv11 Confianza: <span id="yoloConfVal">0.5</span></label>
-                    <input type="range" id="yoloConf" min="0.1" max="1.0" step="0.05" value="0.5">
-                </div>
-                <div class="control-group">
-                    <label>PaddleOCR Umbral: <span id="ocrThreshVal">0.6</span></label>
-                    <input type="range" id="ocrThresh" min="0.1" max="1.0" step="0.05" value="0.6">
-                </div>
-                <button id="btnExportLog">Descargar Log Estándar (.txt)</button>
-            </div>
-        </main>
+
+    <h1>Procesador Local - Tablas & Texto</h1>
+
+    <div class="panel">
+        <div class="btn-group">
+            <button onclick="document.getElementById('fileInput').click()">Cargar Imagen</button>
+            <button onclick="addRow()">+ Fila</button>
+            <button onclick="addColumn()">+ Columna</button>
+            <button class="danger" onclick="clearData()">Limpiar</button>
+        </div>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
+        
+        <div style="text-align:center;">
+            <canvas id="imageCanvas" style="max-width:100%; height:auto; border:1px solid var(--gold-dark); border-radius:4px; display:none;"></canvas>
+        </div>
     </div>
-    <script src="js/app.js"></script>
+
+    <div class="panel">
+        <h2>Motores & Parámetros</h2>
+        <button style="width:100%; background-color: var(--accent-blue); color:#000; margin-bottom:10px;">Inicializar Motores (YOLO/OCR)</button>
+        
+        <div class="slider-container">
+            <label>YOLOv11 Confianza: <span id="yoloVal">0.5</span></label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('yoloVal').innerText=this.value">
+        </div>
+        
+        <div class="slider-container">
+            <label>PaddleOCR Umbral: <span id="ocrVal">0.6</span></label>
+            <input type="range" min="0.1" max="1.0" step="0.05" value="0.6" oninput="document.getElementById('ocrVal').innerText=this.value">
+        </div>
+    </div>
+
+    <div class="panel">
+        <h2>Visor & Gestor de Tabla</h2>
+        <div class="controls-row">
+            <input type="text" id="searchInput" placeholder="Filtrar datos en tiempo real..." onkeyup="filterTable()">
+        </div>
+        <div style="margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+            Ocultar columnas: 
+            <label><input type="checkbox" checked onclick="toggleColumn(0)"> Col 1</label>
+            <label><input type="checkbox" checked onclick="toggleColumn(1)"> Col 2</label>
+            <label><input type="checkbox" checked onclick="toggleColumn(2)"> Status</label>
+        </div>
+        <div style="overflow-x: auto;">
+            <table id="excelTable">
+                <thead>
+                    <tr>
+                        <th>Hotel / Dato</th>
+                        <th>Horario / Info</th>
+                        <th>Status</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td contenteditable="true">Ejemplo Hotel A</td>
+                        <td contenteditable="true">09:00 AM</td>
+                        <td>
+                            <select>
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="Confirmado">Confirmado</option>
+                                <option value="Cancelado">Cancelado</option>
+                            </select>
+                        </td>
+                        <td><button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function loadImage(event) {
+            const reader = new FileReader();
+            reader.onload = function(){
+                const canvas = document.getElementById('imageCanvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.onload = function() {
+                    canvas.style.display = 'block';
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                }
+                img.src = reader.result;
+            }
+            reader.readAsDataURL(event.target.files[0]);
+        }
+
+        function addRow() {
+            const table = document.getElementById("excelTable").getElementsByTagName('tbody')[0];
+            const newRow = table.insertRow();
+            const cell1 = newRow.insertCell(0);
+            const cell2 = newRow.insertCell(1);
+            const cell3 = newRow.insertCell(2);
+            const cell4 = newRow.insertCell(3);
+            
+            cell1.contentEditable = "true";
+            cell1.innerText = "Nuevo dato";
+            cell2.contentEditable = "true";
+            cell2.innerText = "Nueva info";
+            cell3.innerHTML = `<select><option value="Pendiente">Pendiente</option><option value="Confirmado">Confirmado</option><option value="Cancelado">Cancelado</option></select>`;
+            cell4.innerHTML = `<button class="danger" style="padding:2px 6px;" onclick="deleteRow(this)">X</button>`;
+        }
+
+        function deleteRow(btn) {
+            const row = btn.parentNode.parentNode;
+            row.parentNode.removeChild(row);
+        }
+
+        function clearData() {
+            const tbody = document.getElementById("excelTable").getElementsByTagName('tbody')[0];
+            tbody.innerHTML = "";
+        }
+
+        function filterTable() {
+            const input = document.getElementById("searchInput").value.toLowerCase();
+            const rows = document.getElementById("excelTable").getElementsByTagName("tbody")[0].getElementsBy("tr");
+            for (let i = 0; i < rows.length; i++) {
+                let text = rows[i].innerText.toLowerCase();
+                rows[i].style.display = text.includes(input) ? "" : "none";
+            }
+        }
+
+        function toggleColumn(colIndex) {
+            const table = document.getElementById("excelTable");
+            for (let row of table.rows) {
+                if (row.cells[colIndex]) {
+                    row.cells[colIndex].style.display = row.cells[colIndex].style.display === 'none' ? '' : 'none';
+                }
+            }
+        }
+    </script>
 </body>
 </html>
