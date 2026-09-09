@@ -1,5 +1,4 @@
 {
-<<<<<<< HEAD
   "name": "imagen",
   "version": "1.0.0",
   "description": "App local de procesamiento de tablas y OCR con YOLOv11 y PaddleOCR para Android 14",
@@ -22,25 +21,5 @@
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
     "@capacitor/android": "^6.0.0"
-=======
-  "name": "mar-caribe",
-  "version": "1.0.0",
-  "description": "MAR Caribe — Modelos locales independientes",
-  "main": "www/index.html",
-  "scripts": {
-    "sync": "npx cap sync android",
-    "build:android": "cd android && ./gradlew assembleDebug"
-  },
-  "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "@tensorflow/tfjs": "^4.20.0"
-  },
-  "devDependencies": {
-    "@capacitor/cli": "^6.0.0"
-  },
-  "engines": {
-    "node": "22.x"
->>>>>>> 8c9f207716760862311961da3e09f92be1ddff6f
   }
 }
