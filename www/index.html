@@ -7,35 +7,51 @@
   <style>
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif;}
     body{background:#f0f2f5;padding:16px;max-width:1200px;margin:0 auto;}
-    h1,h2{text-align:center;color:#1a1a1a;margin-bottom:20px;}
+    h1,h2,h3{text-align:center;color:#1a1a1a;margin-bottom:16px;}
     .motor-card{background:#fff;border-radius:16px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:20px;margin-bottom:24px;}
-    .estado{padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:16px;background:#e9ecef;}
+    .estado{padding:12px 16px;border-radius:10px;font-weight:600;margin-bottom:12px;background:#e9ecef;}
     .barra-fondo{width:100%;height:12px;background:#e9ecef;border-radius:6px;overflow:hidden;margin-bottom:16px;}
     .barra-progreso{height:100%;background:linear-gradient(90deg,#28a745,#20c997);border-radius:6px;transition:width 0.3s ease;}
+    
+    /* 🎚️ ESTILOS DE SLIDERS */
+    .grupo-sliders{background:#f8f9fa;border-radius:12px;padding:14px;margin-bottom:16px;}
+    .slider-fila{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+    .slider-fila label{width:140px;font-size:14px;font-weight:500;color:#374151;flex-shrink:0;}
+    .slider-fila input[type="range"]{flex:1;min-width:120px;height:8px;border-radius:4px;background:#d1d5db;outline:none;-webkit-appearance:none;}
+    .slider-fila input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#007bff;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.2);}
+    .slider-fila input[type="range"]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#007bff;cursor:pointer;border:none;}
+    .slider-valor{width:70px;text-align:right;font-weight:600;font-family:monospace;font-size:14px;color:#1f2937;}
+    
     .btn-group{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
     button{padding:14px 24px;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.15s;}
     button:active{transform:scale(0.97);}
     .btn-analizar{background:#007bff;color:#fff;}
     .btn-reset{background:#dc3545;color:#fff;}
-    .logs{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:10px;font-family:monospace;font-size:13px;max-height:180px;overflow-y:auto;margin-top:12px;}
+    
+    .logs{background:#1e1e1e;color:#d4d4d4;padding:12px;border-radius:10px;font-family:monospace;font-size:12px;max-height:160px;overflow-y:auto;margin-top:12px;}
+    .logs-ajustes{background:#2a2a1a;color:#ffd700;padding:14px;border-radius:10px;font-family:monospace;font-size:11px;max-height:200px;overflow-y:auto;margin:16px 0;line-height:1.5;}
     .resultado{margin-top:16px;overflow-x:auto;}
     table{border-collapse:collapse;width:100%;margin-top:8px;}
     th,td{border:1px solid #dee2e6;padding:8px 10px;text-align:left;font-size:14px;}
     th{background:#212529;color:#fff;}
     tr:nth-child(even){background:#f8f9fa;}
+    
     .oculto{display:none !important;}
     .carga-pantalla{position:fixed;inset:0;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;gap:20px;padding:20px;}
     .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
     #vistaImagen{display:none;max-width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin:16px auto;}
-    .etiqueta-auto{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
+    
     .etiqueta-recomendado{background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
+    .etiqueta-sliders{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
+    
     .m4 .barra-progreso{background:linear-gradient(90deg,#667eea,#764ba2);}
     .m4 .btn-analizar{background:linear-gradient(135deg,#667eea,#764ba2);}
     .m5{border:3px solid #f59e0b;box-shadow:0 0 12px rgba(245,158,11,0.2);}
     .m5 .barra-progreso{background:linear-gradient(90deg,#f59e0b,#eab308);}
     .m5 .btn-analizar{background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;}
-    .info-auto{font-size:12px;color:#6b7280;margin-top:4px;}
+    
+    .info-param{font-size:11px;color:#6b7280;margin-top:-8px;margin-bottom:8px;}
   </style>
 </head>
 <body>
@@ -49,18 +65,61 @@
 </div>
 
 <div id="seccionImagen" class="oculto">
-  <h1>📊 MAR Caribe — OCR de Tablas <span class="etiqueta-auto">Auto-Calibración</span></h1>
+  <h1>📊 MAR Caribe — OCR de Tablas <span class="etiqueta-sliders">5 Sliders x Motor</span></h1>
   <div id="btnSeleccionar" class="seccion-imagen">
     <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
   </div>
   <img id="vistaImagen" alt="Vista previa de la tabla">
 
+  <!-- ================================================== -->
+  <!-- 📋 LOG DE AJUSTES — AQUÍ QUEDAN REGISTRADOS TODOS -->
+  <!-- ================================================== -->
+  <h3>📋 Log de Ajustes — Cópialo y pásamelo</h3>
+  <div id="logsAjustes" class="logs-ajustes">
+    === INICIO DEL LOG DE AJUSTES ===<br>
+    Mueve cualquier control deslizante y se registrará aquí automáticamente.<br>
+    Cada línea: [hora] Motor | brillo:XX | distFilas:YY | distCols:ZZ | denV:0.XX | denH:0.XX<br>
+    === CÓPIA TODO ESTE BLOQUE CUANDO TERMINES DE AJUSTAR ===
+  </div>
+
+  <!-- ================================================== -->
+  <!-- MOTOR 1 -->
+  <!-- ================================================== -->
   <div class="motor-card">
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
-    <div class="estado">⏳ Meta: 18×26</div>
-    <div id="estadoM1" class="estado">⏳ Pendiente</div>
+    <div class="estado" id="estadoM1">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM1" class="barra-progreso" style="width:0%"></div></div>
+    
+    <div class="grupo-sliders">
+      <p class="info-param">🔧 Ajusta los parámetros y presiona "Analizar"</p>
+      <div class="slider-fila">
+        <label>Brillo umbral:</label>
+        <input type="range" id="sliderBrilloM1" min="150" max="255" value="210">
+        <span class="slider-valor" id="valBrilloM1">210</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima filas:</label>
+        <input type="range" id="sliderFilasM1" min="6" max="40" value="12">
+        <span class="slider-valor" id="valFilasM1">12</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima cols:</label>
+        <input type="range" id="sliderColsM1" min="15" max="60" value="28">
+        <span class="slider-valor" id="valColsM1">28</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima V:</label>
+        <input type="range" id="sliderDenVM1" min="0.10" max="0.60" step="0.01" value="0.35">
+        <span class="slider-valor" id="valDenVM1">0.35</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima H:</label>
+        <input type="range" id="sliderDenHM1" min="0.03" max="0.25" step="0.01" value="0.08">
+        <span class="slider-valor" id="valDenHM1">0.08</span>
+      </div>
+    </div>
+    
     <div class="btn-group">
       <button id="btnAnalizarM1" class="btn-analizar">🔍 Analizar</button>
       <button id="btnResetM1" class="btn-reset">🔄 Reset</button>
@@ -69,11 +128,42 @@
     <div id="resultadoM1" class="resultado"></div>
   </div>
 
+  <!-- ================================================== -->
+  <!-- MOTOR 2 -->
+  <!-- ================================================== -->
   <div class="motor-card">
     <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
-    <div class="estado">⏳ Meta: 18×25</div>
-    <div id="estadoM2" class="estado">⏳ Pendiente</div>
+    <div class="estado" id="estadoM2">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM2" class="barra-progreso" style="width:0%"></div></div>
+    
+    <div class="grupo-sliders">
+      <div class="slider-fila">
+        <label>Brillo umbral:</label>
+        <input type="range" id="sliderBrilloM2" min="150" max="255" value="205">
+        <span class="slider-valor" id="valBrilloM2">205</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima filas:</label>
+        <input type="range" id="sliderFilasM2" min="6" max="40" value="12">
+        <span class="slider-valor" id="valFilasM2">12</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima cols:</label>
+        <input type="range" id="sliderColsM2" min="15" max="60" value="28">
+        <span class="slider-valor" id="valColsM2">28</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima V:</label>
+        <input type="range" id="sliderDenVM2" min="0.10" max="0.60" step="0.01" value="0.35">
+        <span class="slider-valor" id="valDenVM2">0.35</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima H:</label>
+        <input type="range" id="sliderDenHM2" min="0.03" max="0.25" step="0.01" value="0.08">
+        <span class="slider-valor" id="valDenHM2">0.08</span>
+      </div>
+    </div>
+    
     <div class="btn-group">
       <button id="btnAnalizarM2" class="btn-analizar">⚡ Analizar</button>
       <button id="btnResetM2" class="btn-reset">🔄 Reset</button>
@@ -82,11 +172,42 @@
     <div id="resultadoM2" class="resultado"></div>
   </div>
 
+  <!-- ================================================== -->
+  <!-- MOTOR 3 -->
+  <!-- ================================================== -->
   <div class="motor-card">
     <h2>🎯 Motor 3: YOLOv8n</h2>
-    <div class="estado">⏳ Meta: 18×26</div>
-    <div id="estadoM3" class="estado">⏳ Pendiente</div>
+    <div class="estado" id="estadoM3">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM3" class="barra-progreso" style="width:0%"></div></div>
+    
+    <div class="grupo-sliders">
+      <div class="slider-fila">
+        <label>Brillo umbral:</label>
+        <input type="range" id="sliderBrilloM3" min="150" max="255" value="215">
+        <span class="slider-valor" id="valBrilloM3">215</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima filas:</label>
+        <input type="range" id="sliderFilasM3" min="6" max="40" value="12">
+        <span class="slider-valor" id="valFilasM3">12</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima cols:</label>
+        <input type="range" id="sliderColsM3" min="15" max="60" value="28">
+        <span class="slider-valor" id="valColsM3">28</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima V:</label>
+        <input type="range" id="sliderDenVM3" min="0.10" max="0.60" step="0.01" value="0.35">
+        <span class="slider-valor" id="valDenVM3">0.35</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima H:</label>
+        <input type="range" id="sliderDenHM3" min="0.03" max="0.25" step="0.01" value="0.08">
+        <span class="slider-valor" id="valDenHM3">0.08</span>
+      </div>
+    </div>
+    
     <div class="btn-group">
       <button id="btnAnalizarM3" class="btn-analizar">🎯 Analizar</button>
       <button id="btnResetM3" class="btn-reset">🔄 Reset</button>
@@ -95,11 +216,42 @@
     <div id="resultadoM3" class="resultado"></div>
   </div>
 
+  <!-- ================================================== -->
+  <!-- MOTOR 4 -->
+  <!-- ================================================== -->
   <div class="motor-card m4">
-    <h2>🚀 Motor 4: YOLOv11-Tabla <span class="etiqueta-nuevo">NUEVO</span></h2>
-    <div class="estado">⏳ Meta: 17×25</div>
-    <div id="estadoM4" class="estado">⏳ Pendiente</div>
+    <h2>🚀 Motor 4: YOLOv11-Tabla</h2>
+    <div class="estado" id="estadoM4">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM4" class="barra-progreso" style="width:0%"></div></div>
+    
+    <div class="grupo-sliders">
+      <div class="slider-fila">
+        <label>Brillo umbral:</label>
+        <input type="range" id="sliderBrilloM4" min="150" max="255" value="200">
+        <span class="slider-valor" id="valBrilloM4">200</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima filas:</label>
+        <input type="range" id="sliderFilasM4" min="6" max="40" value="14">
+        <span class="slider-valor" id="valFilasM4">14</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima cols:</label>
+        <input type="range" id="sliderColsM4" min="15" max="60" value="30">
+        <span class="slider-valor" id="valColsM4">30</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima V:</label>
+        <input type="range" id="sliderDenVM4" min="0.10" max="0.60" step="0.01" value="0.38">
+        <span class="slider-valor" id="valDenVM4">0.38</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima H:</label>
+        <input type="range" id="sliderDenHM4" min="0.03" max="0.25" step="0.01" value="0.09">
+        <span class="slider-valor" id="valDenHM4">0.09</span>
+      </div>
+    </div>
+    
     <div class="btn-group">
       <button id="btnAnalizarM4" class="btn-analizar">🚀 Analizar</button>
       <button id="btnResetM4" class="btn-reset">🔄 Reset</button>
@@ -108,11 +260,42 @@
     <div id="resultadoM4" class="resultado"></div>
   </div>
 
+  <!-- ================================================== -->
+  <!-- MOTOR 5 -->
+  <!-- ================================================== -->
   <div class="motor-card m5">
     <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-recomendado">⭐ RECOMENDADO</span></h2>
-    <div class="estado">⏳ Meta: 18×25 + más palabras</div>
-    <div id="estadoM5" class="estado">⏳ Pendiente</div>
+    <div class="estado" id="estadoM5">⏳ Pendiente</div>
     <div class="barra-fondo"><div id="barraM5" class="barra-progreso" style="width:0%"></div></div>
+    
+    <div class="grupo-sliders">
+      <div class="slider-fila">
+        <label>Brillo umbral:</label>
+        <input type="range" id="sliderBrilloM5" min="150" max="255" value="220">
+        <span class="slider-valor" id="valBrilloM5">220</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima filas:</label>
+        <input type="range" id="sliderFilasM5" min="6" max="40" value="12">
+        <span class="slider-valor" id="valFilasM5">12</span>
+      </div>
+      <div class="slider-fila">
+        <label>Dist. mínima cols:</label>
+        <input type="range" id="sliderColsM5" min="15" max="60" value="28">
+        <span class="slider-valor" id="valColsM5">28</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima V:</label>
+        <input type="range" id="sliderDenVM5" min="0.10" max="0.60" step="0.01" value="0.40">
+        <span class="slider-valor" id="valDenVM5">0.40</span>
+      </div>
+      <div class="slider-fila">
+        <label>Densidad mínima H:</label>
+        <input type="range" id="sliderDenHM5" min="0.03" max="0.25" step="0.01" value="0.10">
+        <span class="slider-valor" id="valDenHM5">0.10</span>
+      </div>
+    </div>
+    
     <div class="btn-group">
       <button id="btnAnalizarM5" class="btn-analizar">📄 Analizar</button>
       <button id="btnResetM5" class="btn-reset">🔄 Reset</button>
