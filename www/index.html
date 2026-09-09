@@ -28,6 +28,7 @@
     .seccion-imagen{border:2px dashed #ccc;border-radius:16px;padding:30px;text-align:center;margin-bottom:24px;cursor:pointer;}
     .seccion-imagen:hover{border-color:#007bff;background:#f0f7ff;}
     #vistaImagen{display:none;max-width:100%;height:auto;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin:16px auto;}
+    .etiqueta-nuevo{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:12px;padding:2px 8px;border-radius:12px;margin-left:8px;}
   </style>
 </head>
 <body>
@@ -48,8 +49,11 @@
     <p style="font-size:18px;color:#666;">📁 Toca para elegir imagen de tabla</p>
     <input type="file" id="entradaImagen" accept="image/*" class="oculto">
   </div>
-  <img id="vistaImagen" alt="Vista previa de la tabla — ¡YA SE VE!">
+  <img id="vistaImagen" alt="Vista previa de la tabla">
 
+  <!-- ======================================== -->
+  <!-- MOTOR 1: SSD MobileNet v2 -->
+  <!-- ======================================== -->
   <div class="motor-card">
     <h2>🔍 Motor 1: SSD MobileNet v2</h2>
     <div id="estadoM1" class="estado">⏳ Pendiente</div>
@@ -62,6 +66,9 @@
     <div id="resultadoM1" class="resultado"></div>
   </div>
 
+  <!-- ======================================== -->
+  <!-- MOTOR 2: EfficientDet-Lite0 -->
+  <!-- ======================================== -->
   <div class="motor-card">
     <h2>⚡ Motor 2: EfficientDet-Lite0</h2>
     <div id="estadoM2" class="estado">⏳ Pendiente</div>
@@ -74,6 +81,9 @@
     <div id="resultadoM2" class="resultado"></div>
   </div>
 
+  <!-- ======================================== -->
+  <!-- MOTOR 3: YOLOv8n -->
+  <!-- ======================================== -->
   <div class="motor-card">
     <h2>🎯 Motor 3: YOLOv8n</h2>
     <div id="estadoM3" class="estado">⏳ Pendiente</div>
@@ -85,6 +95,37 @@
     <div id="logsM3" class="logs"></div>
     <div id="resultadoM3" class="resultado"></div>
   </div>
+
+  <!-- ======================================== -->
+  <!-- 🆕 MOTOR 4: YOLOv11-Tabla -->
+  <!-- ======================================== -->
+  <div class="motor-card" style="border:2px solid #667eea;">
+    <h2>🚀 Motor 4: YOLOv11-Tabla <span class="etiqueta-nuevo">NUEVO</span></h2>
+    <div id="estadoM4" class="estado">⏳ Pendiente — Especializado en tablas</div>
+    <div class="barra-fondo"><div id="barraM4" class="barra-progreso" style="width:0%;background:linear-gradient(90deg,#667eea,#764ba2);"></div></div>
+    <div class="btn-group">
+      <button id="btnAnalizarM4" class="btn-analizar" style="background:linear-gradient(135deg,#667eea,#764ba2);">🚀 Analizar</button>
+      <button id="btnResetM4" class="btn-reset">🔄 Reset</button>
+    </div>
+    <div id="logsM4" class="logs"></div>
+    <div id="resultadoM4" class="resultado"></div>
+  </div>
+
+  <!-- ======================================== -->
+  <!-- 🆕 MOTOR 5: PaddleOCR Table -->
+  <!-- ======================================== -->
+  <div class="motor-card" style="border:2px solid #f59e0b;">
+    <h2>📄 Motor 5: PaddleOCR Table <span class="etiqueta-nuevo">NUEVO</span></h2>
+    <div id="estadoM5" class="estado">⏳ Pendiente — OCR + Estructura integrada</div>
+    <div class="barra-fondo"><div id="barraM5" class="barra-progreso" style="width:0%;background:linear-gradient(90deg,#f59e0b,#eab308);"></div></div>
+    <div class="btn-group">
+      <button id="btnAnalizarM5" class="btn-analizar" style="background:linear-gradient(135deg,#f59e0b,#eab308);color:#1a1a1a;">📄 Analizar</button>
+      <button id="btnResetM5" class="btn-reset">🔄 Reset</button>
+    </div>
+    <div id="logsM5" class="logs"></div>
+    <div id="resultadoM5" class="resultado"></div>
+  </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
