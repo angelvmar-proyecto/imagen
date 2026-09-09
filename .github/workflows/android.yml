@@ -6,8 +6,8 @@ on:
 
 jobs:
   build:
-  name: Build Android APK
-  runs-on: ubuntu-latest
+    name: Build Android APK
+    runs-on: ubuntu-latest
 
     steps:
     - name: Clonar Repositorio
