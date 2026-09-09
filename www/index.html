@@ -212,8 +212,8 @@
             </div>
             
             <div class="btn-group" style="margin-top: 6px;">
-                <button onclick="addLineH()">+ Línea H</button>
-                <button onclick="addLineV()">+ Línea V</button>
+                <button onclick="addLineH()">+ Línea H (Centro)</button>
+                <button onclick="addLineV()">+ Línea V (Centro)</button>
                 <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
             </div>
             <div class="log-box" id="logBox">Sistema listo. Cargue captura de WhatsApp.</div>
@@ -329,7 +329,13 @@
                     hiddenCanvas.height = img.height;
                     hiddenCtx.drawImage(img, 0, 0);
 
-                    scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                    // Aplicar binarización inicial automática (128) para limpiar el fondo gris de WhatsApp de inmediato
+                    applyInitialBinarization(128);
+
+                    // Zoom inicial inteligente ligeramente ampliado para ver mejor los datos de Excel
+                    let baseScale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                    scale = baseScale * 1.25; 
+
                     panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
                     panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
                     
@@ -339,11 +345,24 @@
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada con límites automáticos de extremo a extremo.");
+                    log("Imagen cargada, binarizada y ampliada ópticamente.");
                 }
                 img.src = reader.result;
             }
             reader.readAsDataURL(event.target.files[0]);
+        }
+
+        function applyInitialBinarization(binVal) {
+            let imgData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            let data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                let v = avg >= binVal ? 255 : 0;
+                data[i] = v;
+                data[i+1] = v;
+                data[i+2] = v;
+            }
+            hiddenCtx.putImageData(imgData, 0, 0);
         }
 
         function resizeCanvas() {
@@ -361,7 +380,6 @@
             ctx.scale(scale, scale);
             
             if (img.src) {
-                // Dibujar imagen procesada con binarización y rotación en tiempo real
                 ctx.save();
                 ctx.translate(img.width / 2, img.height / 2);
                 ctx.rotate((currentAngle * Math.PI) / 180);
@@ -399,18 +417,8 @@
             document.getElementById('binVal').innerText = currentBin;
             if (!img.src) return;
 
-            // Aplicar filtro de binarización en tiempo real sobre hiddenCanvas
             hiddenCtx.drawImage(img, 0, 0);
-            let imgData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
-            let data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
-                let v = avg >= currentBin ? 255 : 0;
-                data[i] = v;
-                data[i+1] = v;
-                data[i+2] = v;
-            }
-            hiddenCtx.putImageData(imgData, 0, 0);
+            applyInitialBinarization(currentBin);
             redraw();
         }
 
@@ -492,31 +500,47 @@
         function zoomOut() { scale /= 1.2; redraw(); }
         function resetZoom() {
             if(img.width) {
-                scale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                let baseScale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
+                scale = baseScale * 1.25;
                 panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
                 panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
                 redraw();
             }
         }
 
+        // NUEVA FUNCIÓN: Las líneas nuevas nacen exactamente en el CENTRO de la vista actual en pantalla
         function addLineH() {
             if (isGridLocked) return;
-            let lastY = linesH.length > 0 ? linesH[linesH.length-1] - 20 : img.height / 2;
-            linesH.push(Math.max(0, Math.min(img.height, lastY)));
+            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            
+            // Calcular el centro exacto visible en el canvas actual
+            let centerY = (canvas.height / 2 - panY) / scale;
+            centerY = Math.max(0, Math.min(img.height, centerY));
+            
+            linesH.push(centerY);
             linesH.sort((a,b)=>a-b);
             redraw();
+            log("Línea H añadida en el centro de la vista.");
         }
 
+        // NUEVA FUNCIÓN: Las líneas verticales nuevas nacen exactamente en el CENTRO de la vista actual
         function addLineV() {
             if (isGridLocked) return;
-            let lastX = linesV.length > 0 ? linesV[linesV.length-1] - 30 : img.width / 2;
-            linesV.push(Math.max(0, Math.min(img.width, lastX)));
+            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            
+            // Calcular el centro exacto visible en el canvas actual
+            let centerX = (canvas.width / 2 - panX) / scale;
+            centerX = Math.max(0, Math.min(img.width, centerX));
+            
+            linesV.push(centerX);
             linesV.sort((a,b)=>a-b);
             redraw();
+            log("Línea V añadida en el centro de la vista.");
         }
 
         function clearLines() {
             if (isGridLocked) return;
+            if (!img.src) return;
             linesH = [0, img.height];
             linesV = [0, img.width];
             redraw();
@@ -526,7 +550,6 @@
         function toggleLockGrid() {
             isGridLocked = !isGridLocked;
             const btn = document.getElementById('lockBtn');
-            const inputs = document.querySelectorAll('.panel input, .panel select');
 
             if (isGridLocked) {
                 btn.innerText = "🔒 Bloquear Cuadrícula: ON";
@@ -597,7 +620,6 @@
 
                 let rowCells = [];
                 for (let j = 0; j < sortedV.length - 1; j++) {
-                    // Texto referencial automático basado en coordenadas si el motor viene limpio
                     rowCells.push(`C${j+1}-R${i}`);
                 }
                 addRowData(rowCells);
