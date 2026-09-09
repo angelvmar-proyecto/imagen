@@ -24,15 +24,6 @@ jobs:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: Instalar Dependencias del Proyecto
-      run: |
-        npm install
-
-    - name: Anadir y Sincronizar Plataforma Capacitor Android
-      run: |
-        npx cap add android
-        npx cap sync android
-
     - name: Compilar APK con Gradle
       run: |
         cd android
