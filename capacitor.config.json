@@ -1,0 +1,11 @@
+{
+  "appId": "com.angelvmar.imagen",
+  "appName": "imagen",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "buildOptions": {
+      "releaseType": "signed"
+    }
+  }
+}
