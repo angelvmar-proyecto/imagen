@@ -3,690 +3,553 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAR Caribe - Procesadores OCR</title>
+    <title>MAR Caribe - OCR Studio</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
-            --bg-dark: #121212;
-            --card-bg: #1e1e1e;
-            --gold: #FFD700;
-            --gold-dark: #C5A059;
-            --text-main: #FFFFFF;
-            --text-secondary: #AAAAAA;
-            --accent-blue: #00bcd4;
-            --danger: #ff4444;
-            --success: #4caf50;
-            --warning: #ff9800;
+            --bg: #0d0d0d;
+            --surface: #171717;
+            --surface-card: #212121;
+            --gold: #D4AF37;
+            --gold-light: #F3E5AB;
+            --gold-dark: #AA8C2C;
+            --text: #E0E0E0;
+            --text-muted: #888888;
+            --accent-tess: #4CAF50;
+            --accent-ml: #2196F3;
+            --accent-paddle: #FF9800;
+            --danger: #CF6679;
         }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
-            font-family: sans-serif;
-            margin: 0;
-            padding: 8px;
-            box-sizing: border-box;
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             height: 100vh;
             overflow: hidden;
         }
-        h1 {
-            color: var(--gold);
+        header {
             text-align: center;
-            font-size: 1.1rem;
-            margin: 4px 0;
+            padding: 6px 0;
+            border-bottom: 1px solid var(--gold-dark);
+            margin-bottom: 8px;
         }
-        h2 {
+        header h1 {
             color: var(--gold);
             font-size: 1rem;
-            margin: 6px 0;
+            letter-spacing: 0.5px;
         }
-        .main-container {
+        .app-container {
             display: flex;
             flex-direction: column;
             gap: 8px;
             flex: 1;
             overflow-y: auto;
-            padding-bottom: 20px;
+            padding-bottom: 15px;
         }
-        .panel {
-            background-color: var(--card-bg);
+        .card {
+            background-color: var(--surface);
             border: 1px solid var(--gold-dark);
-            border-radius: 6px;
-            padding: 8px;
+            border-radius: 8px;
+            padding: 10px;
         }
-        .btn-group {
+        .card-title {
+            color: var(--gold-light);
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 8px;
             display: flex;
-            gap: 4px;
-            flex-wrap: wrap;
-            margin-bottom: 6px;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .workspace {
+            position: relative;
+            width: 100%;
+            height: 180px;
+            background: #000;
+            border-radius: 6px;
+            border: 1px solid #333;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            touch-action: none;
+        }
+        canvas { position: absolute; }
+        .placeholder-text {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-align: center;
+            pointer-events: none;
+        }
+        .btn-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
         }
         button {
             background-color: var(--gold);
             color: #000;
             border: none;
-            padding: 6px 10px;
+            padding: 8px 12px;
             font-weight: bold;
-            border-radius: 4px;
-            flex: 1;
+            border-radius: 5px;
+            font-size: 0.75rem;
             cursor: pointer;
-            font-size: 0.8rem;
+            flex: 1;
+            transition: opacity 0.2s;
         }
+        button:active { opacity: 0.8; }
+        button.tess { background-color: var(--accent-tess); color: #fff; }
+        button.ml { background-color: var(--accent-ml); color: #fff; }
+        button.paddle { background-color: var(--accent-paddle); color: #000; }
         button.danger { background-color: var(--danger); color: #fff; }
-        button.success { background-color: var(--success); color: #fff; }
-        button.warning { background-color: var(--warning); color: #000; }
-        button.info { background-color: var(--accent-blue); color: #000; }
+        button.secondary { background-color: #333; color: var(--gold-light); border: 1px solid var(--gold-dark); }
+        
+        .engines-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+            max-height: 150px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin-top: 6px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 6px;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
+            background: var(--surface-card);
         }
         th, td {
-            border: 1px solid #444;
-            padding: 4px;
+            border: 1px solid #333;
+            padding: 5px;
             text-align: left;
-            min-width: 80px;
+            white-space: nowrap;
         }
         th {
-            background-color: #2c2c2c;
+            background-color: #2a2a2a;
             color: var(--gold);
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
-        input[type="text"] {
-            background: #2a2a2a;
+        td[contenteditable="true"]:focus {
+            background-color: #333;
+            outline: 1px solid var(--gold);
+        }
+        .search-box {
+            width: 100%;
+            background: #111;
+            border: 1px solid #444;
             color: #fff;
-            border: 1px solid #555;
-            padding: 4px;
-            width: 100%;
-            box-sizing: border-box;
-            font-size: 0.8rem;
-        }
-        .controls-row {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 6px;
-            align-items: center;
-        }
-        .canvas-container {
-            position: relative;
-            width: 100%;
-            height: 200px;
-            background: #000;
-            overflow: hidden;
-            border: 1px solid var(--gold-dark);
-            border-radius: 4px;
-            touch-action: none;
-        }
-        canvas {
-            position: absolute;
-            cursor: crosshair;
-        }
-        .log-box {
-            background: #000;
-            color: var(--accent-blue);
-            font-family: monospace;
-            font-size: 0.7rem;
             padding: 6px;
             border-radius: 4px;
-            height: 40px;
-            overflow-y: auto;
-            border: 1px solid #333;
-            margin-top: 4px;
-        }
-        .col-toggles {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
             font-size: 0.75rem;
-            color: var(--text-secondary);
             margin-bottom: 6px;
-            background: #151515;
-            padding: 4px;
-            border-radius: 4px;
-            max-height: 80px;
-            overflow-y: auto;
         }
-        .progress-bar-container {
-            width: 100%;
-            background: #333;
+        .progress-box {
+            background: #111;
             border-radius: 4px;
-            overflow: hidden;
-            height: 16px;
-            margin: 6px 0;
-            display: none;
+            height: 14px;
             position: relative;
+            overflow: hidden;
+            margin-top: 6px;
+            display: none;
+            border: 1px solid #333;
         }
-        .progress-bar-fill {
+        .progress-fill {
             height: 100%;
-            background: var(--success);
+            background: var(--gold);
             width: 0%;
-            transition: width 0.1s ease;
+            transition: width 0.1s linear;
         }
-        .progress-text {
+        .progress-label {
             position: absolute;
             width: 100%;
             text-align: center;
-            font-size: 0.7rem;
+            font-size: 0.65rem;
             font-weight: bold;
             color: #fff;
             top: 0;
-            line-height: 16px;
+            line-height: 14px;
         }
     </style>
 </head>
 <body>
 
-    <h1>MAR Caribe - Procesador Local</h1>
+    <header>
+        <h1>MAR Caribe — OCR Studio</h1>
+    </header>
 
-    <div class="main-container">
-        <div class="panel">
-            <div class="btn-group">
-                <button onclick="document.getElementById('fileInput').click()">Cargar Imagen</button>
-                <button onclick="zoomIn()">Zoom +</button>
-                <button onclick="zoomOut()">Zoom -</button>
-                <button onclick="resetZoom()">Restaurar</button>
-            </div>
-            <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImage(event)">
-            
-            <div class="canvas-container" id="canvasContainer">
-                <canvas id="imageCanvas"></canvas>
+    <div class="app-container">
+        <!-- Tarjeta 1: Imagen y Cuadrícula -->
+        <div class="card">
+            <div class="card-title">
+                <span>1. Imagen y Delimitación</span>
+                <span id="gridStatus" style="color:var(--text-muted); font-size:0.7rem;">Cuadrícula Libre</span>
             </div>
             
-            <div class="btn-group" style="margin-top: 6px;">
-                <button onclick="addLineH()">+ Línea H</button>
-                <button onclick="addLineV()">+ Línea V</button>
-                <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
+            <div class="workspace" id="workspace">
+                <div class="placeholder-text" id="placeholder">Toca para cargar captura de WhatsApp</div>
+                <canvas id="mainCanvas"></canvas>
             </div>
-            <div class="log-box" id="logBox">Sistema listo. Cargue captura de WhatsApp.</div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleImage(event)">
+
+            <div class="btn-row">
+                <button class="secondary" onclick="document.getElementById('fileInput').click()">📁 Cargar</button>
+                <button class="secondary" onclick="adjustGridLock()" id="lockBtn">🔒 Bloquear</button>
+                <button class="danger" onclick="resetGrid()">Limpiar</button>
+            </div>
         </div>
 
-        <div class="panel">
-            <h2>Motores de Extracción Independientes</h2>
+        <!-- Tarjeta 2: Motores de Extracción Independientes -->
+        <div class="card">
+            <div class="card-title">2. Motores de Extracción Independientes</div>
             
-            <div class="controls-row">
-                <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula: OFF</button>
+            <div class="engines-grid">
+                <button class="tess" onclick="executeOCR('tesseract')">⚡ Extraer con Tesseract.js</button>
+                <button class="ml" onclick="executeOCR('mlkit')">⚡ Extraer con Google ML Kit</button>
+                <button class="paddle" onclick="executeOCR('paddle')">⚡ Extraer con PaddleOCR / ONNX</button>
             </div>
 
-            <div class="controls-row" style="font-size: 0.8rem; justify-content: space-between; background: #151515; padding: 4px; border-radius: 4px;">
-                <label><input type="checkbox" id="hasHeaderCheck" checked> Imagen incluye Encabezados</label>
+            <div class="progress-box" id="progressBox">
+                <div class="progress-fill" id="progressFill"></div>
+                <div class="progress-label" id="progressLabel">0%</div>
             </div>
-
-            <div class="btn-group" style="margin-top:6px; flex-direction: column;">
-                <button class="success" onclick="runOCR('tesseract')">Extraer con Tesseract.js</button>
-                <button class="info" onclick="runOCR('mlkit')">Extraer con Google ML Kit</button>
-                <button class="warning" onclick="runOCR('paddle')">Extraer con PaddleOCR / ONNX</button>
-            </div>
-            
-            <div class="progress-bar-container" id="progressBarContainer">
-                <div class="progress-bar-fill" id="progressBarFill"></div>
-                <div class="progress-text" id="progressText">0%</div>
-            </div>
-
-            <button style="width:100%; background-color: var(--accent-blue); color:#000; margin-top:6px;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
         </div>
 
-        <div class="panel">
-            <h2>Visor & Gestor de Tabla</h2>
-            <div class="controls-row">
-                <input type="text" id="searchInput" placeholder="Filtrar datos..." onkeyup="filterTable()">
-                <button onclick="addRow()">+ Fila</button>
-                <button onclick="promptAddColumn()">+ Col</button>
-                <button class="danger" onclick="resetTableCols()">Reset Cols</button>
-                <button class="danger" onclick="clearTableData()">Vaciar</button>
+        <!-- Tarjeta 3: Visor y Datos -->
+        <div class="card">
+            <div class="card-title">
+                <span>3. Visor Estructurado</span>
+                <div style="display:flex; gap:4px;">
+                    <button class="secondary" style="padding:2px 6px; font-size:0.65rem;" onclick="addRow()">+ Fila</button>
+                    <button class="secondary" style="padding:2px 6px; font-size:0.65rem;" onclick="addColumn()">+ Col</button>
+                </div>
             </div>
             
-            <div class="col-toggles" id="colTogglesContainer">
-                <span>Visibilidad:</span>
-            </div>
+            <input type="text" class="search-box" id="searchBox" placeholder="Filtrar registros..." oninput="filterTableData()">
 
-            <div style="overflow-x: auto;">
-                <table id="excelTable">
+            <div class="table-wrapper">
+                <table id="dataTable">
                     <thead>
-                        <tr id="tableHeaderRow"></tr>
+                        <tr id="tableHead">
+                            <th>Col 1</th>
+                            <th>Col 2</th>
+                            <th>Acción</th>
+                        </tr>
                     </thead>
                     <tbody id="tableBody">
+                        <tr>
+                            <td contenteditable="true">Dato 1</td>
+                            <td contenteditable="true">Dato 2</td>
+                            <td><button class="danger" style="padding:2px 4px;" onclick="this.closest('tr').remove()">×</button></td>
+                        </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div class="btn-row" style="margin-top: 8px;">
+                <button class="secondary" onclick="exportReport()">📄 Exportar Reporte</button>
+                <button class="danger" onclick="clearTable()">Vaciar Tabla</button>
             </div>
         </div>
     </div>
 
-    <canvas id="rawCanvas" style="display:none;"></canvas>
+    <canvas id="sourceCanvas" style="display:none;"></canvas>
 
     <script>
-        let canvas = document.getElementById('imageCanvas');
-        let ctx = canvas.getContext('2d');
-        let rawCanvas = document.getElementById('rawCanvas');
-        let rawCtx = rawCanvas.getContext('2d');
-
-        let img = new Image();
-        let scale = 1;
-        let panX = 0, panY = 0;
-        let isDragging = false;
-        let startX = 0, startY = 0;
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const srcCanvas = document.getElementById('sourceCanvas');
+        const srcCtx = srcCanvas.getContext('2d');
         
-        let linesH = [];
-        let linesV = [];
-        let activeLine = null;
-        let lineType = null;
-        let isGridLocked = false;
-
-        let columnsList = [];
+        let loadedImage = new Image();
+        let scale = 1, panX = 0, panY = 0;
+        let isLocked = false;
+        let linesH = [], linesV = [];
+        let activeLine = null, lineAxis = null;
+        let columnsCount = 2;
         let tesseractWorker = null;
 
-        function log(msg) {
-            const box = document.getElementById('logBox');
-            box.innerText += "\n> " + msg;
-            box.scrollTop = box.scrollHeight;
-        }
-
-        async function initTesseract() {
+        async function initWorker() {
             try {
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
-            } catch (e) {
-                log("Tesseract listo para carga.");
-            }
+            } catch(e) {}
         }
-        window.addEventListener('DOMContentLoaded', initTesseract);
+        initWorker();
 
-        function loadImage(event) {
+        function handleImage(e) {
             const reader = new FileReader();
-            reader.onload = function(){
-                img.onload = function() {
-                    rawCanvas.width = img.width;
-                    rawCanvas.height = img.height;
-                    rawCtx.drawImage(img, 0, 0);
+            reader.onload = function(evt) {
+                loadedImage.onload = function() {
+                    srcCanvas.width = loadedImage.width;
+                    srcCanvas.height = loadedImage.height;
+                    srcCtx.drawImage(loadedImage, 0, 0);
 
-                    let baseScale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
-                    scale = baseScale * 1.25; 
-
-                    panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
-                    panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
+                    document.getElementById('placeholder').style.display = 'none';
                     
-                    linesH = [0, img.height * 0.2, img.height * 0.5, img.height * 0.8, img.height];
-                    linesV = [0, img.width * 0.33, img.width * 0.66, img.width];
+                    const workspace = document.getElementById('workspace');
+                    scale = Math.min(workspace.clientWidth / loadedImage.width, workspace.clientHeight / loadedImage.height);
+                    panX = (workspace.clientWidth - loadedImage.width * scale) / 2;
+                    panY = (workspace.clientHeight - loadedImage.height * scale) / 2;
+
+                    linesH = [0, loadedImage.height * 0.3, loadedImage.height * 0.7, loadedImage.height];
+                    linesV = [0, loadedImage.width * 0.5, loadedImage.width];
 
                     resizeCanvas();
-                    redraw();
-                    log("Imagen cargada con éxito.");
+                    redrawWorkspace();
                 }
-                img.src = reader.result;
+                loadedImage.src = evt.target.result;
             }
-            reader.readAsDataURL(event.target.files[0]);
+            reader.readAsDataURL(e.target.files[0]);
         }
 
         function resizeCanvas() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
-            redraw();
+            const workspace = document.getElementById('workspace');
+            canvas.width = workspace.clientWidth;
+            canvas.height = workspace.clientHeight;
+            redrawWorkspace();
         }
-
         window.addEventListener('resize', resizeCanvas);
 
-        function redraw() {
+        function redrawWorkspace() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!loadedImage.src) return;
+
             ctx.save();
             ctx.translate(panX, panY);
             ctx.scale(scale, scale);
-            
-            if (img.src) {
-                ctx.drawImage(rawCanvas, 0, 0);
-            }
+            ctx.drawImage(srcCanvas, 0, 0);
 
-            ctx.strokeStyle = '#FFD700';
-            ctx.lineWidth = 2 / scale;
-            linesH.forEach((y, index) => {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(img.width || 800, y);
-                ctx.stroke();
-                ctx.fillStyle = '#FFD700';
-                ctx.font = `${11 / scale}px sans-serif`;
-                ctx.fillText(`H${index+1}`, 6, y > 15 ? y - 4 : y + 14);
+            ctx.lineWidth = 1.5 / scale;
+            ctx.strokeStyle = '#D4AF37';
+            linesH.forEach(y => {
+                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImage.width, y); ctx.stroke();
             });
 
-            ctx.strokeStyle = '#00bcd4';
-            linesV.forEach((x, index) => {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, img.height || 600);
-                ctx.stroke();
-                ctx.fillStyle = '#00bcd4';
-                ctx.fillText(`V${index+1}`, x > 15 ? x - 14 : x + 4, 16);
+            ctx.strokeStyle = '#2196F3';
+            linesV.forEach(x => {
+                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImage.height); ctx.stroke();
             });
-
             ctx.restore();
         }
 
-        const container = document.getElementById('canvasContainer');
-
-        container.addEventListener('pointerdown', (e) => {
-            if (isGridLocked) return;
-            const rect = container.getBoundingClientRect();
-            const mouseX = (e.clientX - rect.left - panX) / scale;
-            const mouseY = (e.clientY - rect.top - panY) / scale;
+        const workspace = document.getElementById('workspace');
+        workspace.addEventListener('pointerdown', (e) => {
+            if (isLocked || !loadedImage.src) return;
+            const rect = workspace.getBoundingClientRect();
+            const mx = (e.clientX - rect.left - panX) / scale;
+            const my = (e.clientY - rect.top - panY) / scale;
 
             activeLine = null;
             for (let i = 0; i < linesH.length; i++) {
-                if (Math.abs(mouseY - linesH[i]) < 15 / scale) {
-                    activeLine = i;
-                    lineType = 'H';
-                    break;
-                }
+                if (Math.abs(my - linesH[i]) < 12 / scale) { activeLine = i; lineAxis = 'H'; break; }
             }
             if (activeLine === null) {
                 for (let i = 0; i < linesV.length; i++) {
-                    if (Math.abs(mouseX - linesV[i]) < 15 / scale) {
-                        activeLine = i;
-                        lineType = 'V';
-                        break;
-                    }
+                    if (Math.abs(mx - linesV[i]) < 12 / scale) { activeLine = i; lineAxis = 'V'; break; }
                 }
             }
-
-            if (activeLine === null) {
-                isDragging = true;
-                startX = e.clientX - panX;
-                startY = e.clientY - panY;
-            }
         });
 
-        container.addEventListener('pointermove', (e) => {
-            if (isGridLocked) return;
-            if (activeLine !== null) {
-                const rect = container.getBoundingClientRect();
-                if (lineType === 'H') {
-                    let newY = (e.clientY - rect.top - panY) / scale;
-                    linesH[activeLine] = Math.max(0, Math.min(img.height, newY));
-                } else {
-                    let newX = (e.clientX - rect.left - panX) / scale;
-                    linesV[activeLine] = Math.max(0, Math.min(img.width, newX));
-                }
-                redraw();
-            } else if (isDragging) {
-                panX = e.clientX - startX;
-                panY = e.clientY - startY;
-                redraw();
-            }
-        });
-
-        container.addEventListener('pointerup', () => {
-            isDragging = false;
-            activeLine = null;
-        });
-
-        container.addEventListener('wheel', (e) => {
-            e.preventDefault();
-            const zoomFactor = 1.1;
-            if (e.deltaY < 0) scale *= zoomFactor;
-            else scale /= zoomFactor;
-            redraw();
-        });
-
-        function zoomIn() { scale *= 1.2; redraw(); }
-        function zoomOut() { scale /= 1.2; redraw(); }
-        function resetZoom() {
-            if(img.width) {
-                let baseScale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
-                scale = baseScale * 1.25;
-                panX = (canvas.parentElement.clientWidth - img.width * scale) / 2;
-                panY = (canvas.parentElement.clientHeight - img.height * scale) / 2;
-                redraw();
-            }
-        }
-
-        function addLineH() {
-            if (isGridLocked || !img.src) return;
-            let centerY = (canvas.height / 2 - panY) / scale;
-            linesH.push(Math.max(0, Math.min(img.height, centerY)));
-            linesH.sort((a,b)=>a-b);
-            redraw();
-        }
-
-        function addLineV() {
-            if (isGridLocked || !img.src) return;
-            let centerX = (canvas.width / 2 - panX) / scale;
-            linesV.push(Math.max(0, Math.min(img.width, centerX)));
-            linesV.sort((a,b)=>a-b);
-            redraw();
-        }
-
-        function clearLines() {
-            if (isGridLocked || !img.src) return;
-            linesH = [0, img.height];
-            linesV = [0, img.width];
-            redraw();
-        }
-
-        function toggleLockGrid() {
-            isGridLocked = !isGridLocked;
-            const btn = document.getElementById('lockBtn');
-            if (isGridLocked) {
-                btn.innerText = "🔒 Bloquear Cuadrícula: ON";
-                btn.className = "success";
+        workspace.addEventListener('pointermove', (e) => {
+            if (isLocked || activeLine === null || !loadedImage.src) return;
+            const rect = workspace.getBoundingClientRect();
+            if (lineAxis === 'H') {
+                let ny = (e.clientY - rect.top - panY) / scale;
+                linesH[activeLine] = Math.max(0, Math.min(loadedImage.height, ny));
             } else {
-                btn.innerText = "🔒 Bloquear Cuadrícula: OFF";
-                btn.className = "warning";
+                let nx = (e.clientX - rect.left - panX) / scale;
+                linesV[activeLine] = Math.max(0, Math.min(loadedImage.width, nx));
+            }
+            redrawWorkspace();
+        });
+
+        window.addEventListener('pointerup', () => { activeLine = null; });
+
+        function adjustGridLock() {
+            isLocked = !isLocked;
+            const btn = document.getElementById('lockBtn');
+            const status = document.getElementById('gridStatus');
+            if (isLocked) {
+                btn.innerText = "🔓 Desbloquear";
+                btn.style.borderColor = "var(--accent-tess)";
+                status.innerText = "Cuadrícula Bloqueada";
+                status.style.color = "var(--accent-tess)";
+            } else {
+                btn.innerText = "🔒 Bloquear";
+                btn.style.borderColor = "var(--gold-dark)";
+                status.innerText = "Cuadrícula Libre";
+                status.style.color = "var(--text-muted)";
             }
         }
 
-        function prepareGridStructure() {
+        function resetGrid() {
+            if (isLocked || !loadedImage.src) return;
+            linesH = [0, loadedImage.height];
+            linesV = [0, loadedImage.width];
+            redrawWorkspace();
+        }
+
+        async function executeOCR(engine) {
+            if (!loadedImage.src) { alert("Cargue una imagen primero."); return; }
+            
+            const pBox = document.getElementById('progressBox');
+            const pFill = document.getElementById('progressFill');
+            const pLabel = document.getElementById('progressLabel');
+            pBox.style.display = 'block';
+            pFill.style.width = '0%';
+
             let sortedH = [...linesH].sort((a,b)=>a-b);
             let sortedV = [...linesV].sort((a,b)=>a-b);
-            const hasHeader = document.getElementById('hasHeaderCheck').checked;
             
-            let totalCols = sortedV.length - 1;
-            columnsList = [];
-            for(let c = 0; c < totalCols; c++) {
-                columnsList.push("Columna " + (c + 1));
-            }
-            rebuildTableStructure();
+            let totalCells = (sortedH.length - 1) * (sortedV.length - 1);
+            if (totalCells <= 0) { pBox.style.display = 'none'; return; }
 
-            let rowConfigs = [];
-            let totalCells = 0;
-
-            for (let i = 0; i < sortedH.length - 1; i++) {
-                if (hasHeader && i === 0) continue;
-                let y1 = sortedH[i];
-                let y2 = sortedH[i+1];
-                let cellsInRow = [];
-                for (let j = 0; j < sortedV.length - 1; j++) {
-                    cellsInRow.push({ x: sortedV[j], y: y1, w: sortedV[j+1] - sortedV[j], h: y2 - y1 });
-                    totalCells++;
-                }
-                rowConfigs.push(cellsInRow);
-            }
-            return { rowConfigs, totalCells };
-        }
-
-        function binarizeCellLocally(sourceCanvas, box) {
-            let w = Math.max(10, Math.floor(box.w));
-            let h = Math.max(10, Math.floor(box.h));
-            let cellCanvas = document.createElement('canvas');
-            cellCanvas.width = w;
-            cellCanvas.height = h;
-            let cCtx = cellCanvas.getContext('2d');
-            
-            cCtx.drawImage(sourceCanvas, box.x, box.y, box.w, box.h, 0, 0, w, h);
-            let imgData = cCtx.getImageData(0, 0, w, h);
-            let data = imgData.data;
-
-            let sum = 0;
-            let count = 0;
-            for (let i = 0; i < data.length; i += 4) {
-                let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-                sum += gray;
-                count++;
-            }
-            let threshold = count > 0 ? sum / count : 128;
-
-            for (let i = 0; i < data.length; i += 4) {
-                let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
-                let val = gray >= threshold ? 255 : 0;
-                data[i] = val;
-                data[i+1] = val;
-                data[i+2] = val;
-            }
-            cCtx.putImageData(imgData, 0, 0);
-            return cellCanvas;
-        }
-
-        async function runOCR(engineType) {
-            if (!img.src) { alert("Cargue una imagen primero."); return; }
-            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
-
-            const containerBar = document.getElementById('progressBarContainer');
-            const fillBar = document.getElementById('progressBarFill');
-            const textBar = document.getElementById('progressText');
-            containerBar.style.display = 'block';
-            fillBar.style.width = '0%';
-
-            let { rowConfigs, totalCells } = prepareGridStructure();
-            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
-
-            if (engineType === 'tesseract' && !tesseractWorker) {
+            if (engine === 'tesseract' && !tesseractWorker) {
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
             }
 
+            document.getElementById('tableBody').innerHTML = "";
             let processed = 0;
-            document.getElementById("tableBody").innerHTML = "";
 
-            for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
-                let rowData = [];
-                for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
-                    let box = rowConfigs[rIdx][cIdx];
-                    let processedCellCanvas = binarizeCellLocally(rawCanvas, box);
+            for (let r = 0; r < sortedH.length - 1; r++) {
+                let rowValues = [];
+                for (let c = 0; c < sortedV.length - 1; c++) {
+                    let bx = sortedV[c], by = sortedH[r];
+                    let bw = sortedV[c+1] - bx, bh = sortedH[r+1] - by;
 
-                    let cellText = "";
-                    try {
-                        if (engineType === 'tesseract') {
-                            let result = await tesseractWorker.recognize(processedCellCanvas);
-                            cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
-                        } else if (engineType === 'mlkit') {
-                            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextRecognition) {
-                                let b64 = processedCellCanvas.toDataURL('image/jpeg', 0.9);
-                                let res = await window.Capacitor.Plugins.TextRecognition.detect({ image: b64 });
-                                if (res && res.text) cellText = res.text.replace(/[\r\n]+/g, " ").trim();
-                            } else {
-                                if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
-                                let res = await tesseractWorker.recognize(processedCellCanvas);
-                                cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
-                            }
-                        } else if (engineType === 'paddle') {
-                            if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
-                            let res = await tesseractWorker.recognize(processedCellCanvas);
-                            cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
-                        }
-                    } catch (e) {
-                        cellText = "";
+                    // Binarización local independiente por celda
+                    let cellCanvas = document.createElement('canvas');
+                    cellCanvas.width = Math.max(10, bw); cellCanvas.height = Math.max(10, bh);
+                    let cCtx = cellCanvas.getContext('2d');
+                    cCtx.drawImage(srcCanvas, bx, by, bw, bh, 0, 0, cellCanvas.width, cellCanvas.height);
+                    
+                    let imgData = cCtx.getImageData(0, 0, cellCanvas.width, cellCanvas.height);
+                    let data = imgData.data, sum = 0;
+                    for (let i = 0; i < data.length; i += 4) sum += (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                    let threshold = sum / (data.length / 4);
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        let g = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                        let v = g >= threshold ? 255 : 0;
+                        data[i] = v; data[i+1] = v; data[i+2] = v;
                     }
+                    cCtx.putImageData(imgData, 0, 0);
 
-                    rowData.push(cellText);
+                    let txt = "";
+                    try {
+                        if (engine === 'tesseract') {
+                            let res = await tesseractWorker.recognize(cellCanvas);
+                            txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                        } else if (engine === 'mlkit') {
+                            if (window.Capacitor?.Plugins?.TextRecognition) {
+                                let res = await window.Capacitor.Plugins.TextRecognition.detect({ image: cellCanvas.toDataURL() });
+                                txt = res.text?.replace(/[\r\n]+/g, " ").trim() || "";
+                            } else {
+                                let res = await tesseractWorker.recognize(cellCanvas);
+                                txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                            }
+                        } else {
+                            let res = await tesseractWorker.recognize(cellCanvas);
+                            txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                        }
+                    } catch(err) { txt = ""; }
+
+                    rowValues.push(txt);
                     processed++;
                     let pct = Math.round((processed / totalCells) * 100);
-                    fillBar.style.width = pct + '%';
-                    textBar.innerText = `${engineType.toUpperCase()}: ${processed}/${totalCells} (${pct}%)`;
+                    pFill.style.width = pct + '%';
+                    pLabel.innerText = `${engine.toUpperCase()}: ${pct}%`;
                 }
-                addRowData(rowData);
+                appendRowToTable(rowValues);
             }
 
-            setTimeout(() => {
-                containerBar.style.display = 'none';
-                log(`Extracción con ${engineType} finalizada.`);
-            }, 300);
+            setTimeout(() => { pBox.style.display = 'none'; }, 400);
         }
 
-        function downloadStandardLog() {
-            let content = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
-            content += `Fecha: ${new Date().toLocaleString()}\n`;
-            content += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
-            content += `Incluye Encabezados: ${document.getElementById('hasHeaderCheck').checked ? 'SI' : 'NO'}\n`;
-            content += `--------------------------------------------------\n\n`;
-            content += columnsList.join(" | ") + "\n--------------------------------------------------\n";
-            
-            const rows = document.getElementById("tableBody").getElementsByTagName("tr");
-            for (let row of rows) {
-                let rData = [];
-                for (let i = 0; i < columnsList.length; i++) {
-                    let cell = row.cells[i];
-                    rData.push(cell ? cell.innerText.trim() : "");
-                }
-                content += rData.join(" | ") + "\n";
-            }
-            showLogModal(content);
-        }
-
-        function showLogModal(content) {
-            let existing = document.getElementById('logModal');
-            if (existing) existing.remove();
-
-            const modal = document.createElement('div');
-            modal.id = 'logModal';
-            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;';
-            modal.innerHTML = `
-                <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:12px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
-                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte Estándar</h3>
-                    <textarea readonly style="width:100%; height:180px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.75rem; border:1px solid #444; padding:6px; resize:none; border-radius:4px;">${content}</textarea>
-                    <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); alert('¡Copiado!');" style="background:#4caf50; color:#fff; margin-top:10px; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar</button>
-                    <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:6px; padding:6px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-
-        function updateColumnToggles() {
-            const container = document.getElementById('colTogglesContainer');
-            container.innerHTML = '<span>Visibilidad:</span>';
-            columnsList.forEach((col, idx) => {
-                container.innerHTML += `<label><input type="checkbox" checked onclick="toggleColumn(${idx})"> ${col}</label>`;
+        function appendRowToTable(values) {
+            const tbody = document.getElementById('tableBody');
+            const tr = document.createElement('tr');
+            values.forEach(val => {
+                const td = document.createElement('td');
+                td.contentEditable = "true";
+                td.innerText = val;
+                tr.appendChild(td);
             });
+            const actionTd = document.createElement('td');
+            actionTd.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="this.closest('tr').remove()">×</button>`;
+            tr.appendChild(actionTd);
         }
 
-        function addRowData(values = []) {
-            const tbody = document.getElementById("tableBody");
-            const newRow = tbody.insertRow();
-            for (let i = 0; i < columnsList.length; i++) {
-                const cell = newRow.insertCell(i);
-                cell.contentEditable = "true";
-                cell.innerText = values[i] || "";
+        function addRow() {
+            const tr = document.createElement('tr');
+            for (let i = 0; i < columnsCount; i++) {
+                const td = document.createElement('td');
+                td.contentEditable = "true";
+                tr.appendChild(td);
             }
-            const actionCell = newRow.insertCell(columnsList.length);
-            actionCell.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="this.parentNode.parentNode.remove()">X</button>`;
+            const actionTd = document.createElement('td');
+            actionTd.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="this.closest('tr').remove()">×</button>`;
+            tr.appendChild(actionTd);
+            document.getElementById('tableBody').appendChild(tr);
         }
 
-        function addRow() { addRowData(); }
-        function promptAddColumn() {
-            let name = prompt("Nombre de columna:");
-            if (name && name.trim()) {
-                columnsList.push(name.trim());
-                rebuildTableStructure();
+        function addColumn() {
+            columnsCount++;
+            const head = document.getElementById('tableHead');
+            const actionTh = head.lastElementChild;
+            actionTh.remove();
+            
+            const th = document.createElement('th');
+            th.innerText = `Col ${columnsCount}`;
+            head.appendChild(th);
+            head.appendChild(actionTh);
+
+            const rows = document.getElementById('tableBody').rows;
+            for (let r of rows) {
+                const actionCell = r.lastElementChild;
+                actionCell.remove();
+                const td = document.createElement('td');
+                td.contentEditable = "true";
+                r.appendChild(td);
+                r.appendChild(actionCell);
             }
         }
-        function resetTableCols() {
-            columnsList = ["Columna 1", "Columna 2", "Columna 3"];
-            rebuildTableStructure();
-        }
-        function rebuildTableStructure() {
-            const hRow = document.getElementById("tableHeaderRow");
-            hRow.innerHTML = "";
-            columnsList.forEach(col => hRow.innerHTML += `<th>${col}</th>`);
-            hRow.innerHTML += `<th>Acciones</th>`;
-            updateColumnToggles();
-            document.getElementById("tableBody").innerHTML = "";
-        }
-        function clearTableData() { document.getElementById("tableBody").innerHTML = ""; }
-        function filterTable() {
-            const query = document.getElementById("searchInput").value.toLowerCase();
-            const rows = document.getElementById("tableBody").getElementsByTagName("tr");
-            for (let r of rows) r.style.display = r.innerText.toLowerCase().includes(query) ? "" : "none";
-        }
-        function toggleColumn(idx) {
-            const table = document.getElementById("excelTable");
-            for (let r of table.rows) {
-                if (r.cells[idx]) r.cells[idx].style.display = r.cells[idx].style.display === 'none' ? '' : 'none';
+
+        function clearTable() { document.getElementById('tableBody').innerHTML = ""; }
+
+        function filterTableData() {
+            const query = document.getElementById('searchBox').value.toLowerCase();
+            const rows = document.getElementById('tableBody').rows;
+            for (let r of rows) {
+                r.style.display = r.innerText.toLowerCase().includes(query) ? "" : "none";
             }
         }
-        resetTableCols();
+
+        function exportReport() {
+            let text = "=== REPORTE MAR CARIBE ===\n";
+            const rows = document.getElementById('tableBody').rows;
+            for (let r of rows) {
+                let rowArr = [];
+                for (let i = 0; i < r.cells.length - 1; i++) {
+                    rowArr.push(r.cells[i].innerText.trim());
+                }
+                text += rowArr.join(" | ") + "\n";
+            }
+            
+            const win = window.open();
+            win.document.write(`<pre style="background:#000;color:#00ff00;padding:15px;font-size:14px;">${text}</pre>`);
+        }
     </script>
 </body>
 </html>
