@@ -32,13 +32,10 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             document.getElementById('placeholderText').style.display = 'none';
             const box = document.getElementById('canvasBox');
             
-            let displayHeight = (loadedImg.height / loadedImg.width) * box.clientWidth;
-            box.style.height = Math.max(300, displayHeight) + 'px';
-
             canvas.width = box.clientWidth;
             canvas.height = box.clientHeight;
 
-            scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height);
+            scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height) * 0.9;
             panX = (box.clientWidth - loadedImg.width * scale) / 2;
             panY = (box.clientHeight - loadedImg.height * scale) / 2;
 
@@ -56,10 +53,6 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
 
 function resizeCanvas() {
     const box = document.getElementById('canvasBox');
-    if (loadedImg.src) {
-        let displayHeight = (loadedImg.height / loadedImg.width) * box.clientWidth;
-        box.style.height = Math.max(300, displayHeight) + 'px';
-    }
     canvas.width = box.clientWidth;
     canvas.height = box.clientHeight;
     redraw();
@@ -74,7 +67,7 @@ function redraw() {
     ctx.scale(scale, scale);
     ctx.drawImage(srcCanvas, 0, 0);
 
-    ctx.lineWidth = 1.5 / scale;
+    ctx.lineWidth = Math.max(1, 2 / scale);
     ctx.strokeStyle = '#D4AF37';
     linesH.forEach(y => { 
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); 
@@ -93,20 +86,30 @@ function updateSlidersUI() {
     container.innerHTML = '';
     if (!loadedImg.src) return;
 
+    let titleH = document.createElement('div');
+    titleH.style.cssText = "color:#D4AF37; font-size:13px; font-weight:bold; margin-bottom:4px;";
+    titleH.innerText = "Líneas Horizontales:";
+    container.appendChild(titleH);
+
     linesH.forEach((val, idx) => {
         if (idx === 0 || idx === linesH.length - 1) return;
         let div = document.createElement('div');
-        div.style.margin = "8px 0";
-        div.innerHTML = `<label style="color:#D4AF37; font-size:14px; font-weight:bold;">Línea H ${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label>` +
+        div.style.margin = "6px 0";
+        div.innerHTML = `<div style="display:flex; justify-content:space-between;"><label style="color:#D4AF37; font-size:13px;">H${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label><button class="btn-danger-sm" onclick="removeLine('H', ${idx})">×</button></div>` +
                         `<input type="range" min="0" max="${loadedImg.height}" value="${val}" style="width:100%; accent-color:#D4AF37; height:24px;" data-idx="${idx}" data-axis="H">`;
         container.appendChild(div);
     });
 
+    let titleV = document.createElement('div');
+    titleV.style.cssText = "color:#2196F3; font-size:13px; font-weight:bold; margin-top:10px; margin-bottom:4px;";
+    titleV.innerText = "Líneas Verticales:";
+    container.appendChild(titleV);
+
     linesV.forEach((val, idx) => {
         if (idx === 0 || idx === linesV.length - 1) return;
         let div = document.createElement('div');
-        div.style.margin = "8px 0";
-        div.innerHTML = `<label style="color:#2196F3; font-size:14px; font-weight:bold;">Línea V ${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label>` +
+        div.style.margin = "6px 0";
+        div.innerHTML = `<div style="display:flex; justify-content:space-between;"><label style="color:#2196F3; font-size:13px;">V${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label><button class="btn-danger-sm" onclick="removeLine('V', ${idx})">×</button></div>` +
                         `<input type="range" min="0" max="${loadedImg.width}" value="${val}" style="width:100%; accent-color:#2196F3; height:24px;" data-idx="${idx}" data-axis="V">`;
         container.appendChild(div);
     });
@@ -131,6 +134,57 @@ function updateSlidersUI() {
     });
 }
 
+function removeLine(axis, idx) {
+    if (isLocked || !loadedImg.src) return;
+    if (axis === 'H') {
+        linesH.splice(idx, 1);
+    } else {
+        linesV.splice(idx, 1);
+    }
+    updateSlidersUI();
+    redraw();
+}
+
+function changeZoom(factor) {
+    if (!loadedImg.src) return;
+    let oldScale = scale;
+    scale *= factor;
+    scale = Math.max(0.05, Math.min(30, scale));
+    let cx = canvas.width / 2;
+    let cy = canvas.height / 2;
+    panX = cx - (cx - panX) * (scale / oldScale);
+    panY = cy - (cy - panY) * (scale / oldScale);
+    redraw();
+}
+
+document.getElementById('zoomInBtn').addEventListener('click', () => changeZoom(1.25));
+document.getElementById('zoomOutBtn').addEventListener('click', () => changeZoom(0.8));
+document.getElementById('zoomResetBtn').addEventListener('click', () => {
+    if (!loadedImg.src) return;
+    scale = Math.min(canvas.width / loadedImg.width, canvas.height / loadedImg.height) * 0.9;
+    panX = (canvas.width - loadedImg.width * scale) / 2;
+    panY = (canvas.height - loadedImg.height * scale) / 2;
+    redraw();
+});
+
+document.getElementById('addLineHBtn').addEventListener('click', () => {
+    if (!loadedImg.src || isLocked) return;
+    let newY = loadedImg.height / 2;
+    linesH.push(newY);
+    linesH.sort((a,b)=>a-b);
+    updateSlidersUI();
+    redraw();
+});
+
+document.getElementById('addLineVBtn').addEventListener('click', () => {
+    if (!loadedImg.src || isLocked) return;
+    let newX = loadedImg.width / 2;
+    linesV.push(newX);
+    linesV.sort((a,b)=>a-b);
+    updateSlidersUI();
+    redraw();
+});
+
 const box = document.getElementById('canvasBox');
 
 box.addEventListener('pointerdown', (e) => {
@@ -143,11 +197,11 @@ box.addEventListener('pointerdown', (e) => {
         activeLine = null;
         lineAxis = null;
         for (let i = 0; i < linesH.length; i++) {
-            if (Math.abs(my - linesH[i]) < 25 / scale) { activeLine = i; lineAxis = 'H'; break; }
+            if (Math.abs(my - linesH[i]) < 30 / scale) { activeLine = i; lineAxis = 'H'; break; }
         }
         if (activeLine === null) {
             for (let i = 0; i < linesV.length; i++) {
-                if (Math.abs(mx - linesV[i]) < 25 / scale) { activeLine = i; lineAxis = 'V'; break; }
+                if (Math.abs(mx - linesV[i]) < 30 / scale) { activeLine = i; lineAxis = 'V'; break; }
             }
         }
     }
@@ -188,15 +242,9 @@ window.addEventListener('pointerup', () => {
 box.addEventListener('wheel', (e) => {
     if (!loadedImg.src) return;
     e.preventDefault();
-    const zoomFactor = 1.15;
     let oldScale = scale;
-    if (e.deltaY < 0) {
-        scale *= zoomFactor;
-    } else {
-        scale /= zoomFactor;
-    }
-    scale = Math.max(0.05, Math.min(25, scale));
-    
+    if (e.deltaY < 0) { scale *= 1.15; } else { scale /= 1.15; }
+    scale = Math.max(0.05, Math.min(30, scale));
     let cx = box.clientWidth / 2;
     let cy = box.clientHeight / 2;
     panX = cx - (cx - panX) * (scale / oldScale);
@@ -215,7 +263,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     if (isLocked || !loadedImg.src) return;
     linesH = [0, loadedImg.height * 0.3, loadedImg.height * 0.7, loadedImg.height];
     linesV = [0, loadedImg.width * 0.5, loadedImg.width];
-    scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height);
+    scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height) * 0.9;
     panX = (box.clientWidth - loadedImg.width * scale) / 2;
     panY = (box.clientHeight - loadedImg.height * scale) / 2;
     updateSlidersUI();
@@ -288,13 +336,6 @@ function appendRow(values) {
 }
 
 document.getElementById('addRowBtn').addEventListener('click', () => {
-    if (loadedImg.src) {
-        let midY = loadedImg.height / 2;
-        linesH.push(midY);
-        linesH.sort((a,b)=>a-b);
-        updateSlidersUI();
-        redraw();
-    }
     const tr = document.createElement('tr');
     for(let i=0; i<totalCols; i++) {
         const td = document.createElement('td');
@@ -308,13 +349,6 @@ document.getElementById('addRowBtn').addEventListener('click', () => {
 });
 
 document.getElementById('addColBtn').addEventListener('click', () => {
-    if (loadedImg.src) {
-        let midX = loadedImg.width / 2;
-        linesV.push(midX);
-        linesV.sort((a,b)=>a-b);
-        updateSlidersUI();
-        redraw();
-    }
     totalCols++;
     const hRow = document.getElementById('tableHeaderRow');
     const actTh = hRow.lastElementChild; actTh.remove();

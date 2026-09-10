@@ -1,149 +1,50 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
 body {
-    background-color: #0b0b0b;
+    background-color: #121212;
     color: #e0e0e0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
+    font-family: sans-serif;
+    margin: 0;
+    padding: 10px;
+    overflow-y: auto !important;
+    height: auto !important;
+    -webkit-overflow-scrolling: touch;
 }
-header {
-    text-align: center;
-    padding: 6px 0;
-    border-bottom: 1px solid #333;
-    margin-bottom: 6px;
+
+#appContainer {
+    height: auto !important;
+    min-height: 100vh;
+    overflow-y: visible !important;
+    padding-bottom: 80px;
 }
-header h1 {
-    color: #D4AF37;
-    font-size: 0.95rem;
-}
-.main-container {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    flex: 1;
-    overflow-y: auto;
-    padding-bottom: 10px;
-}
-.panel {
-    background-color: #141414;
+
+.card {
+    background: #1e1e1e;
     border: 1px solid #333;
-    border-radius: 6px;
-    padding: 8px;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
 }
-.panel-title {
-    color: #D4AF37;
-    font-size: 0.75rem;
-    font-weight: bold;
-    margin-bottom: 6px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.canvas-box {
-    position: relative;
-    width: 100%;
-    height: 150px;
-    background: #000;
-    border-radius: 4px;
-    border: 1px solid #222;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    touch-action: none;
-}
-canvas { position: absolute; }
-.placeholder {
-    color: #666;
-    font-size: 0.7rem;
-    pointer-events: none;
-}
-.btn-group {
-    display: flex;
-    gap: 5px;
-    margin-top: 6px;
-}
-.btn-group.vertical {
-    flex-direction: column;
-}
-button {
+
+.btn {
     border: none;
-    padding: 6px 10px;
-    font-weight: bold;
     border-radius: 4px;
-    font-size: 0.7rem;
+    padding: 10px;
+    font-weight: bold;
     cursor: pointer;
-}
-.btn-sec { background-color: #222; color: #D4AF37; border: 1px solid #444; flex: 1; }
-.btn-danger { background-color: #5c1d24; color: #ff8080; flex: 1; }
-.btn-danger-sm { background-color: #5c1d24; color: #ff8080; padding: 2px 5px; font-size: 0.65rem; }
-.btn-engine { color: #fff; width: 100%; padding: 7px; text-align: center; }
-.tess { background-color: #2e6930; }
-.ml { background-color: #1a5276; }
-.paddle { background-color: #7d6608; color: #fff; }
-.btn-tiny { background: #222; color: #D4AF37; border: 1px solid #444; padding: 2px 6px; font-size: 0.65rem; }
-.search-input {
-    width: 100%;
-    background: #0a0a0a;
-    border: 1px solid #333;
     color: #fff;
-    padding: 5px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    margin-bottom: 5px;
 }
-.table-container {
-    overflow-x: auto;
-    max-height: 120px;
-    border: 1px solid #222;
-    border-radius: 4px;
-}
-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.7rem;
-    background: #181818;
-}
-th, td {
-    border: 1px solid #333;
-    padding: 4px;
-    text-align: left;
-    white-space: nowrap;
-}
-th {
-    background-color: #202020;
-    color: #D4AF37;
-    position: sticky;
-    top: 0;
-}
-td[contenteditable="true"]:focus {
-    background-color: #2a2a2a;
-    outline: 1px solid #D4AF37;
-}
-.progress-container {
-    background: #0a0a0a;
-    border-radius: 4px;
-    height: 12px;
-    position: relative;
-    overflow: hidden;
-    margin-top: 6px;
-    border: 1px solid #333;
-}
-.progress-bar {
-    height: 100%;
-    background: #D4AF37;
-    width: 0%;
-}
-.progress-text {
-    position: absolute;
-    width: 100%;
-    text-align: center;
-    font-size: 0.6rem;
-    font-weight: bold;
-    color: #fff;
-    top: 0;
-    line-height: 12px;
+
+.btn-primary { background-color: #d4af37; color: #000; }
+.btn-secondary { background-color: #333; color: #fff; }
+.btn-warning { background-color: #f39c12; color: #000; }
+.btn-danger { background-color: #c0392b; color: #fff; }
+.btn-success { background-color: #27ae60; color: #fff; }
+.btn-info { background-color: #2980b9; color: #fff; }
+
+.btn-danger-sm {
+    background: #c0392b;
+    color: white;
+    border: none;
+    border-radius: 3px;
+    padding: 2px 6px;
+    cursor: pointer;
 }
