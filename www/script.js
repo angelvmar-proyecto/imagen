@@ -31,6 +31,14 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
 
             document.getElementById('placeholderText').style.display = 'none';
             const box = document.getElementById('canvasBox');
+            
+            // Ajuste dinámico de altura proporcional para evitar que la imagen se vea aplastada
+            let displayHeight = (loadedImg.height / loadedImg.width) * box.clientWidth;
+            box.style.height = Math.max(250, displayHeight) + 'px';
+
+            canvas.width = box.clientWidth;
+            canvas.height = box.clientHeight;
+
             scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height);
             panX = (box.clientWidth - loadedImg.width * scale) / 2;
             panY = (box.clientHeight - loadedImg.height * scale) / 2;
@@ -49,6 +57,10 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
 
 function resizeCanvas() {
     const box = document.getElementById('canvasBox');
+    if (loadedImg.src) {
+        let displayHeight = (loadedImg.height / loadedImg.width) * box.clientWidth;
+        box.style.height = Math.max(250, displayHeight) + 'px';
+    }
     canvas.width = box.clientWidth;
     canvas.height = box.clientHeight;
     redraw();
@@ -85,18 +97,18 @@ function updateSlidersUI() {
     linesH.forEach((val, idx) => {
         if (idx === 0 || idx === linesH.length - 1) return;
         let div = document.createElement('div');
-        div.style.margin = "5px 0";
-        div.innerHTML = `<label style="color:#D4AF37; font-size:12px;">Línea H ${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label>` +
-                        `<input type="range" min="0" max="${loadedImg.height}" value="${val}" style="width:100%; accent-color:#D4AF37;" data-idx="${idx}" data-axis="H">`;
+        div.style.margin = "8px 0";
+        div.innerHTML = `<label style="color:#D4AF37; font-size:14px; font-weight:bold;">Línea H ${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label>` +
+                        `<input type="range" min="0" max="${loadedImg.height}" value="${val}" style="width:100%; accent-color:#D4AF37; height:24px;" data-idx="${idx}" data-axis="H">`;
         container.appendChild(div);
     });
 
     linesV.forEach((val, idx) => {
         if (idx === 0 || idx === linesV.length - 1) return;
         let div = document.createElement('div');
-        div.style.margin = "5px 0";
-        div.innerHTML = `<label style="color:#2196F3; font-size:12px;">Línea V ${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label>` +
-                        `<input type="range" min="0" max="${loadedImg.width}" value="${val}" style="width:100%; accent-color:#2196F3;" data-idx="${idx}" data-axis="V">`;
+        div.style.margin = "8px 0";
+        div.innerHTML = `<label style="color:#2196F3; font-size:14px; font-weight:bold;">Línea V ${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label>` +
+                        `<input type="range" min="0" max="${loadedImg.width}" value="${val}" style="width:100%; accent-color:#2196F3; height:24px;" data-idx="${idx}" data-axis="V">`;
         container.appendChild(div);
     });
 
@@ -132,11 +144,11 @@ box.addEventListener('pointerdown', (e) => {
         activeLine = null;
         lineAxis = null;
         for (let i = 0; i < linesH.length; i++) {
-            if (Math.abs(my - linesH[i]) < 15 / scale) { activeLine = i; lineAxis = 'H'; break; }
+            if (Math.abs(my - linesH[i]) < 20 / scale) { activeLine = i; lineAxis = 'H'; break; }
         }
         if (activeLine === null) {
             for (let i = 0; i < linesV.length; i++) {
-                if (Math.abs(mx - linesV[i]) < 15 / scale) { activeLine = i; lineAxis = 'V'; break; }
+                if (Math.abs(mx - linesV[i]) < 20 / scale) { activeLine = i; lineAxis = 'V'; break; }
             }
         }
     }
@@ -177,14 +189,14 @@ window.addEventListener('pointerup', () => {
 box.addEventListener('wheel', (e) => {
     if (!loadedImg.src) return;
     e.preventDefault();
-    const zoomFactor = 1.1;
+    const zoomFactor = 1.15;
     let oldScale = scale;
     if (e.deltaY < 0) {
         scale *= zoomFactor;
     } else {
         scale /= zoomFactor;
     }
-    scale = Math.max(0.1, Math.min(10, scale));
+    scale = Math.max(0.05, Math.min(20, scale));
     
     const r = box.getBoundingClientRect();
     let cx = box.clientWidth / 2;
@@ -237,7 +249,7 @@ async function runEngine(engineName) {
         for (let c = 0; c < sV.length - 1; c++) {
             let bx = sV[c], by = sH[r], bw = sV[c+1] - bx, bh = sH[r+1] - by;
             let cCanvas = document.createElement('canvas');
-            cCanvas.width = Math.max(10, bw); cCanvas.height = Math.max(10, bh);
+            cCanvas.width = Math.max(15, bw); cCanvas.height = Math.max(15, bh);
             let cCtx = cCanvas.getContext('2d');
             cCtx.drawImage(srcCanvas, bx, by, bw, bh, 0, 0, cCanvas.width, cCanvas.height);
 
@@ -330,6 +342,21 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
     for(let r of document.getElementById('tableBody').rows) {
         r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
     }
+});
+
+// Función para exportar los parámetros actuales y usarlos como nuevo estándar
+document.getElementById('exportParamsBtn')?.addEventListener('click', () => {
+    let config = {
+        imageWidth: loadedImg.width,
+        imageHeight: loadedImg.height,
+        linesH: linesH,
+        linesV: linesV
+    };
+    let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+    let dlAnchorElem = document.createElement('a');
+    dlAnchorElem.setAttribute("href", dataStr);
+    dlAnchorElem.setAttribute("download", "estand_parametros_lineas.json");
+    dlAnchorElem.click();
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
