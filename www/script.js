@@ -11,6 +11,9 @@ let activeLine = null, lineAxis = null;
 let totalCols = 1;
 let worker = null;
 
+let isDragging = false;
+let startX = 0, startY = 0;
+
 async function initTesseract() {
     try { worker = await Tesseract.createWorker('spa+eng'); } catch(e) {}
 }
@@ -18,6 +21,7 @@ initTesseract();
 
 document.getElementById('loadBtn').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', (e) => {
+    if (!e.target.files[0]) return;
     const reader = new FileReader();
     reader.onload = function(evt) {
         loadedImg.onload = function() {
@@ -60,40 +64,89 @@ function redraw() {
 
     ctx.lineWidth = 1.5 / scale;
     ctx.strokeStyle = '#D4AF37';
-    linesH.forEach(y => { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); });
+    linesH.forEach(y => { 
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); 
+    });
+    
     ctx.strokeStyle = '#2196F3';
-    linesV.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); });
+    linesV.forEach(x => { 
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); 
+    });
     ctx.restore();
 }
 
 const box = document.getElementById('canvasBox');
+
 box.addEventListener('pointerdown', (e) => {
-    if (isLocked || !loadedImg.src) return;
+    if (!loadedImg.src) return;
     const r = box.getBoundingClientRect();
     let mx = (e.clientX - r.left - panX) / scale;
     let my = (e.clientY - r.top - panY) / scale;
-    activeLine = null;
-    for (let i = 0; i < linesH.length; i++) {
-        if (Math.abs(my - linesH[i]) < 12 / scale) { activeLine = i; lineAxis = 'H'; break; }
-    }
-    if (activeLine === null) {
-        for (let i = 0; i < linesV.length; i++) {
-            if (Math.abs(mx - linesV[i]) < 12 / scale) { activeLine = i; lineAxis = 'V'; break; }
+
+    if (!isLocked) {
+        activeLine = null;
+        lineAxis = null;
+        for (let i = 0; i < linesH.length; i++) {
+            if (Math.abs(my - linesH[i]) < 15 / scale) { activeLine = i; lineAxis = 'H'; break; }
         }
+        if (activeLine === null) {
+            for (let i = 0; i < linesV.length; i++) {
+                if (Math.abs(mx - linesV[i]) < 15 / scale) { activeLine = i; lineAxis = 'V'; break; }
+            }
+        }
+    }
+
+    if (activeLine === null) {
+        isDragging = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
     }
 });
 
 box.addEventListener('pointermove', (e) => {
-    if (isLocked || activeLine === null || !loadedImg.src) return;
+    if (!loadedImg.src) return;
     const r = box.getBoundingClientRect();
-    if (lineAxis === 'H') {
-        linesH[activeLine] = Math.max(0, Math.min(loadedImg.height, (e.clientY - r.top - panY) / scale));
-    } else {
-        linesV[activeLine] = Math.max(0, Math.min(loadedImg.width, (e.clientX - r.left - panX) / scale));
+
+    if (!isLocked && activeLine !== null) {
+        if (lineAxis === 'H') {
+            linesH[activeLine] = Math.max(0, Math.min(loadedImg.height, (e.clientY - r.top - panY) / scale));
+            linesH.sort((a, b) => a - b);
+        } else if (lineAxis === 'V') {
+            linesV[activeLine] = Math.max(0, Math.min(loadedImg.width, (e.clientX - r.left - panX) / scale));
+            linesV.sort((a, b) => a - b);
+        }
+        redraw();
+    } else if (isDragging) {
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        redraw();
     }
-    redraw();
 });
-window.addEventListener('pointerup', () => { activeLine = null; });
+
+window.addEventListener('pointerup', () => {
+    activeLine = null;
+    isDragging = false;
+});
+
+box.addEventListener('wheel', (e) => {
+    if (!loadedImg.src) return;
+    e.preventDefault();
+    const zoomFactor = 1.1;
+    let oldScale = scale;
+    if (e.deltaY < 0) {
+        scale *= zoomFactor;
+    } else {
+        scale /= zoomFactor;
+    }
+    scale = Math.max(0.1, Math.min(10, scale));
+    
+    const r = box.getBoundingClientRect();
+    let cx = box.clientWidth / 2;
+    let cy = box.clientHeight / 2;
+    panX = cx - (cx - panX) * (scale / oldScale);
+    panY = cy - (cy - panY) * (scale / oldScale);
+    redraw();
+}, { passive: false });
 
 document.getElementById('lockBtn').addEventListener('click', () => {
     isLocked = !isLocked;
@@ -104,8 +157,11 @@ document.getElementById('lockBtn').addEventListener('click', () => {
 
 document.getElementById('resetBtn').addEventListener('click', () => {
     if (isLocked || !loadedImg.src) return;
-    linesH = [0, loadedImg.height];
-    linesV = [0, loadedImg.width];
+    linesH = [0, loadedImg.height * 0.3, loadedImg.height * 0.7, loadedImg.height];
+    linesV = [0, loadedImg.width * 0.5, loadedImg.width];
+    scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height);
+    panX = (box.clientWidth - loadedImg.width * scale) / 2;
+    panY = (box.clientHeight - loadedImg.height * scale) / 2;
     redraw();
 });
 
@@ -114,13 +170,13 @@ async function runEngine(engineName) {
     const pContainer = document.getElementById('progressContainer');
     const pBar = document.getElementById('progressBar');
     const pText = document.getElementById('progressText');
-    pContainer.style.display = 'block';
-    pBar.style.width = '0%';
+    if(pContainer) pContainer.style.display = 'block';
+    if(pBar) pBar.style.width = '0%';
 
     let sH = [...linesH].sort((a,b)=>a-b);
     let sV = [...linesV].sort((a,b)=>a-b);
     let totalCells = (sH.length - 1) * (sV.length - 1);
-    if (totalCells <= 0) { pContainer.style.display = 'none'; return; }
+    if (totalCells <= 0) { if(pContainer) pContainer.style.display = 'none'; return; }
 
     if (engineName === 'tesseract' && !worker) {
         worker = await Tesseract.createWorker('spa+eng');
@@ -147,12 +203,12 @@ async function runEngine(engineName) {
             rowVals.push(txt);
             processed++;
             let pct = Math.round((processed / totalCells) * 100);
-            pBar.style.width = pct + '%';
-            pText.innerText = `${engineName.toUpperCase()} (${pct}%)`;
+            if(pBar) pBar.style.width = pct + '%';
+            if(pText) pText.innerText = `${engineName.toUpperCase()} (${pct}%)`;
         }
         appendRow(rowVals);
     }
-    setTimeout(() => { pContainer.style.display = 'none'; }, 400);
+    setTimeout(() => { if(pContainer) pContainer.style.display = 'none'; }, 400);
 }
 
 document.getElementById('btnTess').addEventListener('click', () => runEngine('tesseract'));
@@ -175,6 +231,12 @@ function appendRow(values) {
 }
 
 document.getElementById('addRowBtn').addEventListener('click', () => {
+    if (loadedImg.src) {
+        let midY = loadedImg.height / 2;
+        linesH.push(midY);
+        linesH.sort((a,b)=>a-b);
+        redraw();
+    }
     const tr = document.createElement('tr');
     for(let i=0; i<totalCols; i++) {
         const td = document.createElement('td');
@@ -188,6 +250,12 @@ document.getElementById('addRowBtn').addEventListener('click', () => {
 });
 
 document.getElementById('addColBtn').addEventListener('click', () => {
+    if (loadedImg.src) {
+        let midX = loadedImg.width / 2;
+        linesV.push(midX);
+        linesV.sort((a,b)=>a-b);
+        redraw();
+    }
     totalCols++;
     const hRow = document.getElementById('tableHeaderRow');
     const actTh = hRow.lastElementChild; actTh.remove();
