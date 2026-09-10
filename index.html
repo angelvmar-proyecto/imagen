@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAR Caribe - Procesador Local con OCR</title>
-    <!-- Tesseract.js para OCR real en navegador -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
@@ -73,18 +72,9 @@
             cursor: pointer;
             font-size: 0.8rem;
         }
-        button.danger {
-            background-color: var(--danger);
-            color: #fff;
-        }
-        button.success {
-            background-color: var(--success);
-            color: #fff;
-        }
-        button.warning {
-            background-color: var(--warning);
-            color: #000;
-        }
+        button.danger { background-color: var(--danger); color: #fff; }
+        button.success { background-color: var(--success); color: #fff; }
+        button.warning { background-color: var(--warning); color: #000; }
         button:disabled, input:disabled, select:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -237,21 +227,6 @@
                 <input type="range" id="binSlider" min="50" max="240" step="5" value="195" oninput="updateBinarization(this.value)">
             </div>
 
-            <div class="slider-container">
-                <label>Ángulo de Corrección: <span id="angleVal">0</span>°</label>
-                <input type="range" id="angleSlider" min="-15" max="15" step="1" value="0" oninput="updateAngle(this.value)">
-            </div>
-            
-            <div class="slider-container">
-                <label>YOLOv11 Confianza: <span id="yoloVal">0.95</span></label>
-                <input type="range" id="yoloSlider" min="0.1" max="1.0" step="0.05" value="0.95" oninput="document.getElementById('yoloVal').innerText=this.value">
-            </div>
-            
-            <div class="slider-container">
-                <label>PaddleOCR / Tesseract Umbral: <span id="ocrVal">0.9</span></label>
-                <input type="range" id="ocrSlider" min="0.1" max="1.0" step="0.05" value="0.9" oninput="document.getElementById('ocrVal').innerText=this.value">
-            </div>
-
             <button class="success" style="width:100%; margin:6px 0;" onclick="initAndProcessOCR()">Procesar Celdas con OCR Real</button>
             
             <div class="progress-bar-container" id="progressBarContainer">
@@ -293,12 +268,15 @@
     </div>
 
     <canvas id="hiddenCanvas" style="display:none;"></canvas>
+    <canvas id="rawCanvas" style="display:none;"></canvas>
 
     <script>
         let canvas = document.getElementById('imageCanvas');
         let ctx = canvas.getContext('2d');
         let hiddenCanvas = document.getElementById('hiddenCanvas');
         let hiddenCtx = hiddenCanvas.getContext('2d');
+        let rawCanvas = document.getElementById('rawCanvas');
+        let rawCtx = rawCanvas.getContext('2d');
 
         let img = new Image();
         let scale = 1;
@@ -325,11 +303,11 @@
 
         async function initTesseract() {
             try {
-                log("Cargando motor OCR Tesseract en caché local...");
+                log("Cargando motor OCR Tesseract...");
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
-                log("Motor OCR listo para extraer texto.");
+                log("Motor OCR listo.");
             } catch (e) {
-                log("Aviso OCR: Se inicializará bajo demanda al procesar.");
+                log("Aviso OCR: Se inicializará bajo demanda.");
             }
         }
         window.addEventListener('DOMContentLoaded', initTesseract);
@@ -338,6 +316,10 @@
             const reader = new FileReader();
             reader.onload = function(){
                 img.onload = function() {
+                    rawCanvas.width = img.width;
+                    rawCanvas.height = img.height;
+                    rawCtx.drawImage(img, 0, 0);
+
                     hiddenCanvas.width = img.width;
                     hiddenCanvas.height = img.height;
                     hiddenCtx.drawImage(img, 0, 0);
@@ -355,7 +337,7 @@
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada. Ajuste sus líneas de 21 columnas.");
+                    log("Imagen cargada correctamente.");
                 }
                 img.src = reader.result;
             }
@@ -363,7 +345,7 @@
         }
 
         function applyInitialBinarization(binVal) {
-            let imgData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+            let imgData = rawCtx.getImageData(0, 0, rawCanvas.width, rawCanvas.height);
             let data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
                 let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
@@ -390,11 +372,7 @@
             ctx.scale(scale, scale);
             
             if (img.src) {
-                ctx.save();
-                ctx.translate(img.width / 2, img.height / 2);
-                ctx.rotate((currentAngle * Math.PI) / 180);
-                ctx.drawImage(hiddenCanvas, -img.width / 2, -img.height / 2);
-                ctx.restore();
+                ctx.drawImage(hiddenCanvas, 0, 0);
             }
 
             ctx.strokeStyle = '#FFD700';
@@ -426,15 +404,7 @@
             currentBin = parseInt(val);
             document.getElementById('binVal').innerText = currentBin;
             if (!img.src) return;
-
-            hiddenCtx.drawImage(img, 0, 0);
             applyInitialBinarization(currentBin);
-            redraw();
-        }
-
-        function updateAngle(val) {
-            currentAngle = parseInt(val);
-            document.getElementById('angleVal').innerText = currentAngle;
             redraw();
         }
 
@@ -498,11 +468,8 @@
         container.addEventListener('wheel', (e) => {
             e.preventDefault();
             const zoomFactor = 1.1;
-            if (e.deltaY < 0) {
-                scale *= zoomFactor;
-            } else {
-                scale /= zoomFactor;
-            }
+            if (e.deltaY < 0) scale *= zoomFactor;
+            else scale /= zoomFactor;
             redraw();
         });
 
@@ -519,34 +486,26 @@
         }
 
         function addLineH() {
-            if (isGridLocked) return;
-            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            if (isGridLocked || !img.src) return;
             let centerY = (canvas.height / 2 - panY) / scale;
-            centerY = Math.max(0, Math.min(img.height, centerY));
-            linesH.push(centerY);
+            linesH.push(Math.max(0, Math.min(img.height, centerY)));
             linesH.sort((a,b)=>a-b);
             redraw();
-            log("Línea H añadida.");
         }
 
         function addLineV() {
-            if (isGridLocked) return;
-            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            if (isGridLocked || !img.src) return;
             let centerX = (canvas.width / 2 - panX) / scale;
-            centerX = Math.max(0, Math.min(img.width, centerX));
-            linesV.push(centerX);
+            linesV.push(Math.max(0, Math.min(img.width, centerX)));
             linesV.sort((a,b)=>a-b);
             redraw();
-            log("Línea V añadida.");
         }
 
         function clearLines() {
-            if (isGridLocked) return;
-            if (!img.src) return;
+            if (isGridLocked || !img.src) return;
             linesH = [0, img.height];
             linesV = [0, img.width];
             redraw();
-            log("Líneas restablecidas.");
         }
 
         function toggleLockGrid() {
@@ -555,21 +514,19 @@
             if (isGridLocked) {
                 btn.innerText = "🔒 Bloquear Cuadrícula: ON";
                 btn.className = "success";
-                log("Cuadrícula bloqueada.");
             } else {
                 btn.innerText = "🔒 Bloquear Cuadrícula: OFF";
                 btn.className = "warning";
-                log("Cuadrícula desbloqueada.");
             }
         }
 
         async function initAndProcessOCR() {
             if (!img.src) {
-                alert("Primero cargue la imagen de WhatsApp.");
+                alert("Cargue una imagen primero.");
                 return;
             }
             if (linesH.length < 2 || linesV.length < 2) {
-                alert("Se requieren al menos 2 líneas horizontales y verticales.");
+                alert("Se requieren líneas de cuadrícula.");
                 return;
             }
 
@@ -579,11 +536,9 @@
             
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
-            textBar.innerText = 'Iniciando OCR...';
 
             let sortedH = [...linesH].sort((a,b)=>a-b);
             let sortedV = [...linesV].sort((a,b)=>a-b);
-
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
             
             let totalCols = sortedV.length - 1;
@@ -593,8 +548,8 @@
             }
             rebuildTableStructure();
 
-            let totalCellsToProcess = 0;
             let rowConfigs = [];
+            let totalCells = 0;
 
             for (let i = 0; i < sortedH.length - 1; i++) {
                 if (hasHeader && i === 0) continue;
@@ -603,216 +558,143 @@
                 let cellsInRow = [];
                 for (let j = 0; j < sortedV.length - 1; j++) {
                     cellsInRow.push({ x: sortedV[j], y: y1, w: sortedV[j+1] - sortedV[j], h: y2 - y1 });
-                    totalCellsToProcess++;
+                    totalCells++;
                 }
                 rowConfigs.push(cellsInRow);
             }
 
-            if (totalCellsToProcess === 0) {
-                alert("No hay celdas para procesar.");
+            if (totalCells === 0) {
+                alert("No hay celdas válidas.");
                 containerBar.style.display = 'none';
                 return;
             }
 
             if (!tesseractWorker) {
-                log("Iniciando motor OCR en vivo...");
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
             }
 
-            let processedCount = 0;
+            let processed = 0;
             document.getElementById("tableBody").innerHTML = "";
 
             for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
-                let rowCellsData = [];
+                let rowData = [];
                 for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
                     let box = rowConfigs[rIdx][cIdx];
                     
                     let pCanvas = document.createElement('canvas');
-                    pCanvas.width = Math.max(15, Math.floor(box.w));
-                    pCanvas.height = Math.max(15, Math.floor(box.h));
+                    pCanvas.width = Math.max(20, Math.floor(box.w));
+                    pCanvas.height = Math.max(20, Math.floor(box.h));
                     let pCtx = pCanvas.getContext('2d');
-                    pCtx.drawImage(hiddenCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
+                    
+                    // Extraer directamente del canvas original a color para mejorar precisión de Tesseract por celda
+                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
 
                     try {
                         let result = await tesseractWorker.recognize(pCanvas);
-                        let cleanText = result.data.text.replace(/[\r\n]+/g, " ").trim();
-                        rowCellsData.push(cleanText);
-                    } catch (err) {
-                        rowCellsData.push("");
+                        let text = result.data.text.replace(/[\r\n]+/g, " ").trim();
+                        rowData.push(text);
+                    } catch (e) {
+                        rowData.push("");
                     }
 
-                    processedCount++;
-                    let pct = Math.round((processedCount / totalCellsToProcess) * 100);
+                    processed++;
+                    let pct = Math.round((processed / totalCells) * 100);
                     fillBar.style.width = pct + '%';
-                    textBar.innerText = `Leyendo celdas: ${processedCount}/${totalCellsToProcess} (${pct}%)`;
+                    textBar.innerText = `Procesando: ${processed}/${totalCells} (${pct}%)`;
                 }
-                addRowData(rowCellsData);
+                addRowData(rowData);
             }
 
             setTimeout(() => {
                 containerBar.style.display = 'none';
-                log(`¡OCR completo! Se extrajeron los datos de las ${totalCols} columnas.`);
-            }, 500);
+                log("¡Proceso OCR por celdas finalizado!");
+            }, 300);
         }
 
         function downloadStandardLog() {
-            const yoloConf = document.getElementById('yoloSlider').value;
-            const ocrThresh = document.getElementById('ocrSlider').value;
-            const hasHeader = document.getElementById('hasHeaderCheck').checked;
-            
-            let logContent = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
-            logContent += `Fecha: ${new Date().toLocaleString()}\n`;
-            logContent += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
-            logContent += `Incluye Encabezados: ${hasHeader ? 'SI' : 'NO'}\n`;
-            logContent += `Parametros -> YOLO: ${yoloConf} | OCR: ${ocrThresh} | Angulo: ${currentAngle}° | Binarizacion: ${currentBin}\n`;
-            logContent += `--------------------------------------------------\n\n`;
-            
-            logContent += columnsList.join(" | ") + "\n";
-            logContent += "--------------------------------------------------\n";
-            
+            let content = `=== REPORTE MAR CARIBE ===\n`;
+            content += columnsList.join(" | ") + "\n--------------------------------------------------\n";
             const rows = document.getElementById("tableBody").getElementsByTagName("tr");
             for (let row of rows) {
-                let rowData = [];
+                let rData = [];
                 for (let i = 0; i < columnsList.length; i++) {
-                    const cell = row.cells[i];
-                    if (cell) {
-                        rowData.push(cell.innerText.trim());
-                    }
+                    rData.push(row.cells[i] ? row.cells[i].innerText.trim() : "");
                 }
-                logContent += rowData.join(" | ") + "\n";
+                content += rData.join(" | ") + "\n";
             }
-
-            showLogModal(logContent);
+            showLogModal(content);
         }
 
         function showLogModal(content) {
-            let existingModal = document.getElementById('logModal');
-            if (existingModal) existingModal.remove();
+            let existing = document.getElementById('logModal');
+            if (existing) existing.remove();
 
             const modal = document.createElement('div');
             modal.id = 'logModal';
             modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;';
-            
             modal.innerHTML = `
                 <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:12px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
-                    <h3 style="color:#FFD700; margin-top:0; text-align:center; font-size:1rem;">Reporte Generado</h3>
-                    <textarea id="logTextArea" readonly style="width:100%; height:180px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.75rem; border:1px solid #444; padding:6px; resize:none; box-sizing:border-box; border-radius:4px;">${content}</textarea>
-                    <div style="display:flex; gap:6px; margin-top:10px;">
-                        <button onclick="copyLogText()" style="background:#4caf50; color:#fff; flex:1; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar</button>
-                        <button onclick="shareLogText()" style="background:#00bcd4; color:#000; flex:1; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Compartir</button>
-                    </div>
+                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte</h3>
+                    <textarea readonly style="width:100%; height:180px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.75rem; border:1px solid #444; padding:6px; resize:none; border-radius:4px;">${content}</textarea>
+                    <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); alert('¡Copiado!');" style="background:#4caf50; color:#fff; margin-top:10px; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar</button>
                     <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:6px; padding:6px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
                 </div>
             `;
             document.body.appendChild(modal);
-            log("Reporte listo para copiar/compartir.");
-        }
-
-        function copyLogText() {
-            const ta = document.getElementById('logTextArea');
-            ta.select();
-            try {
-                navigator.clipboard.writeText(ta.value).then(() => {
-                    alert("¡Copiado!");
-                }).catch(() => {
-                    document.execCommand('copy');
-                    alert("¡Copiado!");
-                });
-            } catch (e) {
-                document.execCommand('copy');
-                alert("¡Copiado!");
-            }
-        }
-
-        function shareLogText() {
-            const ta = document.getElementById('logTextArea');
-            if (navigator.share) {
-                navigator.share({ title: 'Reporte MAR Caribe', text: ta.value }).catch(err => {});
-            } else {
-                copyLogText();
-            }
         }
 
         function updateColumnToggles() {
-            const togglesContainer = document.getElementById('colTogglesContainer');
-            togglesContainer.innerHTML = '<span>Visibilidad:</span>';
-            columnsList.forEach((colName, index) => {
-                togglesContainer.innerHTML += `<label><input type="checkbox" checked onclick="toggleColumn(${index})"> ${colName}</label>`;
+            const container = document.getElementById('colTogglesContainer');
+            container.innerHTML = '<span>Visibilidad:</span>';
+            columnsList.forEach((col, idx) => {
+                container.innerHTML += `<label><input type="checkbox" checked onclick="toggleColumn(${idx})"> ${col}</label>`;
             });
         }
 
         function addRowData(values = []) {
             const tbody = document.getElementById("tableBody");
             const newRow = tbody.insertRow();
-            
             for (let i = 0; i < columnsList.length; i++) {
                 const cell = newRow.insertCell(i);
                 cell.contentEditable = "true";
                 cell.innerText = values[i] || "";
             }
-
             const actionCell = newRow.insertCell(columnsList.length);
-            actionCell.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="deleteRow(this)">X</button>`;
+            actionCell.innerHTML = `<button class="danger" style="padding:2px 4px;" onclick="this.parentNode.parentNode.remove()">X</button>`;
         }
 
-        function addRow() {
-            addRowData();
-        }
-
+        function addRow() { addRowData(); }
         function promptAddColumn() {
-            let colName = prompt("Nombre de la nueva columna:");
-            if (colName && colName.trim() !== "") {
-                columnsList.push(colName.trim());
+            let name = prompt("Nombre de columna:");
+            if (name && name.trim()) {
+                columnsList.push(name.trim());
                 rebuildTableStructure();
-                log(`Columna '${colName}' agregada.`);
             }
         }
-
         function resetTableCols() {
             columnsList = ["Columna 1", "Columna 2", "Columna 3"];
             rebuildTableStructure();
-            log("Columnas restablecidas a 3.");
         }
-
         function rebuildTableStructure() {
-            const headerRow = document.getElementById("tableHeaderRow");
-            headerRow.innerHTML = "";
-            columnsList.forEach(col => {
-                headerRow.innerHTML += `<th>${col}</th>`;
-            });
-            headerRow.innerHTML += `<th>Acciones</th>`;
+            const hRow = document.getElementById("tableHeaderRow");
+            hRow.innerHTML = "";
+            columnsList.forEach(col => hRow.innerHTML += `<th>${col}</th>`);
+            hRow.innerHTML += `<th>Acciones</th>`;
             updateColumnToggles();
             document.getElementById("tableBody").innerHTML = "";
         }
-
-        function deleteRow(btn) {
-            const row = btn.parentNode.parentNode;
-            row.parentNode.removeChild(row);
-        }
-
-        function clearTableData() {
-            document.getElementById("tableBody").innerHTML = "";
-            log("Tabla vaciada.");
-        }
-
+        function clearTableData() { document.getElementById("tableBody").innerHTML = ""; }
         function filterTable() {
-            const input = document.getElementById("searchInput").value.toLowerCase();
+            const query = document.getElementById("searchInput").value.toLowerCase();
             const rows = document.getElementById("tableBody").getElementsByTagName("tr");
-            for (let i = 0; i < rows.length; i++) {
-                let text = rows[i].innerText.toLowerCase();
-                rows[i].style.display = text.includes(input) ? "" : "none";
-            }
+            for (let r of rows) r.style.display = r.innerText.toLowerCase().includes(query) ? "" : "none";
         }
-
-        function toggleColumn(colIndex) {
+        function toggleColumn(idx) {
             const table = document.getElementById("excelTable");
-            for (let row of table.rows) {
-                if (row.cells[colIndex]) {
-                    row.cells[colIndex].style.display = row.cells[colIndex].style.display === 'none' ? '' : 'none';
-                }
+            for (let r of table.rows) {
+                if (r.cells[idx]) r.cells[idx].style.display = r.cells[idx].style.display === 'none' ? '' : 'none';
             }
         }
-
         updateColumnToggles();
     </script>
 </body>
