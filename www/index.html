@@ -9,7 +9,7 @@
 <body>
     <div id="appContainer">
         <header>
-            <h2>MAR Caribe — Híbrido (Auto/Manual)</h2>
+            <h2>MAR Caribe — Híbrido (Intersecciones 90°)</h2>
         </header>
 
         <!-- 1. Zona de Trabajo & Cuadrícula -->
@@ -54,16 +54,16 @@
             </div>
         </section>
 
-        <!-- 2. Motores de Extracción Híbridos (Sharpening + Pipeline 200/115/Base) -->
+        <!-- 2. Motores de Extracción Híbridos (Intersecciones 90° + Pipeline 200/115/Base) -->
         <section class="card">
             <h3>2. Motores de Extracción (Pipeline Secuencial)</h3>
-            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer Tesseract (Auto 90° o Manual)</button>
+            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer Tesseract (Auto Esquinas 90° o Manual)</button>
             <button id="btnML" class="btn btn-info" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Google ML Kit</button>
             <button id="btnPaddle" class="btn btn-warning" style="font-size:16px; width:100%;">⚡ Extraer con PaddleOCR / ONNX</button>
             
             <div id="progressContainer" style="display:none; margin-top:10px; background:#222; border-radius:4px; overflow:hidden;">
                 <div id="progressBar" style="width:0%; height:20px; background:#4CAF50; text-align:center; font-size:12px; color:#fff;">0%</div>
-                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Aplicando pipeline...</div>
+                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Analizando celdas...</div>
             </div>
         </section>
 
