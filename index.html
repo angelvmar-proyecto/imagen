@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAR Caribe - Procesador Local con OCR</title>
+    <title>MAR Caribe - Procesador ML Kit & Tesseract</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
@@ -75,6 +75,7 @@
         button.danger { background-color: var(--danger); color: #fff; }
         button.success { background-color: var(--success); color: #fff; }
         button.warning { background-color: var(--warning); color: #000; }
+        button.info { background-color: var(--accent-blue); color: #000; }
         button:disabled, input:disabled, select:disabled {
             opacity: 0.5;
             cursor: not-allowed;
@@ -208,11 +209,11 @@
                 <button onclick="addLineV()">+ Línea V</button>
                 <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
             </div>
-            <div class="log-box" id="logBox">Motor OCR listo. Cargue captura de WhatsApp.</div>
+            <div class="log-box" id="logBox">Sistemas OCR listos. Cargue imagen.</div>
         </div>
 
         <div class="panel">
-            <h2>Motores & Filtros en Vivo</h2>
+            <h2>Motores de Extracción OCR</h2>
             
             <div class="controls-row">
                 <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula: OFF</button>
@@ -227,14 +228,17 @@
                 <input type="range" id="binSlider" min="50" max="240" step="5" value="195" oninput="updateBinarization(this.value)">
             </div>
 
-            <button class="success" style="width:100%; margin:6px 0;" onclick="initAndProcessOCR()">Procesar Celdas con OCR Real</button>
+            <div class="btn-group" style="margin-top:6px;">
+                <button class="success" onclick="processWithTesseract()">Procesar con Tesseract.js</button>
+                <button class="info" onclick="processWithMLKit()">Procesar con Google ML Kit</button>
+            </div>
             
             <div class="progress-bar-container" id="progressBarContainer">
                 <div class="progress-bar-fill" id="progressBarFill"></div>
                 <div class="progress-text" id="progressText">0%</div>
             </div>
 
-            <button style="width:100%; background-color: var(--accent-blue); color:#000;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
+            <button style="width:100%; background-color: var(--accent-blue); color:#000; margin-top:6px;" onclick="downloadStandardLog()">Exportar / Ver Log Estándar (.txt)</button>
         </div>
 
         <div class="panel">
@@ -292,7 +296,6 @@
 
         let columnsList = ["Columna 1", "Columna 2", "Columna 3"];
         let currentBin = 195;
-        let currentAngle = 0;
         let tesseractWorker = null;
 
         function log(msg) {
@@ -303,11 +306,9 @@
 
         async function initTesseract() {
             try {
-                log("Cargando motor OCR Tesseract...");
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
-                log("Motor OCR listo.");
             } catch (e) {
-                log("Aviso OCR: Se inicializará bajo demanda.");
+                log("Aviso Tesseract: Se inicializará bajo demanda.");
             }
         }
         window.addEventListener('DOMContentLoaded', initTesseract);
@@ -337,7 +338,7 @@
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada correctamente.");
+                    log("Imagen cargada.");
                 }
                 img.src = reader.result;
             }
@@ -520,23 +521,7 @@
             }
         }
 
-        async function initAndProcessOCR() {
-            if (!img.src) {
-                alert("Cargue una imagen primero.");
-                return;
-            }
-            if (linesH.length < 2 || linesV.length < 2) {
-                alert("Se requieren líneas de cuadrícula.");
-                return;
-            }
-
-            const containerBar = document.getElementById('progressBarContainer');
-            const fillBar = document.getElementById('progressBarFill');
-            const textBar = document.getElementById('progressText');
-            
-            containerBar.style.display = 'block';
-            fillBar.style.width = '0%';
-
+        function prepareGridConfigs() {
             let sortedH = [...linesH].sort((a,b)=>a-b);
             let sortedV = [...linesV].sort((a,b)=>a-b);
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
@@ -562,7 +547,27 @@
                 }
                 rowConfigs.push(cellsInRow);
             }
+            return { rowConfigs, totalCells };
+        }
 
+        async function processWithTesseract() {
+            if (!img.src) {
+                alert("Cargue una imagen primero.");
+                return;
+            }
+            if (linesH.length < 2 || linesV.length < 2) {
+                alert("Se requieren líneas de cuadrícula.");
+                return;
+            }
+
+            const containerBar = document.getElementById('progressBarContainer');
+            const fillBar = document.getElementById('progressBarFill');
+            const textBar = document.getElementById('progressText');
+            
+            containerBar.style.display = 'block';
+            fillBar.style.width = '0%';
+
+            let { rowConfigs, totalCells } = prepareGridConfigs();
             if (totalCells === 0) {
                 alert("No hay celdas válidas.");
                 containerBar.style.display = 'none';
@@ -580,13 +585,10 @@
                 let rowData = [];
                 for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
                     let box = rowConfigs[rIdx][cIdx];
-                    
                     let pCanvas = document.createElement('canvas');
                     pCanvas.width = Math.max(20, Math.floor(box.w));
                     pCanvas.height = Math.max(20, Math.floor(box.h));
                     let pCtx = pCanvas.getContext('2d');
-                    
-                    // Extraer directamente del canvas original a color para mejorar precisión de Tesseract por celda
                     pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
 
                     try {
@@ -600,25 +602,100 @@
                     processed++;
                     let pct = Math.round((processed / totalCells) * 100);
                     fillBar.style.width = pct + '%';
-                    textBar.innerText = `Procesando: ${processed}/${totalCells} (${pct}%)`;
+                    textBar.innerText = `Tesseract: ${processed}/${totalCells} (${pct}%)`;
                 }
                 addRowData(rowData);
             }
 
             setTimeout(() => {
                 containerBar.style.display = 'none';
-                log("¡Proceso OCR por celdas finalizado!");
+                log("¡Proceso Tesseract finalizado!");
+            }, 300);
+        }
+
+        async function processWithMLKit() {
+            if (!img.src) {
+                alert("Cargue una imagen primero.");
+                return;
+            }
+            if (linesH.length < 2 || linesV.length < 2) {
+                alert("Se requieren líneas de cuadrícula.");
+                return;
+            }
+
+            const containerBar = document.getElementById('progressBarContainer');
+            const fillBar = document.getElementById('progressBarFill');
+            const textBar = document.getElementById('progressText');
+            
+            containerBar.style.display = 'block';
+            fillBar.style.width = '0%';
+
+            let { rowConfigs, totalCells } = prepareGridConfigs();
+            if (totalCells === 0) {
+                alert("No hay celdas válidas.");
+                containerBar.style.display = 'none';
+                return;
+            }
+
+            let processed = 0;
+            document.getElementById("tableBody").innerHTML = "";
+
+            for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
+                let rowData = [];
+                for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
+                    let box = rowConfigs[rIdx][cIdx];
+                    let pCanvas = document.createElement('canvas');
+                    pCanvas.width = Math.max(20, Math.floor(box.w));
+                    pCanvas.height = Math.max(20, Math.floor(box.h));
+                    let pCtx = pCanvas.getContext('2d');
+                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
+
+                    let cellText = "";
+                    try {
+                        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextRecognition) {
+                            let base64Img = pCanvas.toDataURL('image/jpeg', 0.9);
+                            let result = await window.Capacitor.Plugins.TextRecognition.detect({ image: base64Img });
+                            if (result && result.text) {
+                                cellText = result.text.replace(/[\r\n]+/g, " ").trim();
+                            }
+                        } else {
+                            let result = await tesseractWorker.recognize(pCanvas);
+                            cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
+                        }
+                    } catch (e) {
+                        cellText = "";
+                    }
+
+                    rowData.push(cellText);
+                    processed++;
+                    let pct = Math.round((processed / totalCells) * 100);
+                    fillBar.style.width = pct + '%';
+                    textBar.innerText = `ML Kit: ${processed}/${totalCells} (${pct}%)`;
+                }
+                addRowData(rowData);
+            }
+
+            setTimeout(() => {
+                containerBar.style.display = 'none';
+                log("¡Proceso ML Kit finalizado!");
             }, 300);
         }
 
         function downloadStandardLog() {
-            let content = `=== REPORTE MAR CARIBE ===\n`;
+            let content = `=== REPORTE ESTANDAR MAR CARIBE ===\n`;
+            content += `Fecha: ${new Date().toLocaleString()}\n`;
+            content += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
+            content += `Incluye Encabezados: ${document.getElementById('hasHeaderCheck').checked ? 'SI' : 'NO'}\n`;
+            content += `Parametros -> Binarizacion: ${currentBin}\n`;
+            content += `--------------------------------------------------\n\n`;
             content += columnsList.join(" | ") + "\n--------------------------------------------------\n";
+            
             const rows = document.getElementById("tableBody").getElementsByTagName("tr");
             for (let row of rows) {
                 let rData = [];
                 for (let i = 0; i < columnsList.length; i++) {
-                    rData.push(row.cells[i] ? row.cells[i].innerText.trim() : "");
+                    let cell = row.cells[i];
+                    rData.push(cell ? cell.innerText.trim() : "");
                 }
                 content += rData.join(" | ") + "\n";
             }
@@ -634,7 +711,7 @@
             modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:15px; box-sizing:border-box;';
             modal.innerHTML = `
                 <div style="background:#1e1e1e; border:2px solid #FFD700; border-radius:8px; width:100%; max-width:400px; padding:12px; display:flex; flex-direction:column; max-height:85vh; box-sizing:border-box;">
-                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte</h3>
+                    <h3 style="color:#FFD700; margin-top:0; text-align:center;">Reporte Estándar</h3>
                     <textarea readonly style="width:100%; height:180px; background:#000; color:#00bcd4; font-family:monospace; font-size:0.75rem; border:1px solid #444; padding:6px; resize:none; border-radius:4px;">${content}</textarea>
                     <button onclick="navigator.clipboard.writeText(this.previousElementSibling.value); alert('¡Copiado!');" style="background:#4caf50; color:#fff; margin-top:10px; padding:8px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Copiar</button>
                     <button onclick="document.getElementById('logModal').remove()" style="background:#ff4444; color:#fff; margin-top:6px; padding:6px; font-weight:bold; border:none; border-radius:4px; cursor:pointer;">Cerrar</button>
