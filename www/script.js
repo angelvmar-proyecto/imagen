@@ -39,6 +39,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             linesV = [0, loadedImg.width * 0.5, loadedImg.width];
 
             resizeCanvas();
+            updateSlidersUI();
             redraw();
         }
         loadedImg.src = evt.target.result;
@@ -73,6 +74,50 @@ function redraw() {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); 
     });
     ctx.restore();
+}
+
+function updateSlidersUI() {
+    let container = document.getElementById('slidersContainer');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!loadedImg.src) return;
+
+    linesH.forEach((val, idx) => {
+        if (idx === 0 || idx === linesH.length - 1) return;
+        let div = document.createElement('div');
+        div.style.margin = "5px 0";
+        div.innerHTML = `<label style="color:#D4AF37; font-size:12px;">Línea H ${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label>` +
+                        `<input type="range" min="0" max="${loadedImg.height}" value="${val}" style="width:100%; accent-color:#D4AF37;" data-idx="${idx}" data-axis="H">`;
+        container.appendChild(div);
+    });
+
+    linesV.forEach((val, idx) => {
+        if (idx === 0 || idx === linesV.length - 1) return;
+        let div = document.createElement('div');
+        div.style.margin = "5px 0";
+        div.innerHTML = `<label style="color:#2196F3; font-size:12px;">Línea V ${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label>` +
+                        `<input type="range" min="0" max="${loadedImg.width}" value="${val}" style="width:100%; accent-color:#2196F3;" data-idx="${idx}" data-axis="V">`;
+        container.appendChild(div);
+    });
+
+    container.querySelectorAll('input[type=range]').forEach(input => {
+        input.addEventListener('input', (e) => {
+            if (isLocked) return;
+            let idx = parseInt(e.target.getAttribute('data-idx'));
+            let axis = e.target.getAttribute('data-axis');
+            let v = parseFloat(e.target.value);
+            if (axis === 'H') {
+                linesH[idx] = v;
+                linesH.sort((a,b)=>a-b);
+                document.getElementById(`valH_${idx}`).innerText = Math.round(v);
+            } else {
+                linesV[idx] = v;
+                linesV.sort((a,b)=>a-b);
+                document.getElementById(`valV_${idx}`).innerText = Math.round(v);
+            }
+            redraw();
+        });
+    });
 }
 
 const box = document.getElementById('canvasBox');
@@ -115,6 +160,7 @@ box.addEventListener('pointermove', (e) => {
             linesV[activeLine] = Math.max(0, Math.min(loadedImg.width, (e.clientX - r.left - panX) / scale));
             linesV.sort((a, b) => a - b);
         }
+        updateSlidersUI();
         redraw();
     } else if (isDragging) {
         panX = e.clientX - startX;
@@ -162,6 +208,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height);
     panX = (box.clientWidth - loadedImg.width * scale) / 2;
     panY = (box.clientHeight - loadedImg.height * scale) / 2;
+    updateSlidersUI();
     redraw();
 });
 
@@ -235,6 +282,7 @@ document.getElementById('addRowBtn').addEventListener('click', () => {
         let midY = loadedImg.height / 2;
         linesH.push(midY);
         linesH.sort((a,b)=>a-b);
+        updateSlidersUI();
         redraw();
     }
     const tr = document.createElement('tr');
@@ -254,6 +302,7 @@ document.getElementById('addColBtn').addEventListener('click', () => {
         let midX = loadedImg.width / 2;
         linesV.push(midX);
         linesV.sort((a,b)=>a-b);
+        updateSlidersUI();
         redraw();
     }
     totalCols++;
