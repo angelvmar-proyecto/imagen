@@ -85,7 +85,6 @@ button {
 .ml { background-color: #1a5276; }
 .paddle { background-color: #7d6608; color: #fff; }
 .btn-tiny { background: #222; color: #D4AF37; border: 1px solid #444; padding: 2px 6px; font-size: 0.65rem; }
-
 .search-input {
     width: 100%;
     background: #0a0a0a;
@@ -148,4 +147,3 @@ td[contenteditable="true"]:focus {
     top: 0;
     line-height: 12px;
 }
-
