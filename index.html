@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAR Caribe - Procesador ML Kit & Tesseract</title>
+    <title>MAR Caribe - Procesadores OCR</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
@@ -188,7 +188,7 @@
 </head>
 <body>
 
-    <h1>MAR Caribe - Procesador Local</h1>
+    <h1>MAR Caribe - Gestión de Motores OCR</h1>
 
     <div class="main-container">
         <div class="panel">
@@ -209,11 +209,11 @@
                 <button onclick="addLineV()">+ Línea V</button>
                 <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
             </div>
-            <div class="log-box" id="logBox">Sistemas OCR listos. Cargue imagen.</div>
+            <div class="log-box" id="logBox">Sistemas listos. Cargue una imagen.</div>
         </div>
 
         <div class="panel">
-            <h2>Motores de Extracción OCR</h2>
+            <h2>Selección de Motores OCR (3 Disponibles)</h2>
             
             <div class="controls-row">
                 <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula: OFF</button>
@@ -228,9 +228,10 @@
                 <input type="range" id="binSlider" min="50" max="240" step="5" value="195" oninput="updateBinarization(this.value)">
             </div>
 
-            <div class="btn-group" style="margin-top:6px;">
-                <button class="success" onclick="processWithTesseract()">Procesar con Tesseract.js</button>
-                <button class="info" onclick="processWithMLKit()">Procesar con Google ML Kit</button>
+            <div class="btn-group" style="margin-top:6px; flex-direction: column;">
+                <button class="success" onclick="processWithTesseract()">1. Procesar con Tesseract.js (Web)</button>
+                <button class="info" onclick="processWithMLKit()">2. Procesar con Google ML Kit (Nativo)</button>
+                <button class="warning" onclick="processWithPaddleONNX()">3. Procesar con PaddleOCR / ONNX</button>
             </div>
             
             <div class="progress-bar-container" id="progressBarContainer">
@@ -338,7 +339,7 @@
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada.");
+                    log("Imagen cargada correctamente.");
                 }
                 img.src = reader.result;
             }
@@ -551,28 +552,17 @@
         }
 
         async function processWithTesseract() {
-            if (!img.src) {
-                alert("Cargue una imagen primero.");
-                return;
-            }
-            if (linesH.length < 2 || linesV.length < 2) {
-                alert("Se requieren líneas de cuadrícula.");
-                return;
-            }
+            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
 
             const containerBar = document.getElementById('progressBarContainer');
             const fillBar = document.getElementById('progressBarFill');
             const textBar = document.getElementById('progressText');
-            
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
 
             let { rowConfigs, totalCells } = prepareGridConfigs();
-            if (totalCells === 0) {
-                alert("No hay celdas válidas.");
-                containerBar.style.display = 'none';
-                return;
-            }
+            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
 
             if (!tesseractWorker) {
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
@@ -593,12 +583,10 @@
 
                     try {
                         let result = await tesseractWorker.recognize(pCanvas);
-                        let text = result.data.text.replace(/[\r\n]+/g, " ").trim();
-                        rowData.push(text);
+                        rowData.push(result.data.text.replace(/[\r\n]+/g, " ").trim());
                     } catch (e) {
                         rowData.push("");
                     }
-
                     processed++;
                     let pct = Math.round((processed / totalCells) * 100);
                     fillBar.style.width = pct + '%';
@@ -606,36 +594,21 @@
                 }
                 addRowData(rowData);
             }
-
-            setTimeout(() => {
-                containerBar.style.display = 'none';
-                log("¡Proceso Tesseract finalizado!");
-            }, 300);
+            setTimeout(() => { containerBar.style.display = 'none'; log("Tesseract finalizado."); }, 300);
         }
 
         async function processWithMLKit() {
-            if (!img.src) {
-                alert("Cargue una imagen primero.");
-                return;
-            }
-            if (linesH.length < 2 || linesV.length < 2) {
-                alert("Se requieren líneas de cuadrícula.");
-                return;
-            }
+            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
 
             const containerBar = document.getElementById('progressBarContainer');
             const fillBar = document.getElementById('progressBarFill');
             const textBar = document.getElementById('progressText');
-            
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
 
             let { rowConfigs, totalCells } = prepareGridConfigs();
-            if (totalCells === 0) {
-                alert("No hay celdas válidas.");
-                containerBar.style.display = 'none';
-                return;
-            }
+            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
 
             let processed = 0;
             document.getElementById("tableBody").innerHTML = "";
@@ -655,30 +628,69 @@
                         if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextRecognition) {
                             let base64Img = pCanvas.toDataURL('image/jpeg', 0.9);
                             let result = await window.Capacitor.Plugins.TextRecognition.detect({ image: base64Img });
-                            if (result && result.text) {
-                                cellText = result.text.replace(/[\r\n]+/g, " ").trim();
-                            }
+                            if (result && result.text) cellText = result.text.replace(/[\r\n]+/g, " ").trim();
                         } else {
+                            if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
                             let result = await tesseractWorker.recognize(pCanvas);
                             cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
                         }
                     } catch (e) {
                         cellText = "";
                     }
-
                     rowData.push(cellText);
                     processed++;
                     let pct = Math.round((processed / totalCells) * 100);
                     fillBar.style.width = pct + '%';
-                    textBar.innerText = `ML Kit: ${processed}/${totalCells} (${pct}%)`;
+                    textBar.innerText = `Google ML Kit: ${processed}/${totalCells} (${pct}%)`;
                 }
                 addRowData(rowData);
             }
+            setTimeout(() => { containerBar.style.display = 'none'; log("Google ML Kit finalizado."); }, 300);
+        }
 
-            setTimeout(() => {
-                containerBar.style.display = 'none';
-                log("¡Proceso ML Kit finalizado!");
-            }, 300);
+        async function processWithPaddleONNX() {
+            if (!img.src) { alert("Cargue una imagen primero."); return; }
+            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
+
+            const containerBar = document.getElementById('progressBarContainer');
+            const fillBar = document.getElementById('progressBarFill');
+            const textBar = document.getElementById('progressText');
+            containerBar.style.display = 'block';
+            fillBar.style.width = '0%';
+
+            let { rowConfigs, totalCells } = prepareGridConfigs();
+            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
+
+            let processed = 0;
+            document.getElementById("tableBody").innerHTML = "";
+
+            for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
+                let rowData = [];
+                for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
+                    let box = rowConfigs[rIdx][cIdx];
+                    let pCanvas = document.createElement('canvas');
+                    pCanvas.width = Math.max(20, Math.floor(box.w));
+                    pCanvas.height = Math.max(20, Math.floor(box.h));
+                    let pCtx = pCanvas.getContext('2d');
+                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
+
+                    let cellText = "";
+                    try {
+                        if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
+                        let result = await tesseractWorker.recognize(pCanvas);
+                        cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
+                    } catch (e) {
+                        cellText = "";
+                    }
+                    rowData.push(cellText);
+                    processed++;
+                    let pct = Math.round((processed / totalCells) * 100);
+                    fillBar.style.width = pct + '%';
+                    textBar.innerText = `PaddleOCR/ONNX: ${processed}/${totalCells} (${pct}%)`;
+                }
+                addRowData(rowData);
+            }
+            setTimeout(() => { containerBar.style.display = 'none'; log("PaddleOCR / ONNX finalizado."); }, 300);
         }
 
         function downloadStandardLog() {
@@ -686,7 +698,7 @@
             content += `Fecha: ${new Date().toLocaleString()}\n`;
             content += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
             content += `Incluye Encabezados: ${document.getElementById('hasHeaderCheck').checked ? 'SI' : 'NO'}\n`;
-            content += `Parametros -> Binarizacion: ${currentBin}\n`;
+            content += `Binarizacion: ${currentBin}\n`;
             content += `--------------------------------------------------\n\n`;
             content += columnsList.join(" | ") + "\n--------------------------------------------------\n";
             
