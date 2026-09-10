@@ -4,12 +4,14 @@ const srcCanvas = document.getElementById('sourceCanvas');
 const srcCtx = srcCanvas.getContext('2d');
 
 let loadedImg = new Image();
+let originalImageBitmap = null;
 let scale = 1, panX = 0, panY = 0;
 let isLocked = false;
 let linesH = [], linesV = [];
 let activeLine = null, lineAxis = null;
 let totalCols = 1;
 let worker = null;
+let binThreshold = 128;
 
 let isDragging = false;
 let startX = 0, startY = 0;
@@ -28,6 +30,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             srcCanvas.width = loadedImg.width;
             srcCanvas.height = loadedImg.height;
             srcCtx.drawImage(loadedImg, 0, 0);
+            originalImageBitmap = srcCtx.getImageData(0, 0, loadedImg.width, loadedImg.height);
 
             document.getElementById('placeholderText').style.display = 'none';
             const box = document.getElementById('canvasBox');
@@ -43,7 +46,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             linesV = [0, loadedImg.width * 0.5, loadedImg.width];
 
             resizeCanvas();
-            updateSlidersUI();
+            applyBinarization();
             redraw();
         }
         loadedImg.src = evt.target.result;
@@ -59,6 +62,31 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
+function applyBinarization() {
+    if (!originalImageBitmap) return;
+    let imgData = srcCtx.createImageData(originalImageBitmap);
+    let data = imgData.data;
+    let origData = originalImageBitmap.data;
+    for (let i = 0; i < origData.length; i += 4) {
+        let avg = (origData[i] * 0.3 + origData[i+1] * 0.59 + origData[i+2] * 0.11);
+        let val = avg >= binThreshold ? 255 : 0;
+        data[i] = val;
+        data[i+1] = val;
+        data[i+2] = val;
+        data[i+3] = origData[i+3];
+    }
+    srcCtx.putImageData(imgData, 0, 0);
+}
+
+document.getElementById('binThresholdSlider').addEventListener('input', (e) => {
+    binThreshold = parseInt(e.target.value);
+    document.getElementById('binThresholdVal').innerText = binThreshold;
+    if (loadedImg.src) {
+        applyBinarization();
+        redraw();
+    }
+});
+
 function redraw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!loadedImg.src) return;
@@ -69,80 +97,15 @@ function redraw() {
 
     ctx.lineWidth = Math.max(1, 2 / scale);
     ctx.strokeStyle = '#D4AF37';
-    linesH.forEach(y => { 
+    linesH.forEach((y, idx) => { 
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); 
     });
     
     ctx.strokeStyle = '#2196F3';
-    linesV.forEach(x => { 
+    linesV.forEach((x, idx) => { 
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); 
     });
     ctx.restore();
-}
-
-function updateSlidersUI() {
-    let container = document.getElementById('slidersContainer');
-    if (!container) return;
-    container.innerHTML = '';
-    if (!loadedImg.src) return;
-
-    let titleH = document.createElement('div');
-    titleH.style.cssText = "color:#D4AF37; font-size:13px; font-weight:bold; margin-bottom:4px;";
-    titleH.innerText = "Líneas Horizontales:";
-    container.appendChild(titleH);
-
-    linesH.forEach((val, idx) => {
-        if (idx === 0 || idx === linesH.length - 1) return;
-        let div = document.createElement('div');
-        div.style.margin = "6px 0";
-        div.innerHTML = `<div style="display:flex; justify-content:space-between;"><label style="color:#D4AF37; font-size:13px;">H${idx}: <span id="valH_${idx}">${Math.round(val)}</span></label><button class="btn-danger-sm" onclick="removeLine('H', ${idx})">×</button></div>` +
-                        `<input type="range" min="0" max="${loadedImg.height}" value="${val}" style="width:100%; accent-color:#D4AF37; height:24px;" data-idx="${idx}" data-axis="H">`;
-        container.appendChild(div);
-    });
-
-    let titleV = document.createElement('div');
-    titleV.style.cssText = "color:#2196F3; font-size:13px; font-weight:bold; margin-top:10px; margin-bottom:4px;";
-    titleV.innerText = "Líneas Verticales:";
-    container.appendChild(titleV);
-
-    linesV.forEach((val, idx) => {
-        if (idx === 0 || idx === linesV.length - 1) return;
-        let div = document.createElement('div');
-        div.style.margin = "6px 0";
-        div.innerHTML = `<div style="display:flex; justify-content:space-between;"><label style="color:#2196F3; font-size:13px;">V${idx}: <span id="valV_${idx}">${Math.round(val)}</span></label><button class="btn-danger-sm" onclick="removeLine('V', ${idx})">×</button></div>` +
-                        `<input type="range" min="0" max="${loadedImg.width}" value="${val}" style="width:100%; accent-color:#2196F3; height:24px;" data-idx="${idx}" data-axis="V">`;
-        container.appendChild(div);
-    });
-
-    container.querySelectorAll('input[type=range]').forEach(input => {
-        input.addEventListener('input', (e) => {
-            if (isLocked) return;
-            let idx = parseInt(e.target.getAttribute('data-idx'));
-            let axis = e.target.getAttribute('data-axis');
-            let v = parseFloat(e.target.value);
-            if (axis === 'H') {
-                linesH[idx] = v;
-                linesH.sort((a,b)=>a-b);
-                document.getElementById(`valH_${idx}`).innerText = Math.round(v);
-            } else {
-                linesV[idx] = v;
-                linesV.sort((a,b)=>a-b);
-                document.getElementById(`valV_${idx}`).innerText = Math.round(v);
-            }
-            redraw();
-        });
-    });
-}
-
-function removeLine(axis, idx) {
-    if (isLocked || !loadedImg.src) return;
-    if (axis === 'H') {
-        linesH.splice(idx, 1);
-    } else {
-        linesV.splice(idx, 1);
-    }
-    updateSlidersUI();
-    redraw();
 }
 
 function changeZoom(factor) {
@@ -167,21 +130,22 @@ document.getElementById('zoomResetBtn').addEventListener('click', () => {
     redraw();
 });
 
+// Agregar línea justo en el centro de la vista visible actual del usuario
 document.getElementById('addLineHBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
-    let newY = loadedImg.height / 2;
-    linesH.push(newY);
+    let centerY = (-panY + canvas.height / 2) / scale;
+    centerY = Math.max(0, Math.min(loadedImg.height, centerY));
+    linesH.push(centerY);
     linesH.sort((a,b)=>a-b);
-    updateSlidersUI();
     redraw();
 });
 
 document.getElementById('addLineVBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
-    let newX = loadedImg.width / 2;
-    linesV.push(newX);
+    let centerX = (-panX + canvas.width / 2) / scale;
+    centerX = Math.max(0, Math.min(loadedImg.width, centerX));
+    linesV.push(centerX);
     linesV.sort((a,b)=>a-b);
-    updateSlidersUI();
     redraw();
 });
 
@@ -225,7 +189,6 @@ box.addEventListener('pointermove', (e) => {
             linesV[activeLine] = Math.max(0, Math.min(loadedImg.width, (e.clientX - r.left - panX) / scale));
             linesV.sort((a, b) => a - b);
         }
-        updateSlidersUI();
         redraw();
     } else if (isDragging) {
         panX = e.clientX - startX;
@@ -266,7 +229,6 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height) * 0.9;
     panX = (box.clientWidth - loadedImg.width * scale) / 2;
     panY = (box.clientHeight - loadedImg.height * scale) / 2;
-    updateSlidersUI();
     redraw();
 });
 

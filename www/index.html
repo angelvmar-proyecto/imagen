@@ -38,12 +38,20 @@
             </div>
             <input type="file" id="fileInput" accept="image/*" style="display:none;">
 
+            <!-- Botones directos para agregar líneas dentro de la vista -->
             <div style="display:flex; gap:8px; margin-top:12px;">
                 <button id="addLineHBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#3a3010; color:#D4AF37; border:1px solid #D4AF37;">➕ Línea Horizontal</button>
                 <button id="addLineVBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#10253a; color:#2196F3; border:1px solid #2196F3;">➕ Línea Vertical</button>
             </div>
 
-            <div id="slidersContainer" style="margin-top:10px; max-height:200px; overflow-y:auto; padding:8px; background:#181818; border:1px solid #333; border-radius:6px;"></div>
+            <!-- Control deslizante general de binarización (umbral) -->
+            <div style="margin-top:12px; background:#181818; padding:8px; border:1px solid #333; border-radius:6px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral de Binarización:</label>
+                    <span id="binThresholdVal" style="color:#fff; font-size:13px;">128</span>
+                </div>
+                <input type="range" id="binThresholdSlider" min="0" max="255" value="128" style="width:100%; accent-color:#d4af37; height:24px;">
+            </div>
         </section>
 
         <!-- 2. Motores de Extracción -->
