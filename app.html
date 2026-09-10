@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAR Caribe - OCR Clean</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #080808; color: #f0f0f0; font-family: sans-serif; padding: 10px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        h1 { color: #D4AF37; font-size: 1rem; text-align: center; padding: 6px 0; border-bottom: 1px solid #333; }
+        .wrap { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow-y: auto; padding-top: 6px; }
+        .box { background: #141414; border: 1px solid #333; border-radius: 6px; padding: 8px; }
+        .title { color: #D4AF37; font-size: 0.8rem; font-weight: bold; margin-bottom: 6px; }
+        .canvas-container { position: relative; width: 100%; height: 160px; background: #000; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; touch-action: none; }
+        canvas { position: absolute; }
+        .btns { display: flex; gap: 6px; margin-top: 6px; }
+        button { background: #D4AF37; color: #000; border: none; padding: 6px; font-weight: bold; border-radius: 4px; font-size: 0.75rem; flex: 1; cursor: pointer; }
+        button.tess { background: #4CAF50; color: #fff; }
+        button.ml { background: #2196F3; color: #fff; }
+        button.paddle { background: #FF9800; color: #000; }
+        button.danger { background: #CF6679; color: #fff; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 4px; }
+        th, td { border: 1px solid #333; padding: 4px; text-align: left; background: #1a1a1a; }
+        th { background: #222; color: #D4AF37; }
+        td[contenteditable="true"]:focus { background: #2a2a2a; outline: 1px solid #D4AF37; }
+        .prog { background: #000; border: 1px solid #333; border-radius: 4px; height: 14px; position: relative; margin-top: 6px; display: none; overflow: hidden; }
+        .prog-fill { background: #D4AF37; height: 100%; width: 0%; }
+        .prog-text { position: absolute; width: 100%; text-align: center; font-size: 0.65rem; color: #fff; top: 0; line-height: 14px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <h1>MAR Caribe - Clean Studio</h1>
+
+    <div class="wrap">
+        <div class="box">
+            <div class="title">1. Imagen & Cuadrícula</div>
+            <div class="canvas-container" id="cBox">
+                <span style="color:#666; font-size:0.75rem;" id="ph">Cargar captura de WhatsApp</span>
+                <canvas id="mainCanvas"></canvas>
+            </div>
+            <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="loadImg(event)">
+            <div class="btns">
+                <button style="background:#333; color:#D4AF37;" onclick="document.getElementById('fileInput').click()">📁 Cargar</button>
+                <button style="background:#333; color:#D4AF37;" onclick="toggleLock()" id="lockBtn">🔒 Libre</button>
+                <button class="danger" onclick="resetGrid()">Limpiar</button>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="title">2. Motores Independientes</div>
+            <div class="btns" style="flex-direction:column;">
+                <button class="tess" onclick="runOCR('tesseract')">Extraer con Tesseract.js</button>
+                <button class="ml" onclick="runOCR('mlkit')">Extraer con Google ML Kit</button>
+                <button class="paddle" onclick="runOCR('paddle')">Extraer con PaddleOCR / ONNX</button>
+            </div>
+            <div class="prog" id="progBox">
+                <div class="prog-fill" id="progFill"></div>
+                <div class="prog-text" id="progText">0%</div>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="title">3. Tabla de Datos</div>
+            <div class="btns">
+                <button style="background:#333; color:#fff;" onclick="addRow()">+ Fila</button>
+                <button style="background:#333; color:#fff;" onclick="addCol()">+ Col</button>
+                <button class="danger" onclick="clearTable()">Vaciar</button>
+            </div>
+            <div style="overflow-x:auto; max-height:130px; margin-top:6px;">
+                <table id="dataTable">
+                    <thead><tr id="thRow"><th>Col 1</th><th>Acción</th></tr></thead>
+                    <tbody id="tbBody">
+                        <tr><td contenteditable="true">Dato</td><td><button class="danger" style="padding:1px 4px;" onclick="this.closest('tr').remove()">×</button></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <canvas id="srcCanvas" style="display:none;"></canvas>
+
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const sCanvas = document.getElementById('srcCanvas');
+        const sCtx = sCanvas.getContext('2d');
+
+        let img = new Image();
+        let scale = 1, panX = 0, panY = 0;
+        let locked = false;
+        let linesH = [], linesV = [];
+        let activeLine = null, axis = null;
+        let cols = 1, tessWorker = null;
+
+        async function initW() { try { tessWorker = await Tesseract.createWorker('spa+eng'); } catch(e){} }
+        initW();
+
+        function loadImg(e) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                img.onload = function() {
+                    sCanvas.width = img.width; sCanvas.height = img.height;
+                    sCtx.drawImage(img, 0, 0);
+                    document.getElementById('ph').style.display = 'none';
+                    
+                    const box = document.getElementById('cBox');
+                    scale = Math.min(box.clientWidth / img.width, box.clientHeight / img.height);
+                    panX = (box.clientWidth - img.width * scale) / 2;
+                    panY = (box.clientHeight - img.height * scale) / 2;
+
+                    linesH = [0, img.height * 0.3, img.height * 0.7, img.height];
+                    linesV = [0, img.width * 0.5, img.width];
+                    resizeC();
+                    redraw();
+                }
+                img.src = evt.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        }
+
+        function resizeC() {
+            const box = document.getElementById('cBox');
+            canvas.width = box.clientWidth; canvas.height = box.clientHeight;
+            redraw();
+        }
+        window.addEventListener('resize', resizeC);
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (!img.src) return;
+            ctx.save();
+            ctx.translate(panX, panY); ctx.scale(scale, scale);
+            ctx.drawImage(sCanvas, 0, 0);
+
+            ctx.lineWidth = 1.5 / scale;
+            ctx.strokeStyle = '#D4AF37';
+            linesH.forEach(y => { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(img.width, y); ctx.stroke(); });
+            ctx.strokeStyle = '#2196F3';
+            linesV.forEach(x => { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, img.height); ctx.stroke(); });
+            ctx.restore();
+        }
+
+        const box = document.getElementById('cBox');
+        box.addEventListener('pointerdown', (e) => {
+            if (locked || !img.src) return;
+            const r = box.getBoundingClientRect();
+            let mx = (e.clientX - r.left - panX) / scale, my = (e.clientY - r.top - panY) / scale;
+            activeLine = null;
+            for (let i = 0; i < linesH.length; i++) {
+                if (Math.abs(my - linesH[i]) < 12 / scale) { activeLine = i; axis = 'H'; break; }
+            }
+            if (activeLine === null) {
+                for (let i = 0; i < linesV.length; i++) {
+                    if (Math.abs(mx - linesV[i]) < 12 / scale) { activeLine = i; axis = 'V'; break; }
+                }
+            }
+        });
+
+        box.addEventListener('pointermove', (e) => {
+            if (locked || activeLine === null || !img.src) return;
+            const r = box.getBoundingClientRect();
+            if (axis === 'H') linesH[activeLine] = Math.max(0, Math.min(img.height, (e.clientY - r.top - panY) / scale));
+            else linesV[activeLine] = Math.max(0, Math.min(img.width, (e.clientX - r.left - panX) / scale));
+            redraw();
+        });
+        window.addEventListener('pointerup', () => { activeLine = null; });
+
+        function toggleLock() {
+            locked = !locked;
+            const b = document.getElementById('lockBtn');
+            b.innerText = locked ? "🔒 Bloqueado" : "🔒 Libre";
+            b.style.color = locked ? "#4CAF50" : "#D4AF37";
+        }
+
+        function resetGrid() {
+            if (locked || !img.src) return;
+            linesH = [0, img.height]; linesV = [0, img.width]; redraw();
+        }
+
+        async function runOCR(engine) {
+            if (!img.src) { alert("Cargue imagen."); return; }
+            const pb = document.getElementById('progBox'), pf = document.getElementById('progFill'), pt = document.getElementById('progText');
+            pb.style.display = 'block'; pf.style.width = '0%';
+
+            let sH = [...linesH].sort((a,b)=>a-b), sV = [...linesV].sort((a,b)=>a-b);
+            let total = (sH.length - 1) * (sV.length - 1);
+            if (total <= 0) { pb.style.display = 'none'; return; }
+
+            if (engine === 'tesseract' && !tessWorker) tessWorker = await Tesseract.createWorker('spa+eng');
+
+            document.getElementById('tbBody').innerHTML = "";
+            let count = 0;
+
+            for (let r = 0; r < sH.length - 1; r++) {
+                let rowVals = [];
+                for (let c = 0; c < sV.length - 1; c++) {
+                    let bx = sV[c], by = sH[r], bw = sV[c+1] - bx, bh = sH[r+1] - by;
+                    let cCanv = document.createElement('canvas');
+                    cCanv.width = Math.max(10, bw); cCanv.height = Math.max(10, bh);
+                    let cCtx = cCanv.getContext('2d');
+                    cCtx.drawImage(sCanvas, bx, by, bw, bh, 0, 0, cCanv.width, cCanv.height);
+
+                    // Binarización local
+                    let idata = cCtx.getImageData(0,0,cCanv.width,cCanv.height), d = idata.data, sum = 0;
+                    for (let i = 0; i < d.length; i += 4) sum += (d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114);
+                    let th = sum / (d.length / 4);
+                    for (let i = 0; i < d.length; i += 4) {
+                        let g = d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114;
+                        let v = g >= th ? 255 : 0;
+                        d[i] = v; d[i+1] = v; d[i+2] = v;
+                    }
+                    cCtx.putImageData(idata, 0, 0);
+
+                    let txt = "";
+                    try {
+                        let res = await tessWorker.recognize(cCanv);
+                        txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                    } catch(e) { txt = ""; }
+
+                    rowVals.push(txt);
+                    count++;
+                    let pct = Math.round((count / total) * 100);
+                    pf.style.width = pct + '%';
+                    pt.innerText = `${engine.toUpperCase()} (${pct}%)`;
+                }
+                addRowData(rowVals);
+            }
+            setTimeout(() => { pb.style.display = 'none'; }, 400);
+        }
+
+        function addRowData(vals) {
+            const tb = document.getElementById('tbBody');
+            let tr = document.createElement('tr');
+            vals.forEach(v => {
+                let td = document.createElement('td');
+                td.contentEditable = "true"; td.innerText = v;
+                tr.appendChild(td);
+            });
+            let act = document.createElement('td');
+            act.innerHTML = `<button class="danger" style="padding:1px 4px;" onclick="this.closest('tr').remove()">×</button>`;
+            tr.appendChild(act);
+            tb.appendChild(tr);
+        }
+
+        function addRow() {
+            let tb = document.getElementById('tbBody'), tr = document.createElement('tr');
+            let totalCols = document.getElementById('thRow').cells.length - 1;
+            for (let i = 0; i < totalCols; i++) {
+                let td = document.createElement('td'); td.contentEditable = "true"; tr.appendChild(td);
+            }
+            let act = document.createElement('td');
+            act.innerHTML = `<button class="danger" style="padding:1px 4px;" onclick="this.closest('tr').remove()">×</button>`;
+            tr.appendChild(act);
+            tb.appendChild(tr);
+        }
+
+        function addCol() {
+            const hRow = document.getElementById('thRow');
+            let actTh = hRow.lastElementChild; actTh.remove();
+            cols++;
+            let th = document.createElement('th'); th.innerText = `Col ${cols}`;
+            hRow.appendChild(th); hRow.appendChild(actTh);
+
+            const rows = document.getElementById('tbBody').rows;
+            for (let r of rows) {
+                let actTd = r.lastElementChild; actTd.remove();
+                let td = document.createElement('td'); td.contentEditable = "true";
+                r.appendChild(td); r.appendChild(actTd);
+            }
+        }
+
+        function clearTable() { document.getElementById('tbBody').innerHTML = ""; }
+    </script>
+</body>
+</html>
