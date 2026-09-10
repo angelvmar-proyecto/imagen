@@ -71,10 +71,7 @@ function applyBinarization(customThreshold = binThreshold) {
     for (let i = 0; i < origData.length; i += 4) {
         let avg = (origData[i] * 0.3 + origData[i+1] * 0.59 + origData[i+2] * 0.11);
         let val = avg >= customThreshold ? 255 : 0;
-        data[i] = val;
-        data[i+1] = val;
-        data[i+2] = val;
-        data[i+3] = origData[i+3];
+        data[i] = val; data[i+1] = val; data[i+2] = val; data[i+3] = origData[i+3];
     }
     srcCtx.putImageData(imgData, 0, 0);
 }
@@ -98,12 +95,12 @@ function redraw() {
 
     ctx.lineWidth = Math.max(1, 2 / scale);
     ctx.strokeStyle = '#D4AF37';
-    linesH.forEach((y, idx) => { 
+    linesH.forEach((y) => { 
         ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); 
     });
     
     ctx.strokeStyle = '#2196F3';
-    linesV.forEach((x, idx) => { 
+    linesV.forEach((x) => { 
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); 
     });
     ctx.restore();
@@ -131,7 +128,6 @@ document.getElementById('zoomResetBtn').addEventListener('click', () => {
     redraw();
 });
 
-// Agregar línea horizontal dentro de la vista actual visible
 document.getElementById('addLineHBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerY = (-panY + canvas.height / 2) / scale;
@@ -141,7 +137,6 @@ document.getElementById('addLineHBtn').addEventListener('click', () => {
     redraw();
 });
 
-// Agregar línea vertical dentro de la vista actual visible
 document.getElementById('addLineVBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerX = (-panX + canvas.width / 2) / scale;
@@ -234,7 +229,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     redraw();
 });
 
-// MOTOR OCR CON BARRIDO MULTI-UMBRAL POR CELDA (Bajo, Medio, Alto)
+// MOTOR HÍBRIDO CON DETECCIÓN ORTOGONAL 90° (AUTO) O MANUAL + PIPELINE SHARPENING Y UMBRALES (200, 115, BASE)
 async function runEngine(engineName) {
     if (!loadedImg.src) { alert("Cargue imagen primero."); return; }
     const pContainer = document.getElementById('progressContainer');
@@ -242,6 +237,11 @@ async function runEngine(engineName) {
     const pText = document.getElementById('progressText');
     if(pContainer) pContainer.style.display = 'block';
     if(pBar) pBar.style.width = '0%';
+
+    // MODO AUTOMÁTICO (Ortogonal 90°): Si no está bloqueado, calculamos líneas automáticamente
+    if (!isLocked) {
+        detectGridOrthogonal90();
+    }
 
     let sH = [...linesH].sort((a,b)=>a-b);
     let sV = [...linesV].sort((a,b)=>a-b);
@@ -256,17 +256,13 @@ async function runEngine(engineName) {
     let processed = 0;
     let matrixData = [];
 
-    // Umbrales múltiples a probar por cada celda para obtener la mejor lectura (Bajo, Medio/Base, Alto)
-    let candidateThresholds = [
-        Math.max(40, binThreshold - 45),
-        binThreshold,
-        Math.min(220, binThreshold + 45)
-    ];
+    // Umbrales fijos solicitados: 200 (alto), 115 (bajo) y el slider (base)
+    let candidateThresholds = [115, binThreshold, 200];
 
     for (let r = 0; r < sH.length - 1; r++) {
         let rowVals = [];
         for (let c = 0; c < sV.length - 1; c++) {
-            let margin = 3; // Margen para evitar líneas de la cuadrícula
+            let margin = 3;
             let bx = sV[c] + margin;
             let by = sH[r] + margin;
             let bw = (sV[c+1] - sV[c]) - (margin * 2);
@@ -276,16 +272,45 @@ async function runEngine(engineName) {
             let maxConfidence = -1;
 
             if (bw > 0 && bh > 0) {
-                // Probar los diferentes umbrales para esta celda y elegir la de mayor confianza
+                // 1. ETAPA SHARPENING Y PIPELINE SECUENCIAL
                 for (let th of candidateThresholds) {
                     let tempCanvas = document.createElement('canvas');
                     tempCanvas.width = Math.max(20, bw);
                     tempCanvas.height = Math.max(20, bh);
                     let tCtx = tempCanvas.getContext('2d');
                     
-                    // Generar binarización local temporal para este umbral
+                    // Extraer subimagen original
                     let subImgData = srcCtx.getImageData(bx, by, bw, bh);
                     let data = subImgData.data;
+
+                    // Aplicar Kernel de Realce (Sharpening) básico para contrarrestar compresión WhatsApp
+                    let w_w = bw, h_h = bh;
+                    let srcPix = new Uint8ClampedArray(data);
+                    let kernel = [ 0, -1,  0, 
+                                  -1,  5, -1, 
+                                   0, -1,  0 ];
+
+                    for (let y = 1; y < h_h - 1; y++) {
+                        for (let x = 1; x < w_w - 1; x++) {
+                            let idx = (y * w_w + x) * 4;
+                            let rSum = 0, gSum = 0, bSum = 0;
+                            let kIdx = 0;
+                            for (let ky = -1; ky <= 1; ky++) {
+                                for (let kx = -1; kx <= 1; kx++) {
+                                    let pIdx = ((y + ky) * w_w + (x + kx)) * 4;
+                                    let weight = kernel[kIdx++];
+                                    rSum += srcPix[pIdx] * weight;
+                                    gSum += srcPix[pIdx+1] * weight;
+                                    bSum += srcPix[pIdx+2] * weight;
+                                }
+                            }
+                            data[idx] = Math.min(255, Math.max(0, rSum));
+                            data[idx+1] = Math.min(255, Math.max(0, gSum));
+                            data[idx+2] = Math.min(255, Math.max(0, bSum));
+                        }
+                    }
+
+                    // 2. ETAPA DE BINARIZACIÓN CON EL UMBRAL CORRESPONDIENTE
                     for (let i = 0; i < data.length; i += 4) {
                         let avg = (data[i] * 0.3 + data[i+1] * 0.59 + data[i+2] * 0.11);
                         let val = avg >= th ? 255 : 0;
@@ -293,13 +318,13 @@ async function runEngine(engineName) {
                     }
                     tCtx.putImageData(subImgData, 0, 0);
 
+                    // 3. RECONOCIMIENTO OCR
                     try {
                         let res = await worker.recognize(tempCanvas);
                         let txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
                         let conf = res.data.confidence || 0;
 
-                        // Si la primera columna contiene números y detectamos dígitos, priorizamos
-                        if (c === 0 && /\\d/.test(txt)) conf += 15;
+                        if (c === 0 && /\d/.test(txt)) conf += 20; // Priorizar dígitos en columna 1
 
                         if (conf > maxConfidence && txt.length > 0) {
                             maxConfidence = conf;
@@ -319,7 +344,52 @@ async function runEngine(engineName) {
     }
     
     buildExcelTable(matrixData);
+    redraw();
     setTimeout(() => { if(pContainer) pContainer.style.display = 'none'; }, 400);
+}
+
+// ALGORITMO ORTOGONAL DE 90° PARA DETECCIÓN AUTOMÁTICA DE LÍNEAS
+function detectGridOrthogonal90() {
+    let w = loadedImg.width;
+    let h = loadedImg.height;
+    let imgData = srcCtx.getImageData(0, 0, w, h);
+    let data = imgData.data;
+
+    let hProj = new Array(h).fill(0);
+    let vProj = new Array(w).fill(0);
+
+    // Sumar pixeles oscuros proyectados para hallar intersecciones de 90 grados
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let i = (y * w + x) * 4;
+            let avg = (data[i] + data[i+1] + data[i+2]) / 3;
+            if (avg < 100) { // Píxel oscuro de línea
+                hProj[y]++;
+                vProj[x]++;
+            }
+        }
+    }
+
+    let detectedH = [0];
+    let thresholdH = w * 0.15; // Densidad horizontal para considerar línea de tabla
+    for (let y = 1; y < h - 1; y++) {
+        if (hProj[y] > thresholdH && hProj[y] >= hProj[y-1] && hProj[y] >= hProj[y+1]) {
+            if (y - detectedH[detectedH.length - 1] > 20) detectedH.push(y);
+        }
+    }
+    detectedH.push(h);
+
+    let detectedV = [0];
+    let thresholdV = h * 0.15;
+    for (let x = 1; x < w - 1; x++) {
+        if (vProj[x] > thresholdV && vProj[x] >= vProj[x-1] && vProj[x] >= vProj[x+1]) {
+            if (x - detectedV[detectedV.length - 1] > 20) detectedV.push(x);
+        }
+    }
+    detectedV.push(w);
+
+    if (detectedH.length > 2) linesH = detectedH;
+    if (detectedV.length > 2) linesV = detectedV;
 }
 
 document.getElementById('btnTess').addEventListener('click', () => runEngine('tesseract'));
@@ -343,7 +413,6 @@ function buildExcelTable(dataMatrix) {
     
     totalCols = dataMatrix.length > 0 ? dataMatrix[0].length : 1;
 
-    // Construir cabeceras A, B, C...
     let headerHTML = `<th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>`;
     for (let c = 0; c < totalCols; c++) {
         headerHTML += `<th style="padding:6px; border:1px solid #444; color:#D4AF37;">${getColumnLetter(c)}</th>`;
@@ -351,7 +420,6 @@ function buildExcelTable(dataMatrix) {
     headerHTML += `<th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>`;
     headerRow.innerHTML = headerHTML;
 
-    // Construir filas con números 1, 2, 3...
     dataMatrix.forEach((rowVals, rIdx) => {
         const tr = document.createElement('tr');
         let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
@@ -471,7 +539,7 @@ document.getElementById('exportParamsBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
-    let out = "=== REPORTE MINI EXCEL ===\n";
+    let out = "=== REPORTE MINI EXCEL HÍBRIDO ===\n";
     const rows = document.getElementById('excelBody').rows;
     for(let r of rows) {
         if(r.style.display === 'none') continue;

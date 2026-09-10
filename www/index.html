@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe – Procesador Mini Excel</title>
+    <title>MAR Caribe – Procesador Mini Excel Híbrido</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="appContainer">
         <header>
-            <h2>MAR Caribe — Procesador & Mini Excel</h2>
+            <h2>MAR Caribe — Híbrido (Auto/Manual)</h2>
         </header>
 
         <!-- 1. Zona de Trabajo & Cuadrícula -->
@@ -33,37 +33,37 @@
             
             <div class="btn-group" style="margin-top:10px; display:flex; gap:8px;">
                 <button id="loadBtn" class="btn btn-primary" style="font-size:15px; flex:1;">📁 Cargar</button>
-                <button id="lockBtn" class="btn btn-warning" style="font-size:15px; flex:1;">🔒 Bloquear</button>
+                <button id="lockBtn" class="btn btn-warning" style="font-size:15px; flex:1;" title="Bloquea líneas manuales / Desactiva auto-detección">🔒 Bloquear</button>
                 <button id="resetBtn" class="btn btn-danger" style="font-size:15px; flex:1;">Limpiar</button>
             </div>
             <input type="file" id="fileInput" accept="image/*" style="display:none;">
 
             <!-- Botones directos para agregar líneas dentro de la vista actual -->
             <div style="display:flex; gap:8px; margin-top:12px;">
-                <button id="addLineHBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#3a3010; color:#D4AF37; border:1px solid #D4AF37;">➕ Línea Horizontal</button>
-                <button id="addLineVBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#10253a; color:#2196F3; border:1px solid #2196F3;">➕ Línea Vertical</button>
+                <button id="addLineHBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#3a3010; color:#D4AF37; border:1px solid #D4AF37;">➕ Línea H.</button>
+                <button id="addLineVBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#10253a; color:#2196F3; border:1px solid #2196F3;">➕ Línea V.</button>
             </div>
 
-            <!-- Control deslizante general de binarización (umbral base) -->
+            <!-- Control deslizante de Umbral Base -->
             <div style="margin-top:12px; background:#181818; padding:8px; border:1px solid #333; border-radius:6px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral Base Binarización:</label>
+                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral Base (Slider):</label>
                     <span id="binThresholdVal" style="color:#fff; font-size:13px;">128</span>
                 </div>
                 <input type="range" id="binThresholdSlider" min="0" max="255" value="128" style="width:100%; accent-color:#d4af37; height:24px;">
             </div>
         </section>
 
-        <!-- 2. Motores de Extracción (Con escaneo multi-umbral por celda) -->
+        <!-- 2. Motores de Extracción Híbridos (Sharpening + Pipeline 200/115/Base) -->
         <section class="card">
-            <h3>2. Motores de Extracción</h3>
-            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Multi-Umbral Tesseract</button>
+            <h3>2. Motores de Extracción (Pipeline Secuencial)</h3>
+            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer Tesseract (Auto 90° o Manual)</button>
             <button id="btnML" class="btn btn-info" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Google ML Kit</button>
             <button id="btnPaddle" class="btn btn-warning" style="font-size:16px; width:100%;">⚡ Extraer con PaddleOCR / ONNX</button>
             
             <div id="progressContainer" style="display:none; margin-top:10px; background:#222; border-radius:4px; overflow:hidden;">
                 <div id="progressBar" style="width:0%; height:20px; background:#4CAF50; text-align:center; font-size:12px; color:#fff;">0%</div>
-                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Procesando celdas...</div>
+                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Aplicando pipeline...</div>
             </div>
         </section>
 
@@ -75,7 +75,7 @@
             <div style="display:flex; align-items:center; background:#111; border:1px solid #444; border-radius:4px; padding:4px 8px; margin-bottom:8px;">
                 <span id="selectedCellLabel" style="color:#D4AF37; font-weight:bold; font-size:13px; margin-right:8px; min-width:30px;">A1</span>
                 <span style="color:#777; font-weight:bold; font-size:13px; margin-right:8px;">fx</span>
-                <input type="text" id="formulaBar" placeholder="Valor o fórmula de la celda seleccionada..." style="flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none;">
+                <input type="text" id="formulaBar" placeholder="Valor o fórmula..." style="flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none;">
             </div>
 
             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
@@ -84,7 +84,7 @@
             </div>
             <input type="text" id="searchInput" placeholder="Filtrar registros..." style="width:100%; padding:8px; margin-bottom:8px; background:#222; border:1px solid #444; color:#fff; font-size:14px; border-radius:4px;">
             
-            <!-- Contenedor Tabla Estilo Excel (con cabeceras A, B, C y 1, 2, 3) -->
+            <!-- Contenedor Tabla Estilo Excel -->
             <div style="max-height:240px; overflow:auto; border:1px solid #444; background:#181818;">
                 <table id="excelTable" style="width:100%; border-collapse:collapse; color:#ddd; font-size:13px; text-align:center;">
                     <thead>
@@ -107,7 +107,7 @@
             <!-- Barra de Estado inferior -->
             <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding:4px 6px; background:#111; border-radius:4px; font-size:12px; color:#aaa;">
                 <span id="statusInfo">Listo - 1 fila, 1 columna</span>
-                <span>Mini Excel Activo</span>
+                <span>Mini Excel Híbrido</span>
             </div>
 
             <div style="display:flex; gap:8px; margin-top:10px;">

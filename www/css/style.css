@@ -49,7 +49,6 @@ body {
     cursor: pointer;
 }
 
-/* Estilos de celda activa tipo Excel */
 .excel-cell:focus {
     outline: 2px solid #D4AF37 !important;
     background-color: #252315 !important;
