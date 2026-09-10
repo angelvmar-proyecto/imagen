@@ -12,6 +12,7 @@ let activeLine = null, lineAxis = null;
 let totalCols = 1;
 let worker = null;
 let binThreshold = 128;
+let selectedCell = null;
 
 let isDragging = false;
 let startX = 0, startY = 0;
@@ -62,14 +63,14 @@ function resizeCanvas() {
 }
 window.addEventListener('resize', resizeCanvas);
 
-function applyBinarization() {
+function applyBinarization(customThreshold = binThreshold) {
     if (!originalImageBitmap) return;
     let imgData = srcCtx.createImageData(originalImageBitmap);
     let data = imgData.data;
     let origData = originalImageBitmap.data;
     for (let i = 0; i < origData.length; i += 4) {
         let avg = (origData[i] * 0.3 + origData[i+1] * 0.59 + origData[i+2] * 0.11);
-        let val = avg >= binThreshold ? 255 : 0;
+        let val = avg >= customThreshold ? 255 : 0;
         data[i] = val;
         data[i+1] = val;
         data[i+2] = val;
@@ -130,7 +131,7 @@ document.getElementById('zoomResetBtn').addEventListener('click', () => {
     redraw();
 });
 
-// Agregar línea justo en el centro de la vista visible actual del usuario
+// Agregar línea horizontal dentro de la vista actual visible
 document.getElementById('addLineHBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerY = (-panY + canvas.height / 2) / scale;
@@ -140,6 +141,7 @@ document.getElementById('addLineHBtn').addEventListener('click', () => {
     redraw();
 });
 
+// Agregar línea vertical dentro de la vista actual visible
 document.getElementById('addLineVBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerX = (-panX + canvas.width / 2) / scale;
@@ -232,6 +234,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     redraw();
 });
 
+// MOTOR OCR CON BARRIDO MULTI-UMBRAL POR CELDA (Bajo, Medio, Alto)
 async function runEngine(engineName) {
     if (!loadedImg.src) { alert("Cargue imagen primero."); return; }
     const pContainer = document.getElementById('progressContainer');
@@ -249,32 +252,73 @@ async function runEngine(engineName) {
         worker = await Tesseract.createWorker('spa+eng');
     }
 
-    document.getElementById('tableBody').innerHTML = "";
+    document.getElementById('excelBody').innerHTML = "";
     let processed = 0;
+    let matrixData = [];
+
+    // Umbrales múltiples a probar por cada celda para obtener la mejor lectura (Bajo, Medio/Base, Alto)
+    let candidateThresholds = [
+        Math.max(40, binThreshold - 45),
+        binThreshold,
+        Math.min(220, binThreshold + 45)
+    ];
 
     for (let r = 0; r < sH.length - 1; r++) {
         let rowVals = [];
         for (let c = 0; c < sV.length - 1; c++) {
-            let bx = sV[c], by = sH[r], bw = sV[c+1] - bx, bh = sH[r+1] - by;
-            let cCanvas = document.createElement('canvas');
-            cCanvas.width = Math.max(20, bw); cCanvas.height = Math.max(20, bh);
-            let cCtx = cCanvas.getContext('2d');
-            cCtx.drawImage(srcCanvas, bx, by, bw, bh, 0, 0, cCanvas.width, cCanvas.height);
+            let margin = 3; // Margen para evitar líneas de la cuadrícula
+            let bx = sV[c] + margin;
+            let by = sH[r] + margin;
+            let bw = (sV[c+1] - sV[c]) - (margin * 2);
+            let bh = (sH[r+1] - sH[r]) - (margin * 2);
 
-            let txt = "";
-            try {
-                let res = await worker.recognize(cCanvas);
-                txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
-            } catch(e) { txt = ""; }
+            let bestText = "";
+            let maxConfidence = -1;
 
-            rowVals.push(txt);
+            if (bw > 0 && bh > 0) {
+                // Probar los diferentes umbrales para esta celda y elegir la de mayor confianza
+                for (let th of candidateThresholds) {
+                    let tempCanvas = document.createElement('canvas');
+                    tempCanvas.width = Math.max(20, bw);
+                    tempCanvas.height = Math.max(20, bh);
+                    let tCtx = tempCanvas.getContext('2d');
+                    
+                    // Generar binarización local temporal para este umbral
+                    let subImgData = srcCtx.getImageData(bx, by, bw, bh);
+                    let data = subImgData.data;
+                    for (let i = 0; i < data.length; i += 4) {
+                        let avg = (data[i] * 0.3 + data[i+1] * 0.59 + data[i+2] * 0.11);
+                        let val = avg >= th ? 255 : 0;
+                        data[i] = val; data[i+1] = val; data[i+2] = val;
+                    }
+                    tCtx.putImageData(subImgData, 0, 0);
+
+                    try {
+                        let res = await worker.recognize(tempCanvas);
+                        let txt = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                        let conf = res.data.confidence || 0;
+
+                        // Si la primera columna contiene números y detectamos dígitos, priorizamos
+                        if (c === 0 && /\\d/.test(txt)) conf += 15;
+
+                        if (conf > maxConfidence && txt.length > 0) {
+                            maxConfidence = conf;
+                            bestText = txt;
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            rowVals.push(bestText);
             processed++;
             let pct = Math.round((processed / totalCells) * 100);
             if(pBar) pBar.style.width = pct + '%';
             if(pText) pText.innerText = `${engineName.toUpperCase()} (${pct}%)`;
         }
-        appendRow(rowVals);
+        matrixData.push(rowVals);
     }
+    
+    buildExcelTable(matrixData);
     setTimeout(() => { if(pContainer) pContainer.style.display = 'none'; }, 400);
 }
 
@@ -282,58 +326,132 @@ document.getElementById('btnTess').addEventListener('click', () => runEngine('te
 document.getElementById('btnML').addEventListener('click', () => runEngine('mlkit'));
 document.getElementById('btnPaddle').addEventListener('click', () => runEngine('paddle'));
 
-function appendRow(values) {
-    const tb = document.getElementById('tableBody');
-    const tr = document.createElement('tr');
-    values.forEach(v => {
-        const td = document.createElement('td');
-        td.contentEditable = "true";
-        td.innerText = v;
-        tr.appendChild(td);
+function getColumnLetter(colIndex) {
+    let letter = '';
+    let num = colIndex;
+    while (num >= 0) {
+        letter = String.fromCharCode((num % 26) + 65) + letter;
+        num = Math.floor(num / 26) - 1;
+    }
+    return letter;
+}
+
+function buildExcelTable(dataMatrix) {
+    const headerRow = document.getElementById('excelHeaderRow');
+    const tbody = document.getElementById('excelBody');
+    tbody.innerHTML = "";
+    
+    totalCols = dataMatrix.length > 0 ? dataMatrix[0].length : 1;
+
+    // Construir cabeceras A, B, C...
+    let headerHTML = `<th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>`;
+    for (let c = 0; c < totalCols; c++) {
+        headerHTML += `<th style="padding:6px; border:1px solid #444; color:#D4AF37;">${getColumnLetter(c)}</th>`;
+    }
+    headerHTML += `<th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>`;
+    headerRow.innerHTML = headerHTML;
+
+    // Construir filas con números 1, 2, 3...
+    dataMatrix.forEach((rowVals, rIdx) => {
+        const tr = document.createElement('tr');
+        let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
+        
+        rowVals.forEach((val, cIdx) => {
+            rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${cIdx}" style="padding:6px; border:1px solid #444; text-align:left;">${val}</td>`;
+        });
+        
+        rowHTML += `<td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
+        tr.innerHTML = rowHTML;
+        tbody.appendChild(tr);
     });
-    const act = document.createElement('td');
-    act.innerHTML = `<button class="btn-danger-sm" onclick="this.closest('tr').remove()">×</button>`;
-    tr.appendChild(act);
-    tb.appendChild(tr);
+
+    attachCellListeners();
+    updateExcelStatus();
+}
+
+function attachCellListeners() {
+    const cells = document.querySelectorAll('.excel-cell');
+    const formulaBar = document.getElementById('formulaBar');
+    const selectedLabel = document.getElementById('selectedCellLabel');
+
+    cells.forEach(cell => {
+        cell.addEventListener('focus', () => {
+            selectedCell = cell;
+            let r = parseInt(cell.getAttribute('data-row')) + 1;
+            let c = parseInt(cell.getAttribute('data-col'));
+            selectedLabel.innerText = `${getColumnLetter(c)}${r}`;
+            formulaBar.value = cell.innerText;
+        });
+
+        cell.addEventListener('input', () => {
+            if (selectedCell === cell) {
+                formulaBar.value = cell.innerText;
+            }
+        });
+    });
+
+    formulaBar.oninput = function() {
+        if (selectedCell) {
+            selectedCell.innerText = formulaBar.value;
+        }
+    };
+}
+
+function updateExcelStatus() {
+    const rows = document.getElementById('excelBody').rows.length;
+    document.getElementById('statusInfo').innerText = `Mini Excel - ${rows} filas, ${totalCols} columnas`;
 }
 
 document.getElementById('addRowBtn').addEventListener('click', () => {
+    const tbody = document.getElementById('excelBody');
+    const rIdx = tbody.rows.length;
     const tr = document.createElement('tr');
+    let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
+    
     for(let i=0; i<totalCols; i++) {
-        const td = document.createElement('td');
-        td.contentEditable = "true";
-        tr.appendChild(td);
+        rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${i}" style="padding:6px; border:1px solid #444; text-align:left;"></td>`;
     }
-    const act = document.createElement('td');
-    act.innerHTML = `<button class="btn-danger-sm" onclick="this.closest('tr').remove()">×</button>`;
-    tr.appendChild(act);
-    document.getElementById('tableBody').appendChild(tr);
+    rowHTML += `<td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
+    tr.innerHTML = rowHTML;
+    tbody.appendChild(tr);
+    attachCellListeners();
+    updateExcelStatus();
 });
 
 document.getElementById('addColBtn').addEventListener('click', () => {
     totalCols++;
-    const hRow = document.getElementById('tableHeaderRow');
+    const hRow = document.getElementById('excelHeaderRow');
     const actTh = hRow.lastElementChild; actTh.remove();
     const th = document.createElement('th');
-    th.innerText = `Columna ${totalCols}`;
+    th.style.cssText = "padding:6px; border:1px solid #444; color:#D4AF37;";
+    th.innerText = getColumnLetter(totalCols - 1);
     hRow.appendChild(th); hRow.appendChild(actTh);
 
-    const rows = document.getElementById('tableBody').rows;
-    for(let r of rows) {
+    const rows = document.getElementById('excelBody').rows;
+    for(let rIdx = 0; rIdx < rows.length; rIdx++) {
+        let r = rows[rIdx];
         const actTd = r.lastElementChild; actTd.remove();
         const td = document.createElement('td');
+        td.className = "excel-cell";
         td.contentEditable = "true";
+        td.setAttribute('data-row', rIdx);
+        td.setAttribute('data-col', totalCols - 1);
+        td.style.cssText = "padding:6px; border:1px solid #444; text-align:left;";
         r.appendChild(td); r.appendChild(actTd);
     }
+    attachCellListeners();
+    updateExcelStatus();
 });
 
 document.getElementById('clearTableBtn').addEventListener('click', () => {
-    document.getElementById('tableBody').innerHTML = "";
+    document.getElementById('excelBody').innerHTML = "";
+    totalCols = 1;
+    buildExcelTable([[""]]);
 });
 
 document.getElementById('searchInput').addEventListener('input', (e) => {
     const q = e.target.value.toLowerCase();
-    for(let r of document.getElementById('tableBody').rows) {
+    for(let r of document.getElementById('excelBody').rows) {
         r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
     }
 });
@@ -353,10 +471,12 @@ document.getElementById('exportParamsBtn')?.addEventListener('click', () => {
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
-    let out = "=== REPORTE OCR ===\n";
-    for(let r of document.getElementById('tableBody').rows) {
+    let out = "=== REPORTE MINI EXCEL ===\n";
+    const rows = document.getElementById('excelBody').rows;
+    for(let r of rows) {
+        if(r.style.display === 'none') continue;
         let cols = [];
-        for(let i=0; i<r.cells.length-1; i++) cols.push(r.cells[i].innerText);
+        for(let i=1; i<r.cells.length-1; i++) cols.push(r.cells[i].innerText);
         out += cols.join(" | ") + "\n";
     }
     const win = window.open();

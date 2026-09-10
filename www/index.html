@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe – Procesador Limpio</title>
+    <title>MAR Caribe – Procesador Mini Excel</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <div id="appContainer">
         <header>
-            <h2>MAR Caribe — Procesador Limpio</h2>
+            <h2>MAR Caribe — Procesador & Mini Excel</h2>
         </header>
 
         <!-- 1. Zona de Trabajo & Cuadrícula -->
@@ -38,65 +38,82 @@
             </div>
             <input type="file" id="fileInput" accept="image/*" style="display:none;">
 
-            <!-- Botones directos para agregar líneas dentro de la vista -->
+            <!-- Botones directos para agregar líneas dentro de la vista actual -->
             <div style="display:flex; gap:8px; margin-top:12px;">
                 <button id="addLineHBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#3a3010; color:#D4AF37; border:1px solid #D4AF37;">➕ Línea Horizontal</button>
                 <button id="addLineVBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#10253a; color:#2196F3; border:1px solid #2196F3;">➕ Línea Vertical</button>
             </div>
 
-            <!-- Control deslizante general de binarización (umbral) -->
+            <!-- Control deslizante general de binarización (umbral base) -->
             <div style="margin-top:12px; background:#181818; padding:8px; border:1px solid #333; border-radius:6px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral de Binarización:</label>
+                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral Base Binarización:</label>
                     <span id="binThresholdVal" style="color:#fff; font-size:13px;">128</span>
                 </div>
                 <input type="range" id="binThresholdSlider" min="0" max="255" value="128" style="width:100%; accent-color:#d4af37; height:24px;">
             </div>
         </section>
 
-        <!-- 2. Motores de Extracción -->
+        <!-- 2. Motores de Extracción (Con escaneo multi-umbral por celda) -->
         <section class="card">
             <h3>2. Motores de Extracción</h3>
-            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Tesseract.js</button>
+            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Multi-Umbral Tesseract</button>
             <button id="btnML" class="btn btn-info" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Google ML Kit</button>
             <button id="btnPaddle" class="btn btn-warning" style="font-size:16px; width:100%;">⚡ Extraer con PaddleOCR / ONNX</button>
             
             <div id="progressContainer" style="display:none; margin-top:10px; background:#222; border-radius:4px; overflow:hidden;">
                 <div id="progressBar" style="width:0%; height:20px; background:#4CAF50; text-align:center; font-size:12px; color:#fff;">0%</div>
-                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Procesando...</div>
+                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Procesando celdas...</div>
             </div>
         </section>
 
-        <!-- 3. Visor de Datos -->
+        <!-- 3. Visor de Datos / Mini Excel -->
         <section class="card">
-            <h3>3. Visor de Datos</h3>
-            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                <button id="addRowBtn" class="btn btn-secondary" style="font-size:15px;">+ Fila</button>
-                <button id="addColBtn" class="btn btn-secondary" style="font-size:15px;">+ Col</button>
-            </div>
-            <input type="text" id="searchInput" placeholder="Filtrar registros..." style="width:100%; padding:8px; margin-bottom:8px; background:#222; border:1px solid #444; color:#fff; font-size:15px; border-radius:4px;">
+            <h3>3. Mini Excel & Visor de Datos</h3>
             
-            <div style="max-height:220px; overflow:auto; border:1px solid #444;">
-                <table id="dataTable" style="width:100%; border-collapse:collapse; color:#ddd; font-size:14px;">
+            <!-- Barra de Fórmulas estilo Excel -->
+            <div style="display:flex; align-items:center; background:#111; border:1px solid #444; border-radius:4px; padding:4px 8px; margin-bottom:8px;">
+                <span id="selectedCellLabel" style="color:#D4AF37; font-weight:bold; font-size:13px; margin-right:8px; min-width:30px;">A1</span>
+                <span style="color:#777; font-weight:bold; font-size:13px; margin-right:8px;">fx</span>
+                <input type="text" id="formulaBar" placeholder="Valor o fórmula de la celda seleccionada..." style="flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none;">
+            </div>
+
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                <button id="addRowBtn" class="btn btn-secondary" style="font-size:14px;">+ Fila</button>
+                <button id="addColBtn" class="btn btn-secondary" style="font-size:14px;">+ Columna</button>
+            </div>
+            <input type="text" id="searchInput" placeholder="Filtrar registros..." style="width:100%; padding:8px; margin-bottom:8px; background:#222; border:1px solid #444; color:#fff; font-size:14px; border-radius:4px;">
+            
+            <!-- Contenedor Tabla Estilo Excel (con cabeceras A, B, C y 1, 2, 3) -->
+            <div style="max-height:240px; overflow:auto; border:1px solid #444; background:#181818;">
+                <table id="excelTable" style="width:100%; border-collapse:collapse; color:#ddd; font-size:13px; text-align:center;">
                     <thead>
-                        <tr id="tableHeaderRow" style="background:#222;">
-                            <th style="padding:8px; border:1px solid #444;">Columna 1</th>
-                            <th style="padding:8px; border:1px solid #444;">Acción</th>
+                        <tr id="excelHeaderRow" style="background:#262626; position:sticky; top:0; z-index:2;">
+                            <th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>
+                            <th style="padding:6px; border:1px solid #444; color:#D4AF37;">A</th>
+                            <th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>
                         </tr>
                     </thead>
-                    <tbody id="tableBody">
+                    <tbody id="excelBody">
                         <tr>
-                            <td contenteditable="true" style="padding:6px; border:1px solid #444;">Dato de ejemplo</td>
-                            <td style="padding:6px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove()">×</button></td>
+                            <td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">1</td>
+                            <td contenteditable="true" class="excel-cell" data-row="0" data-col="0" style="padding:6px; border:1px solid #444; text-align:left;">Dato ejemplo</td>
+                            <td style="padding:4px; border:1px solid #444;"><button class="btn-danger-sm" onclick="this.closest('tr').remove()">×</button></td>
                         </tr>
                     </tbody>
                 </table>
             </div>
 
+            <!-- Barra de Estado inferior -->
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding:4px 6px; background:#111; border-radius:4px; font-size:12px; color:#aaa;">
+                <span id="statusInfo">Listo - 1 fila, 1 columna</span>
+                <span>Mini Excel Activo</span>
+            </div>
+
             <div style="display:flex; gap:8px; margin-top:10px;">
-                <button id="exportBtn" class="btn btn-primary" style="font-size:15px; flex:1;">📄 Exportar</button>
-                <button id="exportParamsBtn" class="btn btn-info" style="font-size:15px; flex:1;" title="Exporta JSON con coordenadas">💾 Estándar</button>
-                <button id="clearTableBtn" class="btn btn-danger" style="font-size:15px; flex:1;">Vaciar</button>
+                <button id="exportBtn" class="btn btn-primary" style="font-size:14px; flex:1;">📄 Exportar</button>
+                <button id="exportParamsBtn" class="btn btn-info" style="font-size:14px; flex:1;" title="Exporta JSON con coordenadas">💾 Estándar</button>
+                <button id="clearTableBtn" class="btn btn-danger" style="font-size:14px; flex:1;">Vaciar</button>
             </div>
         </section>
     </div>
