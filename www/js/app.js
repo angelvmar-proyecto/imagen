@@ -32,7 +32,6 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             document.getElementById('placeholderText').style.display = 'none';
             const box = document.getElementById('canvasBox');
             
-            // Ajuste dinámico de altura proporcional para evitar que la imagen se vea aplastada
             let displayHeight = (loadedImg.height / loadedImg.width) * box.clientWidth;
             box.style.height = Math.max(300, displayHeight) + 'px';
 
@@ -198,7 +197,6 @@ box.addEventListener('wheel', (e) => {
     }
     scale = Math.max(0.05, Math.min(25, scale));
     
-    const r = box.getBoundingClientRect();
     let cx = box.clientWidth / 2;
     let cy = box.clientHeight / 2;
     panX = cx - (cx - panX) * (scale / oldScale);
