@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MAR Caribe - Procesadores OCR</title>
+    <title>MAR Caribe - Motores OCR Independientes</title>
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <style>
         :root {
@@ -79,14 +79,6 @@
         button:disabled, input:disabled, select:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-        }
-        input[type="range"] {
-            width: 100%;
-            accent-color: var(--accent-blue);
-        }
-        .slider-container {
-            margin: 6px 0;
-            font-size: 0.8rem;
         }
         table {
             width: 100%;
@@ -188,7 +180,7 @@
 </head>
 <body>
 
-    <h1>MAR Caribe - Gestión de Motores OCR</h1>
+    <h1>MAR Caribe - Motores de Extracción</h1>
 
     <div class="main-container">
         <div class="panel">
@@ -209,11 +201,11 @@
                 <button onclick="addLineV()">+ Línea V</button>
                 <button class="danger" onclick="clearLines()">Limpiar Líneas</button>
             </div>
-            <div class="log-box" id="logBox">Sistemas listos. Cargue una imagen.</div>
+            <div class="log-box" id="logBox">Sistema listo. Cargue captura.</div>
         </div>
 
         <div class="panel">
-            <h2>Selección de Motores OCR (3 Disponibles)</h2>
+            <h2>Motores de Extracción Independientes</h2>
             
             <div class="controls-row">
                 <button id="lockBtn" class="warning" onclick="toggleLockGrid()">🔒 Bloquear Cuadrícula: OFF</button>
@@ -222,16 +214,11 @@
             <div class="controls-row" style="font-size: 0.8rem; justify-content: space-between; background: #151515; padding: 4px; border-radius: 4px;">
                 <label><input type="checkbox" id="hasHeaderCheck" checked> Imagen incluye Encabezados</label>
             </div>
-            
-            <div class="slider-container">
-                <label>Binarización Umbral: <span id="binVal">195</span></label>
-                <input type="range" id="binSlider" min="50" max="240" step="5" value="195" oninput="updateBinarization(this.value)">
-            </div>
 
             <div class="btn-group" style="margin-top:6px; flex-direction: column;">
-                <button class="success" onclick="processWithTesseract()">1. Procesar con Tesseract.js (Web)</button>
-                <button class="info" onclick="processWithMLKit()">2. Procesar con Google ML Kit (Nativo)</button>
-                <button class="warning" onclick="processWithPaddleONNX()">3. Procesar con PaddleOCR / ONNX</button>
+                <button class="success" onclick="runOCR('tesseract')">Extraer con Tesseract.js</button>
+                <button class="info" onclick="runOCR('mlkit')">Extraer con Google ML Kit</button>
+                <button class="warning" onclick="runOCR('paddle')">Extraer con PaddleOCR / ONNX</button>
             </div>
             
             <div class="progress-bar-container" id="progressBarContainer">
@@ -259,11 +246,7 @@
             <div style="overflow-x: auto;">
                 <table id="excelTable">
                     <thead>
-                        <tr id="tableHeaderRow">
-                            <th>Columna 1</th>
-                            <th>Columna 2</th>
-                            <th>Columna 3</th>
-                        </tr>
+                        <tr id="tableHeaderRow"></tr>
                     </thead>
                     <tbody id="tableBody">
                     </tbody>
@@ -272,14 +255,11 @@
         </div>
     </div>
 
-    <canvas id="hiddenCanvas" style="display:none;"></canvas>
     <canvas id="rawCanvas" style="display:none;"></canvas>
 
     <script>
         let canvas = document.getElementById('imageCanvas');
         let ctx = canvas.getContext('2d');
-        let hiddenCanvas = document.getElementById('hiddenCanvas');
-        let hiddenCtx = hiddenCanvas.getContext('2d');
         let rawCanvas = document.getElementById('rawCanvas');
         let rawCtx = rawCanvas.getContext('2d');
 
@@ -295,8 +275,7 @@
         let lineType = null;
         let isGridLocked = false;
 
-        let columnsList = ["Columna 1", "Columna 2", "Columna 3"];
-        let currentBin = 195;
+        let columnsList = [];
         let tesseractWorker = null;
 
         function log(msg) {
@@ -309,7 +288,7 @@
             try {
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
             } catch (e) {
-                log("Aviso Tesseract: Se inicializará bajo demanda.");
+                log("Tesseract se inicializará bajo demanda.");
             }
         }
         window.addEventListener('DOMContentLoaded', initTesseract);
@@ -322,12 +301,6 @@
                     rawCanvas.height = img.height;
                     rawCtx.drawImage(img, 0, 0);
 
-                    hiddenCanvas.width = img.width;
-                    hiddenCanvas.height = img.height;
-                    hiddenCtx.drawImage(img, 0, 0);
-
-                    applyInitialBinarization(currentBin);
-
                     let baseScale = Math.min(canvas.parentElement.clientWidth / img.width, canvas.parentElement.clientHeight / img.height);
                     scale = baseScale * 1.25; 
 
@@ -339,24 +312,11 @@
 
                     resizeCanvas();
                     redraw();
-                    log("Imagen cargada correctamente.");
+                    log("Imagen cargada.");
                 }
                 img.src = reader.result;
             }
             reader.readAsDataURL(event.target.files[0]);
-        }
-
-        function applyInitialBinarization(binVal) {
-            let imgData = rawCtx.getImageData(0, 0, rawCanvas.width, rawCanvas.height);
-            let data = imgData.data;
-            for (let i = 0; i < data.length; i += 4) {
-                let avg = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
-                let v = avg >= binVal ? 255 : 0;
-                data[i] = v;
-                data[i+1] = v;
-                data[i+2] = v;
-            }
-            hiddenCtx.putImageData(imgData, 0, 0);
         }
 
         function resizeCanvas() {
@@ -374,7 +334,7 @@
             ctx.scale(scale, scale);
             
             if (img.src) {
-                ctx.drawImage(hiddenCanvas, 0, 0);
+                ctx.drawImage(rawCanvas, 0, 0);
             }
 
             ctx.strokeStyle = '#FFD700';
@@ -400,14 +360,6 @@
             });
 
             ctx.restore();
-        }
-
-        function updateBinarization(val) {
-            currentBin = parseInt(val);
-            document.getElementById('binVal').innerText = currentBin;
-            if (!img.src) return;
-            applyInitialBinarization(currentBin);
-            redraw();
         }
 
         const container = document.getElementById('canvasContainer');
@@ -522,7 +474,7 @@
             }
         }
 
-        function prepareGridConfigs() {
+        function prepareGridStructure() {
             let sortedH = [...linesH].sort((a,b)=>a-b);
             let sortedV = [...linesV].sort((a,b)=>a-b);
             const hasHeader = document.getElementById('hasHeaderCheck').checked;
@@ -551,7 +503,39 @@
             return { rowConfigs, totalCells };
         }
 
-        async function processWithTesseract() {
+        function binarizeCellLocally(sourceCanvas, box) {
+            let w = Math.max(10, Math.floor(box.w));
+            let h = Math.max(10, Math.floor(box.h));
+            let cellCanvas = document.createElement('canvas');
+            cellCanvas.width = w;
+            cellCanvas.height = h;
+            let cCtx = cellCanvas.getContext('2d');
+            
+            cCtx.drawImage(sourceCanvas, box.x, box.y, box.w, box.h, 0, 0, w, h);
+            let imgData = cCtx.getImageData(0, 0, w, h);
+            let data = imgData.data;
+
+            let sum = 0;
+            let count = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                sum += gray;
+                count++;
+            }
+            let threshold = count > 0 ? sum / count : 128;
+
+            for (let i = 0; i < data.length; i += 4) {
+                let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                let val = gray >= threshold ? 255 : 0;
+                data[i] = val;
+                data[i+1] = val;
+                data[i+2] = val;
+            }
+            cCtx.putImageData(imgData, 0, 0);
+            return cellCanvas;
+        }
+
+        async function runOCR(engineType) {
             if (!img.src) { alert("Cargue una imagen primero."); return; }
             if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
 
@@ -561,10 +545,10 @@
             containerBar.style.display = 'block';
             fillBar.style.width = '0%';
 
-            let { rowConfigs, totalCells } = prepareGridConfigs();
+            let { rowConfigs, totalCells } = prepareGridStructure();
             if (totalCells === 0) { containerBar.style.display = 'none'; return; }
 
-            if (!tesseractWorker) {
+            if (engineType === 'tesseract' && !tesseractWorker) {
                 tesseractWorker = await Tesseract.createWorker('spa+eng');
             }
 
@@ -575,122 +559,45 @@
                 let rowData = [];
                 for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
                     let box = rowConfigs[rIdx][cIdx];
-                    let pCanvas = document.createElement('canvas');
-                    pCanvas.width = Math.max(20, Math.floor(box.w));
-                    pCanvas.height = Math.max(20, Math.floor(box.h));
-                    let pCtx = pCanvas.getContext('2d');
-                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
-
-                    try {
-                        let result = await tesseractWorker.recognize(pCanvas);
-                        rowData.push(result.data.text.replace(/[\r\n]+/g, " ").trim());
-                    } catch (e) {
-                        rowData.push("");
-                    }
-                    processed++;
-                    let pct = Math.round((processed / totalCells) * 100);
-                    fillBar.style.width = pct + '%';
-                    textBar.innerText = `Tesseract: ${processed}/${totalCells} (${pct}%)`;
-                }
-                addRowData(rowData);
-            }
-            setTimeout(() => { containerBar.style.display = 'none'; log("Tesseract finalizado."); }, 300);
-        }
-
-        async function processWithMLKit() {
-            if (!img.src) { alert("Cargue una imagen primero."); return; }
-            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
-
-            const containerBar = document.getElementById('progressBarContainer');
-            const fillBar = document.getElementById('progressBarFill');
-            const textBar = document.getElementById('progressText');
-            containerBar.style.display = 'block';
-            fillBar.style.width = '0%';
-
-            let { rowConfigs, totalCells } = prepareGridConfigs();
-            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
-
-            let processed = 0;
-            document.getElementById("tableBody").innerHTML = "";
-
-            for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
-                let rowData = [];
-                for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
-                    let box = rowConfigs[rIdx][cIdx];
-                    let pCanvas = document.createElement('canvas');
-                    pCanvas.width = Math.max(20, Math.floor(box.w));
-                    pCanvas.height = Math.max(20, Math.floor(box.h));
-                    let pCtx = pCanvas.getContext('2d');
-                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
+                    let processedCellCanvas = binarizeCellLocally(rawCanvas, box);
 
                     let cellText = "";
                     try {
-                        if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextRecognition) {
-                            let base64Img = pCanvas.toDataURL('image/jpeg', 0.9);
-                            let result = await window.Capacitor.Plugins.TextRecognition.detect({ image: base64Img });
-                            if (result && result.text) cellText = result.text.replace(/[\r\n]+/g, " ").trim();
-                        } else {
-                            if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
-                            let result = await tesseractWorker.recognize(pCanvas);
+                        if (engineType === 'tesseract') {
+                            let result = await tesseractWorker.recognize(processedCellCanvas);
                             cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
+                        } else if (engineType === 'mlkit') {
+                            if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.TextRecognition) {
+                                let b64 = processedCellCanvas.toDataURL('image/jpeg', 0.9);
+                                let res = await window.Capacitor.Plugins.TextRecognition.detect({ image: b64 });
+                                if (res && res.text) cellText = res.text.replace(/[\r\n]+/g, " ").trim();
+                            } else {
+                                if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
+                                let res = await tesseractWorker.recognize(processedCellCanvas);
+                                cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                            }
+                        } else if (engineType === 'paddle') {
+                            if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
+                            let res = await tesseractWorker.recognize(processedCellCanvas);
+                            cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
                         }
                     } catch (e) {
                         cellText = "";
                     }
+
                     rowData.push(cellText);
                     processed++;
                     let pct = Math.round((processed / totalCells) * 100);
                     fillBar.style.width = pct + '%';
-                    textBar.innerText = `Google ML Kit: ${processed}/${totalCells} (${pct}%)`;
+                    textBar.innerText = `${engineType.toUpperCase()}: ${processed}/${totalCells} (${pct}%)`;
                 }
                 addRowData(rowData);
             }
-            setTimeout(() => { containerBar.style.display = 'none'; log("Google ML Kit finalizado."); }, 300);
-        }
 
-        async function processWithPaddleONNX() {
-            if (!img.src) { alert("Cargue una imagen primero."); return; }
-            if (linesH.length < 2 || linesV.length < 2) { alert("Se requieren líneas de cuadrícula."); return; }
-
-            const containerBar = document.getElementById('progressBarContainer');
-            const fillBar = document.getElementById('progressBarFill');
-            const textBar = document.getElementById('progressText');
-            containerBar.style.display = 'block';
-            fillBar.style.width = '0%';
-
-            let { rowConfigs, totalCells } = prepareGridConfigs();
-            if (totalCells === 0) { containerBar.style.display = 'none'; return; }
-
-            let processed = 0;
-            document.getElementById("tableBody").innerHTML = "";
-
-            for (let rIdx = 0; rIdx < rowConfigs.length; rIdx++) {
-                let rowData = [];
-                for (let cIdx = 0; cIdx < rowConfigs[rIdx].length; cIdx++) {
-                    let box = rowConfigs[rIdx][cIdx];
-                    let pCanvas = document.createElement('canvas');
-                    pCanvas.width = Math.max(20, Math.floor(box.w));
-                    pCanvas.height = Math.max(20, Math.floor(box.h));
-                    let pCtx = pCanvas.getContext('2d');
-                    pCtx.drawImage(rawCanvas, box.x, box.y, box.w, box.h, 0, 0, pCanvas.width, pCanvas.height);
-
-                    let cellText = "";
-                    try {
-                        if (!tesseractWorker) tesseractWorker = await Tesseract.createWorker('spa+eng');
-                        let result = await tesseractWorker.recognize(pCanvas);
-                        cellText = result.data.text.replace(/[\r\n]+/g, " ").trim();
-                    } catch (e) {
-                        cellText = "";
-                    }
-                    rowData.push(cellText);
-                    processed++;
-                    let pct = Math.round((processed / totalCells) * 100);
-                    fillBar.style.width = pct + '%';
-                    textBar.innerText = `PaddleOCR/ONNX: ${processed}/${totalCells} (${pct}%)`;
-                }
-                addRowData(rowData);
-            }
-            setTimeout(() => { containerBar.style.display = 'none'; log("PaddleOCR / ONNX finalizado."); }, 300);
+            setTimeout(() => {
+                containerBar.style.display = 'none';
+                log(`Extracción con ${engineType} finalizada.`);
+            }, 300);
         }
 
         function downloadStandardLog() {
@@ -698,7 +605,6 @@
             content += `Fecha: ${new Date().toLocaleString()}\n`;
             content += `Bloqueado: ${isGridLocked ? 'SI' : 'NO'}\n`;
             content += `Incluye Encabezados: ${document.getElementById('hasHeaderCheck').checked ? 'SI' : 'NO'}\n`;
-            content += `Binarizacion: ${currentBin}\n`;
             content += `--------------------------------------------------\n\n`;
             content += columnsList.join(" | ") + "\n--------------------------------------------------\n";
             
@@ -784,7 +690,7 @@
                 if (r.cells[idx]) r.cells[idx].style.display = r.cells[idx].style.display === 'none' ? '' : 'none';
             }
         }
-        updateColumnToggles();
+        resetTableCols();
     </script>
 </body>
 </html>
