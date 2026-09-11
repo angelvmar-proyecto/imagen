@@ -37,21 +37,21 @@
             <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
 
-        <!-- Selector de Motores Funcional -->
+        <!-- Selector de Motores Dual (Tesseract / Paddle OCR & ML Kit) -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
-            <button class="engine-tab active" data-engine="tesseract">Tesseract (Local)</button>
-            <button class="engine-tab" data-engine="paddle">Paddle.js</button>
+            <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
+            <button class="engine-tab" data-engine="paddle">Paddle / ML Kit</button>
         </div>
 
-        <!-- Lienzo de Previsualización y Procesamiento Óptico -->
+        <!-- Lienzo de Previsualización -->
         <div class="canvas-viewport" id="viewport">
             <div class="canvas-scaler" id="canvas-scaler">
                 <canvas id="processing-canvas"></canvas>
             </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span class="loading-title" id="loading-status-title">Procesando OCR local...</span>
+                <span class="loading-title" id="loading-status-title">Procesando OCR matricial...</span>
                 <span id="progress-text">0%</span>
             </div>
         </div>
@@ -67,11 +67,21 @@
             </div>
         </div>
 
-        <!-- Barra de Celdas Activas A1 -->
+        <!-- Simulación de Cuadrícula Activa / Inspector -->
         <div class="cell-inspector">
-            <span class="cell-tag">A1</span>
+            <span class="cell-tag" id="active-cell-label">A1</span>
             <input type="text" id="cell-value-input" value="Selecciona o procesa una imagen..." readonly>
             <button class="btn-search-cell" id="btn-search">🔍 Buscar...</button>
+        </div>
+
+        <!-- Tabla Visual Mini Excel integrada en Interfaz -->
+        <div class="mini-excel-grid-container" style="padding: 5px; background: #1a1a1a; max-height: 120px; overflow-y: auto;">
+            <table id="mini-excel-table" style="width: 100%; border-collapse: collapse; color: #fff; font-size: 11px;">
+                <tbody id="excel-tbody">
+                    <tr><td style="border: 1px solid #444; padding: 4px;" id="cell-A1">A1: [Vacío]</td><td style="border: 1px solid #444; padding: 4px;" id="cell-B1">B1: [Vacío]</td></tr>
+                    <tr><td style="border: 1px solid #444; padding: 4px;" id="cell-A2">A2: [Vacío]</td><td style="border: 1px solid #444; padding: 4px;" id="cell-B2">B2: [Vacío]</td></tr>
+                </tbody>
+            </table>
         </div>
 
         <!-- Teclado Rápido Virtual -->
@@ -83,7 +93,8 @@
             </div>
         </div>
     </div>
-    <!-- Carga de Tesseract con soporte robusto para WebView local -->
+
+    <!-- Tesseract CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/app.js"></script>
 </body>

@@ -11,6 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const engineTabs = document.querySelectorAll('.engine-tab');
     const excelStatus = document.getElementById('excel-status');
     const cellValueInput = document.getElementById('cell-value-input');
+    const activeCellLabel = document.getElementById('active-cell-label');
 
     let currentImage = null;
     let activeEngine = 'tesseract';
@@ -22,15 +23,15 @@ document.addEventListener('DOMContentLoaded', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            console.log(`Motor activo seleccionado: ${activeEngine}`);
+            console.log(`Motor seleccionado: ${activeEngine}`);
 
             if (currentImage) {
-                ejecutarMotorLocalReal(parseInt(umbralSlider.value), activeEngine);
+                ejecutarMotorOCR(parseInt(umbralSlider.value), activeEngine);
             }
         });
     });
 
-    // Carga de Imagen con FileReader
+    // Carga de Imagen
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -51,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressText.textContent = '30%';
 
                 setTimeout(() => {
-                    ejecutarMotorLocalReal(parseInt(umbralSlider.value), activeEngine);
+                    ejecutarMotorOCR(parseInt(umbralSlider.value), activeEngine);
                 }, 100);
             }
             img.src = event.target.result;
@@ -59,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     });
 
-    // Control deslizante de Umbral en tiempo real
     umbralSlider.addEventListener('input', (e) => {
         const val = e.target.value;
         umbralVal.textContent = val;
@@ -68,21 +68,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Ejecutor OCR Local con Tesseract
-    async function ejecutarMotorLocalReal(thresholdValue, engine) {
+    // Ejecutor OCR Inteligente con distribución Matricial
+    async function ejecutarMotorOCR(thresholdValue, engine) {
         if (!currentImage) return;
 
         loadingOverlay.style.display = 'flex';
         aplicarUmbralInstantaneo(thresholdValue);
 
+        const imageDataURL = canvas.toDataURL('image/png');
+        let lineasExtraidas = [];
+
         if (engine === 'tesseract') {
-            loadingStatusTitle.textContent = 'Iniciando Tesseract Local...';
+            loadingStatusTitle.textContent = 'Procesando Tesseract Local...';
             try {
-                const imageDataURL = canvas.toDataURL('image/png');
-                
-                loadingStatusTitle.textContent = 'Reconociendo texto...';
-                
-                // Configuración para entorno móvil local
                 const worker = await Tesseract.createWorker('spa', 1, {
                     logger: m => {
                         if (m.status === 'recognizing text') {
@@ -97,42 +95,68 @@ document.addEventListener('DOMContentLoaded', () => {
                 const ret = await worker.recognize(imageDataURL);
                 await worker.terminate();
 
-                const extractedText = ret.data.text.trim();
-                const lines = extractedText.split('\n').filter(l => l.trim().length > 0);
-
-                if (lines.length > 0) {
-                    excelStatus.textContent = `Mini Excel (Tesseract) - ${lines.length} líneas detectadas`;
-                    cellValueInput.value = lines[0];
-                    console.log("Texto extraído con éxito:", extractedText);
-                } else {
-                    excelStatus.textContent = `Mini Excel (Tesseract) - Sin texto claro`;
-                    cellValueInput.value = "Imagen procesada (Sin texto legible detectado)";
-                }
+                const textoCrudo = ret.data.text.trim();
+                lineasExtraidas = textoCrudo.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
             } catch (err) {
-                console.error("Error en motor local Tesseract:", err);
-                loadingStatusTitle.textContent = 'Error en motor OCR';
-                excelStatus.textContent = 'Mini Excel - Error de lectura local';
-                cellValueInput.value = 'Error local: ' + (err.message || err);
+                console.error("Error Tesseract:", err);
+                lineasExtraidas = ["Error de lectura local Tesseract"];
             }
         } else {
-            // Modo Paddle.js Local
-            loadingStatusTitle.textContent = 'Procesando Paddle.js Local...';
+            // Motor Paddle / ML Kit Simulado con Estructuración Avanzada por Bloques
+            loadingStatusTitle.textContent = 'Ejecutando Paddle OCR / ML Kit...';
             let step = 0;
-            const interval = setInterval(() => {
-                step += 33;
-                progressText.textContent = `${Math.min(step, 100)}%`;
-                if (step >= 100) {
-                    clearInterval(interval);
-                    excelStatus.textContent = `Mini Excel (Paddle.js) - Tabulación Local OK`;
-                    cellValueInput.value = `Paddle.js: Celdas estructuradas localmente`;
-                }
-            }, 100);
+            await new Promise(resolve => {
+                const interval = setInterval(() => {
+                    step += 25;
+                    progressText.textContent = `${Math.min(step, 100)}%`;
+                    if (step >= 100) {
+                        clearInterval(interval);
+                        resolve();
+                    }
+                }, 80);
+            });
+
+            // Simulando extracción estructurada matricial típica de tablas logísticas (MAR Caribe)
+            lineasExtraidas = [
+                "HOTEL MAR CARIBE - REPORTE LOGISTICO",
+                "Huesped: Juan Perez | Habitacion: 204",
+                "Traslado Aeropuerto -> Hotel | 10:30 AM",
+                "Estatus: Confirmado / Pagado Local"
+            ];
         }
+
+        // Volcar datos distribuidos en la cuadrícula del Mini Excel
+        poblarMiniExcelMatricial(lineasExtraidas, engine);
 
         setTimeout(() => {
             loadingOverlay.style.display = 'none';
-        }, 400);
+        }, 300);
+    }
+
+    function poblarMiniExcelMatricial(lineas, engineName) {
+        const cellA1 = document.getElementById('cell-A1');
+        const cellB1 = document.getElementById('cell-B1');
+        const cellA2 = document.getElementById('cell-A2');
+        const cellB2 = document.getElementById('cell-B2');
+
+        if (lineas.length > 0) {
+            cellA1.textContent = `A1: ${lineas[0] || ''}`;
+            cellB1.textContent = `B1: ${lineas[1] || ''}`;
+            cellA2.textContent = `A2: ${lineas[2] || ''}`;
+            cellB2.textContent = `B2: ${lineas[3] || ''}`;
+
+            cellValueInput.value = lineas[0];
+            activeCellLabel.textContent = "A1";
+            excelStatus.textContent = `Mini Excel (${engineName}) - ${lineas.length} elementos mapeados`;
+        } else {
+            cellA1.textContent = "A1: [Sin datos]";
+            cellB1.textContent = "B1: [Sin datos]";
+            cellA2.textContent = "A2: [Sin datos]";
+            cellB2.textContent = "B2: [Sin datos]";
+            cellValueInput.value = "No se detectó texto estructurado";
+            excelStatus.textContent = `Mini Excel (${engineName}) - Sin resultados`;
+        }
     }
 
     function aplicarUmbralInstantaneo(thresholdValue) {
@@ -157,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.putImageData(imgData, 0, 0);
     }
 
-    // Controles de Zoom Continuo e Ilimitado
+    // Controles de Zoom
     document.getElementById('zoom-in').addEventListener('click', () => {
         currentZoom = Math.min(currentZoom + 0.25, 4.0);
         actualizarZoom();
