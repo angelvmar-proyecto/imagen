@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0);
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Aplicar pipeline avanzado simulando fotogrametría y filtrado de onda
+                // Aplicar pipeline avanzado de ultrasonido (TGC) y fotogrametría
                 applyAdvancedOpticalPipeline(parseInt(umbralSlider.value));
                 loadingOverlay.style.display = 'none';
             }
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     });
 
-    // Control del umbral dinámico (LiDAR / Gradiente adaptativo)
+    // Control del umbral dinámico
     umbralSlider.addEventListener('input', (e) => {
         const val = e.target.value;
         umbralVal.textContent = val;
@@ -54,32 +54,67 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Pipeline Matemático de Visión Artificial para Tablas de Excel
+    // Pipeline Matemático Avanzado: Inspirado en Ultrasonido (TGC) y LiDAR
     function applyAdvancedOpticalPipeline(thresholdValue) {
         if (!currentImage) return;
 
-        const imgData = ctx.createImageData(currentImage.width, currentImage.height);
+        const width = currentImage.width;
+        const height = currentImage.height;
+        const imgData = ctx.createImageData(width, height);
         const src = currentImage.data;
         const dst = imgData.data;
         
-        const threshold = (thresholdValue / 100) * 255;
+        const baseThreshold = (thresholdValue / 100) * 255;
 
-        // Simulación de Filtro de Onda espacial y Normalización de Iluminación Local
-        for (let i = 0; i < src.length; i += 4) {
-            const r = src[i];
-            const g = src[i+1];
-            const b = src[i+2];
+        // Paso 1: Compensación de Ganancia por Zonas (TGC - Time Gain Compensation)
+        // Dividimos la imagen en franjas horizontales para corregir sombras de luz de celular
+        const zones = 8; 
+        const zoneHeight = height / zones;
+        const zoneAverages = new Float32Array(zones);
 
-            // Escala de grises ponderada de alta precisión para documentos
-            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        // Calcular brillo promedio por zona vertical
+        for (let y = 0; y < height; y++) {
+            const z = Math.floor(y / zoneHeight);
+            for (let x = 0; x < width; x++) {
+                const i = (y * width + x) * 4;
+                const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+                zoneAverages[z] += gray;
+            }
+        }
+        
+        const pixelsPerZone = zoneHeight * width;
+        let globalSum = 0;
+        for(let z = 0; z < zones; z++) {
+            zoneAverages[z] /= pixelsPerZone;
+            globalSum += zoneAverages[z];
+        }
+        const globalAverage = globalSum / zones;
 
-            // Umbralización adaptativa tipo LiDAR (elimina reflejos y sombras de WhatsApp)
-            const processed = gray >= threshold ? 255 : 0;
+        // Paso 2: Aplicar transformación de píxeles con compensación de ganancia y umbral adaptativo
+        for (let y = 0; y < height; y++) {
+            const z = Math.floor(y / zoneHeight);
+            // Factor de ganancia para nivelar zonas oscuras o con sombra
+            const gainFactor = zoneAverages[z] > 0 ? (globalAverage / zoneAverages[z]) : 1.0;
 
-            dst[i]     = processed;
-            dst[i+1]   = processed;
-            dst[i+2]   = processed;
-            dst[i+3]   = src[i+3];
+            for (let x = 0; x < width; x++) {
+                const i = (y * width + x) * 4;
+                
+                const r = src[i];
+                const g = src[i+1];
+                const b = src[i+2];
+
+                // Escala de grises con ganancia aplicada por zona (Efecto Ultrasonido Doppler)
+                let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                gray = Math.min(255, Math.max(0, gray * gainFactor));
+
+                // Umbralización final limpia para destacar celdas y texto de Excel
+                const processed = gray >= baseThreshold ? 255 : 0;
+
+                dst[i]     = processed;
+                dst[i+1]   = processed;
+                dst[i+2]   = processed;
+                dst[i+3]   = src[i+3]; // Mantener transparencia original
+            }
         }
 
         ctx.putImageData(imgData, 0, 0);
