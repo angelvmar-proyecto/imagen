@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let modoDibujoLinea = null;
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
-    let isProcessingOCR = false; // Bandera para evitar llamadas concurrentes que bloqueen el hilo
+    let isProcessingOCR = false;
 
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
@@ -52,24 +52,26 @@ document.addEventListener('DOMContentLoaded', () => {
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
-                registrarLog(`Intento de cambio de motor bloqueado: Hay un proceso OCR activo.`);
+                registrarLog(`Cambio de motor bloqueado: Proceso OCR en curso.`);
                 return;
             }
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Conmutando a motor: ${activeEngine.toUpperCase()}`);
+            registrarLog(`Motor seleccionado: ${activeEngine.toUpperCase()}`);
+            excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}`;
             if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
         });
     });
 
+    // Carga de imagen SIN auto-ejecutar Tesseract para dar libertad de elegir motor
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
         
         loadingOverlay.style.display = 'flex';
-        loadingStatusTitle.textContent = 'Cargando imagen base...';
-        progressText.textContent = '10%';
+        loadingStatusTitle.textContent = 'Cargando imagen...';
+        progressText.textContent = '100%';
         registrarLog(`Carga de imagen: ${file.name} (${file.size} bytes)`);
 
         const reader = new FileReader();
@@ -80,11 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
-                progressText.textContent = '30%';
-                
-                // Esperar un momento prudente para liberar la pila de ejecución antes del primer OCR
-                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine), 250);
+                registrarLog(`Imagen lista en canvas: ${img.width}x${img.height}px`);
+                setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
+                excelStatus.textContent = "Imagen cargada. Elige motor o dibuja líneas.";
             }
             img.src = event.target.result;
         }
@@ -97,25 +97,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentImage) aplicarUmbralInstantaneo(parseInt(val));
     });
 
-    btnH.addEventListener('click', () => { modoDibujoLinea = 'H'; excelStatus.textContent = "Toca el lienzo para línea horizontal negra"; });
-    btnV.addEventListener('click', () => { modoDibujoLinea = 'V'; excelStatus.textContent = "Toca el lienzo para línea vertical negra"; });
+    btnH.addEventListener('click', () => { 
+        modoDibujoLinea = 'H'; 
+        excelStatus.textContent = "Toca la zona visible para trazar línea horizontal"; 
+    });
+    btnV.addEventListener('click', () => { 
+        modoDibujoLinea = 'V'; 
+        excelStatus.textContent = "Toca la zona visible para trazar línea vertical"; 
+    });
 
+    // Mapeo preciso de coordenadas de clic en pantalla visible bajo zoom y scroll
     canvas.addEventListener('click', (e) => {
         if (!currentImage || !modoDibujoLinea || isProcessingOCR) return;
         const rect = canvas.getBoundingClientRect();
-        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
 
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
         ctx.beginPath();
-        if (modoDibujoLinea === 'H') { ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); }
-        else { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
+        if (modoDibujoLinea === 'H') { 
+            ctx.moveTo(0, y); 
+            ctx.lineTo(canvas.width, y); 
+        } else { 
+            ctx.moveTo(x, 0); 
+            ctx.lineTo(x, canvas.height); 
+        }
         ctx.stroke();
 
-        registrarLog(`Línea manual aplicada [${modoDibujoLinea}] en X:${Math.round(x)}, Y:${Math.round(y)}`);
+        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en X:${Math.round(x)}, Y:${Math.round(y)}`);
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const tipoLinea = modoDibujoLinea;
         modoDibujoLinea = null;
+        
+        excelStatus.textContent = `Línea ${tipoLinea} aplicada. Procesando con ${activeEngine}...`;
         ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
     });
 
@@ -131,21 +148,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
-            registrarLog(`Iniciando pipeline OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
+            registrarLog(`Iniciando OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
 
-            // Barra de progreso fluida e independiente del motor seleccionado
             let progresoSimulado = 5;
             const intervaloProgreso = setInterval(() => {
                 if (progresoSimulado < 90) {
                     progresoSimulado += 10;
                     progressText.textContent = `${progresoSimulado}%`;
                 }
-            }, 180);
+            }, 200);
 
-            // Configuraciones de segmentación ajustadas por motor para evitar bloqueos
-            let psmConfig = 3;
-            if (engine === 'paddle') psmConfig = 6;
-            else if (engine === 'mlkit') psmConfig = 11;
+            let psmConfig = engine === 'paddle' ? 6 : (engine === 'mlkit' ? 11 : 3);
 
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => {
@@ -164,12 +177,12 @@ document.addEventListener('DOMContentLoaded', () => {
             progressText.textContent = '100%';
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`[${engine.toUpperCase()}] OCR Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas: ${simbolosDetectados.length}`);
 
         } catch (err) {
-            registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
+            registrarLog(`ERROR en motor ${engine}: ${err.message}`);
         } finally {
-            isProcessingOCR = false; // Liberamos el bloqueo de control obligatoriamente
+            isProcessingOCR = false;
         }
 
         procesarMatrizYConstruirExcel(simbolosDetectados, engine);
@@ -225,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bufferCelda) celdasLimpias.push(bufferCelda.trim());
             if (celdasLimpias.length === 0) celdasLimpias = filaArr;
 
-            csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
+5           csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
 
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
@@ -236,8 +249,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`Estructura generada (${engineName}): ${filasAgrupadas.length} filas procesadas.`);
-        excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas mapeadas`;
+        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas.`);
+        excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas`;
         
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
@@ -287,7 +300,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ultimoCsvGenerado = "";
             cellValueInput.value = "";
             excelStatus.textContent = "Estado: Vacío";
-            registrarLog("Limpieza de canvas y registros ejecutada.");
+            registrarLog("Limpieza ejecutada.");
             alert("¡Datos vaciados correctamente!");
         });
     }
