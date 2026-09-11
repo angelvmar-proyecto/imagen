@@ -44,6 +44,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentZoom = 1.0;
     let modoDibujoLinea = null; // 'H' o 'V'
     let isBloqueado = false;   
+    let manualLines = []; // Almacena las líneas manuales [{type: 'H'|'V', pos: number}]
+    let selectedLineIndex = null; // Para arrastrar/mover líneas existentes
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
     let isProcessingOCR = false;
@@ -51,27 +53,75 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
-    // Desplazamiento panorámico (Panning) fluido con mouse y táctil
+    // Panning fluido y arrastre de líneas
     viewport.addEventListener('mousedown', (e) => {
-        if (currentZoom <= 1.0 || modoDibujoLinea || isBloqueado) return; 
-        isPanning = true;
-        viewport.style.cursor = 'grabbing';
-        startX = e.pageX - viewport.offsetLeft;
-        startY = e.pageY - viewport.offsetTop;
-        scrollLeft = viewport.scrollLeft;
-        scrollTop = viewport.scrollTop;
+        if (isBloqueado) return;
+        
+        // Si hay una línea seleccionada o estamos en modo dibujo, manejamos posición
+        if (modoDibujoLinea) {
+            manejarAccionLinea(e.clientX, e.clientY, 'start');
+            return;
+        }
+
+        if (currentZoom > 1.0) {
+            isPanning = true;
+            viewport.style.cursor = 'grabbing';
+            startX = e.pageX - viewport.offsetLeft;
+            startY = e.pageY - viewport.offsetTop;
+            scrollLeft = viewport.scrollLeft;
+            scrollTop = viewport.scrollTop;
+        }
     });
 
-    viewport.addEventListener('mouseleave', () => { isPanning = false; viewport.style.cursor = 'grab'; });
-    viewport.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; });
+    viewport.addEventListener('mouseleave', () => { 
+        isPanning = false; 
+        selectedLineIndex = null;
+        viewport.style.cursor = 'grab'; 
+    });
+
+    viewport.addEventListener('mouseup', () => { 
+        isPanning = false; 
+        selectedLineIndex = null;
+        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; 
+    });
+
     viewport.addEventListener('mousemove', (e) => {
-        if (!isPanning || modoDibujoLinea || isBloqueado) return;
-        e.preventDefault();
-        viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
-        viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
+        if (isBloqueado) return;
+        
+        if (selectedLineIndex !== null) {
+            actualizarPosicionLinea(e.clientX, e.clientY);
+            return;
+        }
+
+        if (isPanning && currentZoom > 1.0) {
+            e.preventDefault();
+            viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
+            viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
+        }
     });
 
-    // Conmutación de motores OCR con visualizador de porcentaje
+    // Soporte táctil móvil para panning y arrastre de líneas
+    viewport.addEventListener('touchstart', (e) => {
+        if (isBloqueado || e.touches.length !== 1) return;
+        const touch = e.touches[0];
+        if (modoDibujoLinea) {
+            manejarAccionLinea(touch.clientX, touch.clientY, 'start');
+        }
+    }, { passive: true });
+
+    viewport.addEventListener('touchmove', (e) => {
+        if (isBloqueado || e.touches.length !== 1) return;
+        if (selectedLineIndex !== null) {
+            const touch = e.touches[0];
+            actualizarPosicionLinea(touch.clientX, touch.clientY);
+        }
+    }, { passive: true });
+
+    viewport.addEventListener('touchend', () => {
+        selectedLineIndex = null;
+    });
+
+    // Motores OCR con porcentaje
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
@@ -87,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Carga de imagen
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -108,14 +157,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 originalImageBackup = ctx.createImageData(canvas.width, canvas.height);
                 originalImageBackup.data.set(currentImage.data);
+                manualLines = [];
 
-                aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
+                rederizarCanvasConLineas(parseInt(umbralSlider.value));
                 isBloqueado = false;
                 if (btnBloquear) btnBloquear.style.background = '';
                 
                 registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Toca L.H. o L.V. para trazar, o desplázate libremente.";
+                excelStatus.textContent = "Imagen lista. Añade líneas finas, arrástralas, bloquea y procesa.";
             }
             img.src = event.target.result;
         }
@@ -125,23 +175,21 @@ document.addEventListener('DOMContentLoaded', () => {
     umbralSlider.addEventListener('input', (e) => {
         const val = e.target.value;
         umbralVal.textContent = val;
-        if (currentImage && !isBloqueado) aplicarUmbralInstantaneo(parseInt(val));
+        if (currentImage && !isBloqueado) rederizarCanvasConLineas(parseInt(val));
     });
 
     if (btnBloquear) {
-        const toggleBloqueo = () => {
+        btnBloquear.addEventListener('click', (e) => {
+            e.preventDefault();
             isBloqueado = !isBloqueado;
             modoDibujoLinea = null;
             if (btnH) btnH.style.background = '';
             if (btnV) btnV.style.background = '';
 
             btnBloquear.style.background = isBloqueado ? '#27ae60' : '';
-            const msg = isBloqueado ? "🔒 Bloqueado: Imagen fija. Selecciona tu motor OCR." : "🔓 Desbloqueado: Puedes mover o editar.";
+            const msg = isBloqueado ? "🔒 Bloqueado: Líneas fijas. Selecciona tu motor." : "🔓 Desbloqueado: Puedes mover o editar líneas.";
             excelStatus.textContent = msg;
             registrarLog(msg);
-        };
-        ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnBloquear.addEventListener(evt, (e) => { e.preventDefault(); toggleBloqueo(); });
         });
     }
 
@@ -151,7 +199,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         if (isBloqueado) {
-            alert("Desbloquea la imagen para poder agregar líneas.");
+            alert("El visor está bloqueado. Desbloquéalo primero.");
             return;
         }
         modoDibujoLinea = tipo;
@@ -159,9 +207,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnH) btnH.style.background = (tipo === 'H') ? '#f39c12' : '';
         if (btnV) btnV.style.background = (tipo === 'V') ? '#f39c12' : '';
 
-        const mensaje = (tipo === 'H') ? "▶ Toca el canvas para trazar Línea Horizontal" : "▶ Toca el canvas para trazar Línea Vertical";
+        const mensaje = (tipo === 'H') ? "▶ Toca o arrastra para crear/mover Línea Horizontal" : "▶ Toca o arrastra para crear/mover Línea Vertical";
         excelStatus.textContent = mensaje;
-        registrarLog(`Activado modo de línea ${tipo === 'H' ? 'horizontal' : 'vertical'} manual.`);
+        registrarLog(`Activado modo de línea ${tipo === 'H' ? 'horizontal' : 'vertical'}.`);
     }
 
     if (btnH) {
@@ -179,15 +227,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnResetL) {
         const ejecutarResetL = () => {
             if (!originalImageBackup) return;
-            ctx.putImageData(originalImageBackup, 0, 0);
-            currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
+            manualLines = [];
+            rederizarCanvasConLineas(parseInt(umbralSlider.value));
             modoDibujoLinea = null;
             isBloqueado = false;
             if (btnH) btnH.style.background = '';
             if (btnV) btnV.style.background = '';
             if (btnBloquear) btnBloquear.style.background = '';
-            excelStatus.textContent = "Líneas restablecidas a la original.";
+            excelStatus.textContent = "Líneas restablecidas.";
             registrarLog("Reset L ejecutado.");
         };
         ['click', 'touchstart', 'touchend'].forEach(evt => {
@@ -195,9 +242,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Trazado de línea único y liberación inmediata para permitir movimiento
-    const manejarTrazadoLinea = (clientX, clientY) => {
-        if (!currentImage || !modoDibujoLinea || isBloqueado) return;
+    // Lógica para crear y mover líneas con precisión (grosor fino de 1px o 2px)
+    function manejarAccionLinea(clientX, clientY, action) {
+        if (!currentImage || isBloqueado) return;
 
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -205,37 +252,81 @@ document.addEventListener('DOMContentLoaded', () => {
         const x = (clientX - rect.left) * scaleX;
         const y = (clientY - rect.top) * scaleY;
 
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = Math.max(3, Math.round(canvas.width / 350));
-        ctx.beginPath();
-        if (modoDibujoLinea === 'H') { 
-            ctx.moveTo(0, y); 
-            ctx.lineTo(canvas.width, y); 
-        } else { 
-            ctx.moveTo(x, 0); 
-            ctx.lineTo(x, canvas.height); 
+        if (action === 'start') {
+            // Verificar si tocamos cerca de una línea existente del mismo tipo para moverla
+            const tolerancia = 25 * scaleX;
+            let encontrada = -1;
+            
+            manualLines.forEach((l, idx) => {
+                if (l.type === modoDibujoLinea) {
+                    if (l.type === 'H' && Math.abs(l.pos - y) < tolerancia) encontrada = idx;
+                    if (l.type === 'V' && Math.abs(l.pos - x) < tolerancia) encontrada = idx;
+                }
+            });
+
+            if (encontrada !== -1) {
+                selectedLineIndex = encontrada;
+                registrarLog(`Seleccionada línea ${manualLines[encontrada].type} existente para reposicionar.`);
+            } else {
+                // Crear nueva línea
+                const nuevaPos = (modoDibujoLinea === 'H') ? y : x;
+                manualLines.push({ type: modoDibujoLinea, pos: nuevaPos });
+                selectedLineIndex = manualLines.length - 1;
+                registrarLog(`Nueva línea ${modoDibujoLinea} creada en posición ${Math.round(nuevaPos)}.`);
+            }
+            rederizarCanvasConLineas(parseInt(umbralSlider.value));
         }
-        ctx.stroke();
+    }
 
-        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
+    function actualizarPosicionLinea(clientX, clientY) {
+        if (selectedLineIndex === null || selectedLineIndex >= manualLines.length) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (clientX - rect.left) * scaleX;
+        const y = (clientY - rect.top) * scaleY;
+
+        const linea = manualLines[selectedLineIndex];
+        linea.pos = (linea.type === 'H') ? y : x;
+        rederizarCanvasConLineas(parseInt(umbralSlider.value));
+    }
+
+    function rederizarCanvasConLineas(thresholdValue) {
+        if (!originalImageBackup) return;
+        const width = originalImageBackup.width;
+        const height = originalImageBackup.height;
+        const imgData = ctx.createImageData(width, height);
+        const src = originalImageBackup.data;
+        const dst = imgData.data;
+        const baseThreshold = (thresholdValue / 100) * 255;
+
+        for (let i = 0; i < src.length; i += 4) {
+            const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+            const processed = gray >= baseThreshold ? 255 : 0;
+            dst[i] = dst[i+1] = dst[i+2] = processed;
+            dst[i+3] = src[i+3];
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        // Dibujar líneas manuales finas y precisas (grosor 1 a 2px según resolución)
+        const grosorFino = Math.max(1, Math.round(width / 800));
+        ctx.lineWidth = grosorFino;
+        ctx.strokeStyle = '#000000';
+
+        manualLines.forEach(l => {
+            ctx.beginPath();
+            if (l.type === 'H') {
+                ctx.moveTo(0, l.pos);
+                ctx.lineTo(width, l.pos);
+            } else {
+                ctx.moveTo(l.pos, 0);
+                ctx.lineTo(l.pos, height);
+            }
+            ctx.stroke();
+        });
+
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        
-        // Limpiamos el estado de dibujo para liberar el movimiento panorámico de inmediato
-        const tipoAnterior = modoDibujoLinea;
-        modoDibujoLinea = null;
-        if (btnH) btnH.style.background = '';
-        if (btnV) btnV.style.background = '';
-
-        excelStatus.textContent = `Línea ${tipoAnterior} trazada. Ya puedes moverte, hacer zoom o elegir motor.`;
-    };
-
-    canvas.addEventListener('click', (e) => { manejarTrazadoLinea(e.clientX, e.clientY); });
-    canvas.addEventListener('touchend', (e) => {
-        if (!modoDibujoLinea || isBloqueado) return;
-        e.preventDefault();
-        const touch = e.changedTouches[0];
-        if (touch) manejarTrazadoLinea(touch.clientX, touch.clientY);
-    });
+    }
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage || isProcessingOCR) return;
@@ -245,7 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         progressText.textContent = '0%';
         loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
         
-        aplicarUmbralInstantaneo(thresholdValue);
+        rederizarCanvasConLineas(thresholdValue);
         const imageDataURL = canvas.toDataURL('image/png');
         let simbolosDetectados = [];
 
@@ -292,6 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
+    // Separación real en celdas independientes (<td>) dentro del Mini Excel
     function procesarMatrizYConstruirExcel(lines, engineName) {
         let filasAgrupadas = [];
         let toleranciaY = 22; 
@@ -331,52 +423,42 @@ document.addEventListener('DOMContentLoaded', () => {
             let bufferCelda = "";
 
             filaArr.forEach(fragmento => {
-                if (fragmento.length < 15 && /^\d+[\s\)]*$/.test(fragmento)) {
-                    if (bufferCelda) { celdasLimpias.push(bufferCelda.trim()); bufferCelda = ""; }
-                    celdasLimpias.push(fragmento);
-                } else {
-                    bufferCelda += (bufferCelda ? " " : "") + fragmento;
-                }
+                // Separación por espacios múltiples, tabulaciones o fragmentos estructurados
+                const partes = fragmento.split(/\s{2,}|\t|\|/);
+                partes.forEach(p => {
+                    let limpio = p.trim();
+                    if (limpio) celdasLimpias.push(limpio);
+                });
             });
-            if (bufferCelda) celdasLimpias.push(bufferCelda.trim());
+
             if (celdasLimpias.length === 0) celdasLimpias = filaArr;
 
             csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
 
-            let td = document.createElement('td');
-            td.style.border = "1px solid #444";
-            td.style.padding = "6px";
-            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + celdasLimpias.map(c => `<span>[${c}]</span>`).join(' | ');
-            tr.appendChild(td);
+            // Construir columnas reales <td> para separación visual limpia en celdas
+            let tdIndex = document.createElement('td');
+            tdIndex.style.cssText = "border:1px solid #444;padding:6px;background:#1a1a1a;color:#f39c12;font-weight:bold;";
+            tdIndex.textContent = `R${rowIndex + 1}`;
+            tr.appendChild(tdIndex);
+
+            celdasLimpias.forEach(celdaTxt => {
+                let td = document.createElement('td');
+                td.style.cssText = "border:1px solid #444;padding:6px;color:#fff;white-space:nowrap;";
+                td.textContent = celdaTxt;
+                tr.appendChild(td);
+            });
+
             excelTbody.appendChild(tr);
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas.`);
+        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas con celdas separadas.`);
         excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas`;
         
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
             activeCellLabel.textContent = "A1";
         }
-    }
-
-    function aplicarUmbralInstantaneo(thresholdValue) {
-        if (!currentImage) return;
-        const width = currentImage.width;
-        const height = currentImage.height;
-        const imgData = ctx.createImageData(width, height);
-        const src = currentImage.data;
-        const dst = imgData.data;
-        const baseThreshold = (thresholdValue / 100) * 255;
-
-        for (let i = 0; i < src.length; i += 4) {
-            const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-            const processed = gray >= baseThreshold ? 255 : 0;
-            dst[i] = dst[i+1] = dst[i+2] = processed;
-            dst[i+3] = src[i+3];
-        }
-        ctx.putImageData(imgData, 0, 0);
     }
 
     function registrarLog(mensaje) {
@@ -396,18 +478,15 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
+    // Botón Vaciar SELECTIVO: Borra únicamente el texto obtenido, tabla y CSV, manteniendo la imagen intacta
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
-            currentImage = null;
-            originalImageBackup = null;
-            isBloqueado = false;
             excelTbody.innerHTML = '';
             ultimoCsvGenerado = "";
             cellValueInput.value = "";
-            excelStatus.textContent = "Estado: Vacío";
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            registrarLog("Limpieza general ejecutada.");
-            alert("¡Datos vaciados correctamente!");
+            excelStatus.textContent = "Estado: Texto vaciado (Imagen conservada)";
+            registrarLog("Limpieza selectiva ejecutada: Texto y tabla borrados, imagen intacta.");
+            alert("¡Resultados de texto vaciados! La imagen se mantiene cargada.");
         });
     }
 
