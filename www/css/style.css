@@ -160,19 +160,33 @@ body {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     color: #ffc107;
-    font-size: 0.9rem;
     z-index: 10;
 }
 
 .spinner {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border: 3px solid rgba(255, 193, 7, 0.2);
     border-top-color: #ffc107;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
+}
+
+.loading-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+#progress-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #fff;
+    background: rgba(255, 193, 7, 0.2);
+    padding: 4px 12px;
+    border-radius: 12px;
+    border: 1px solid #ffc107;
 }
 
 @keyframes spin {
