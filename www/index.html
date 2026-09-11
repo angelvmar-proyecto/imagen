@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MAR Caribe – Mini Excel Pro</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -46,17 +46,19 @@
 
         <!-- Lienzo de Previsualización y Procesamiento Óptico -->
         <div class="canvas-viewport" id="viewport">
-            <canvas id="processing-canvas"></canvas>
+            <div class="canvas-scaler" id="canvas-scaler">
+                <canvas id="processing-canvas"></canvas>
+            </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span class="loading-title">Procesando Fotogrametría (TGC)...</span>
+                <span class="loading-title">Procesando Fotogrametría...</span>
                 <span id="progress-text">0%</span>
             </div>
         </div>
 
         <!-- Mini Excel Inferior y Panel de Datos -->
         <div class="excel-footer-panel">
-            <div class="excel-status" id="excel-status">Mini Excel - 3 filas, 20 columnas</div>
+            <div class="excel-status" id="excel-status">Mini Excel - Esperando imagen...</div>
             <div class="excel-actions">
                 <button class="btn-table" id="btn-add-fila">➕ Fila</button>
                 <button class="btn-table" id="btn-add-col">➕ Col</button>
@@ -68,8 +70,8 @@
         <!-- Barra de Celdas Activas A1 -->
         <div class="cell-inspector">
             <span class="cell-tag">A1</span>
-            <input type="text" id="cell-value-input" value="Valor de celda unificado en un r..." readonly>
-            <button class="btn-search-cell">🔍 Buscar...</button>
+            <input type="text" id="cell-value-input" value="Selecciona o procesa una imagen..." readonly>
+            <button class="btn-search-cell" id="btn-search">🔍 Buscar...</button>
         </div>
 
         <!-- Teclado Rápido Virtual -->
