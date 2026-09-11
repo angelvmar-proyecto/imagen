@@ -48,13 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
     });
 
-    // Selector de motor con comportamiento independiente y específico
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Conmutando a motor especializado: ${activeEngine.toUpperCase()}`);
+            registrarLog(`Conmutando a motor: ${activeEngine.toUpperCase()}`);
             if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
         });
     });
@@ -106,55 +105,64 @@ document.addEventListener('DOMContentLoaded', () => {
         else { ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); }
         ctx.stroke();
 
-        registrarLog(`Línea manual aplicada [${modoDibujoLinea}] en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
+        registrarLog(`Línea manual aplicada [${modoDibujoLinea}] en X:${Math.round(x)}, Y:${Math.round(y)}`);
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         modoDibujoLinea = null;
         ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
     });
 
-    // Ejecución especializada por motor adaptada al entorno offline de Termux
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage) return;
         loadingOverlay.style.display = 'flex';
+        progressText.textContent = '0%';
         aplicarUmbralInstantaneo(thresholdValue);
         const imageDataURL = canvas.toDataURL('image/png');
         let simbolosDetectados = [];
 
         try {
-            loadingStatusTitle.textContent = `Procesando (${engine.toUpperCase()})...`;
+            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
             registrarLog(`Iniciando pipeline OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
 
-            // Configuraciones de PSM específicas para optimizar tablas y texto denso
-            let psmConfig = 3; // Por defecto Tesseract estándar
-            if (engine === 'paddle') {
-                psmConfig = 6; // Optimizado para bloques de texto uniforme y líneas tabulares
-            } else if (engine === 'mlkit') {
-                psmConfig = 11; // Optimizado para texto disperso, multilínea y celdas variadas
-            }
+            // Simulación de progreso inicial para motores alternativos si el worker es rápido
+            let progresoSimulado = 10;
+            const intervaloProgreso = setInterval(() => {
+                if (progresoSimulado < 85) {
+                    progresoSimulado += 15;
+                    progressText.textContent = `${progresoSimulado}%`;
+                }
+            }, 200);
+
+            let psmConfig = engine === 'paddle' ? 6 : (engine === 'mlkit' ? 11 : 3);
 
             const worker = await Tesseract.createWorker('spa', 1, {
-                logger: m => { if (m.status === 'recognizing text') progressText.textContent = `${Math.round(m.progress * 100)}%`; }
+                logger: m => {
+                    if (m.status === 'recognizing text' && m.progress) {
+                        clearInterval(intervaloProgreso);
+                        progressText.textContent = `${Math.round(m.progress * 100)}%`;
+                    }
+                }
             });
             await worker.setParameters({ tessedit_pageseg_mode: psmConfig });
             const ret = await worker.recognize(imageDataURL);
             await worker.terminate();
 
+            clearInterval(intervaloProgreso);
+            progressText.textContent = '100%';
+
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`[${engine.toUpperCase()}] OCR Finalizado. Líneas brutas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] OCR Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
             registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
         }
 
         procesarMatrizYConstruirExcel(simbolosDetectados, engine);
-        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
+        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 350);
     }
 
-    // Procesamiento matricial refinado para separar columnas de forma limpia
     function procesarMatrizYConstruirExcel(lines, engineName) {
         let filasAgrupadas = [];
-        let toleranciaY = engineName === 'mlkit' ? 22 : 16; // Ajuste fino de banda según el motor
-
+        let toleranciaY = 22; 
         let lineasOrdenadas = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0);
 
         let filaActual = [];
@@ -166,33 +174,47 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!textoLimpio) return;
 
             if (ultimoY === -1 || Math.abs(yCentro - ultimoY) <= toleranciaY) {
-                filaActual.push(textoLimpio);
-                ultimoY = yCentro;
+                filaActual.push({ text: textoLimpio, x0: item.bbox.x0 });
+                ultimoY = (ultimoY + yCentro) / 2;
             } else {
-                if (filaActual.length > 0) filasAgrupadas.push([...filaActual]);
-                filaActual = [textoLimpio];
+                if (filaActual.length > 0) {
+                    filaActual.sort((a, b) => a.x0 - b.x0);
+                    filasAgrupadas.push(filaActual.map(el => el.text));
+                }
+                filaActual = [{ text: textoLimpio, x0: item.bbox.x0 }];
                 ultimoY = yCentro;
             }
         });
-        if (filaActual.length > 0) filasAgrupadas.push(filaActual);
+        if (filaActual.length > 0) {
+            filaActual.sort((a, b) => a.x0 - b.x0);
+            filasAgrupadas.push(filaActual.map(el => el.text));
+        }
 
         let csvRows = [];
         excelTbody.innerHTML = '';
 
         filasAgrupadas.slice(0, 150).forEach((filaArr, rowIndex) => {
             let tr = document.createElement('tr');
-            let textoFilaUnificado = filaArr.join(" ");
-            
-            // Separador inteligente de columnas para evitar aglomeraciones en un solo renglón
-            let partes = textoFilaUnificado.split(/[\s\|]{2,}|(?:\s-\s)|(?:\s—\s)/).filter(p => p.trim().length > 0);
-            if (partes.length < 2) partes = [textoFilaUnificado];
+            let celdasLimpias = [];
+            let bufferCelda = "";
 
-            csvRows.push(`"Fila ${rowIndex + 1}","${partes.join('","')}"`);
+            filaArr.forEach(fragmento => {
+                if (fragmento.length < 15 && /^\d+[\s\)]*$/.test(fragmento)) {
+                    if (bufferCelda) { celdasLimpias.push(bufferCelda.trim()); bufferCelda = ""; }
+                    celdasLimpias.push(fragmento);
+                } else {
+                    bufferCelda += (bufferCelda ? " " : "") + fragmento;
+                }
+            });
+            if (bufferCelda) celdasLimpias.push(bufferCelda.trim());
+            if (celdasLimpias.length === 0) celdasLimpias = filaArr;
+
+            csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
 
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
             td.style.padding = "6px";
-            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join(' | ');
+            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + celdasLimpias.map(c => `<span>[${c}]</span>`).join(' | ');
             tr.appendChild(td);
             excelTbody.appendChild(tr);
         });
@@ -241,7 +263,20 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 
-    // Visor y Copia de Log / CSV Interactivo
+    // Botón de Vaciar / Limpiar datos si existe en la interfaz
+    const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
+    if (btnVaciar) {
+        btnVaciar.addEventListener('click', () => {
+            currentImage = null;
+            excelTbody.innerHTML = '';
+            ultimoCsvGenerado = "";
+            cellValueInput.value = "";
+            excelStatus.textContent = "Estado: Vacío";
+            registrarLog("Limpieza de canvas y registros ejecutada.");
+            alert("¡Datos vaciados correctamente!");
+        });
+    }
+
     btnSearch.addEventListener('click', () => {
         const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
         
