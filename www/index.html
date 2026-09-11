@@ -8,7 +8,6 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Cabecera y Botón Principal -->
         <header class="app-header">
             <h1 class="app-title">MAR Caribe – Mini Excel</h1>
             <label class="btn-primary" id="btn-cargar">
@@ -17,7 +16,6 @@
             </label>
         </header>
 
-        <!-- Barra de Controles y Auditoría -->
         <div class="toolbar-grid">
             <button class="btn-tool" id="btn-bloquear">🔒 Bloquear</button>
             <button class="btn-tool" id="btn-reset">🔄 Reset L</button>
@@ -37,7 +35,6 @@
             <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
 
-        <!-- Selector de los 3 Motores Reales -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
             <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
@@ -45,9 +42,8 @@
             <button class="engine-tab" data-engine="mlkit">ML Kit</button>
         </div>
 
-        <!-- Lienzo de Previsualización con Pan / Arrastre y Dibujo Manual -->
-        <div class="canvas-viewport" id="viewport" style="overflow: auto; position: relative; cursor: grab;">
-            <div class="canvas-scaler" id="canvas-scaler" style="transform-origin: top left; display: inline-block;">
+        <div class="canvas-viewport" id="viewport">
+            <div class="canvas-scaler" id="canvas-scaler">
                 <canvas id="processing-canvas"></canvas>
             </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
@@ -57,45 +53,32 @@
             </div>
         </div>
 
-        <!-- Mini Excel Inferior y Panel de Datos -->
         <div class="excel-footer-panel">
             <div class="excel-status" id="excel-status">Mini Excel - Esperando imagen...</div>
             <div class="excel-actions">
                 <button class="btn-table" id="btn-add-fila">➕ Fila</button>
                 <button class="btn-table" id="btn-add-col">➕ Col</button>
                 <button class="btn-table btn-danger" id="btn-vaciar">🗑️ Vaciar</button>
-                <button class="btn-table btn-success" id="btn-exportar">📤 Exportar</button>
+                <button class="btn-table btn-success" id="btn-exportar">📤 Exportar CSV</button>
             </div>
         </div>
 
-        <!-- Simulación de Cuadrícula Activa / Inspector -->
         <div class="cell-inspector">
             <span class="cell-tag" id="active-cell-label">A1</span>
             <input type="text" id="cell-value-input" value="Selecciona o procesa una imagen..." readonly>
-            <button class="btn-search-cell" id="btn-search">🔍 Buscar...</button>
+            <button class="btn-search-cell" id="btn-search">🔍 Log CSV</button>
         </div>
 
-        <!-- Tabla Visual Mini Excel integrada en Interfaz -->
-        <div class="mini-excel-grid-container" style="padding: 5px; background: #1a1a1a; max-height: 120px; overflow-y: auto;">
-            <table id="mini-excel-table" style="width: 100%; border-collapse: collapse; color: #fff; font-size: 11px;">
+        <div class="mini-excel-grid-container">
+            <table id="mini-excel-table">
                 <tbody id="excel-tbody">
-                    <tr><td style="border: 1px solid #444; padding: 4px;" id="cell-A1">A1: [Vacío]</td><td style="border: 1px solid #444; padding: 4px;" id="cell-B1">B1: [Vacío]</td></tr>
-                    <tr><td style="border: 1px solid #444; padding: 4px;" id="cell-A2">A2: [Vacío]</td><td style="border: 1px solid #444; padding: 4px;" id="cell-B2">B2: [Vacío]</td></tr>
+                    <tr><td id="cell-A1">A1: [Vacío]</td><td id="cell-B1">B1: [Vacío]</td></tr>
+                    <tr><td id="cell-A2">A2: [Vacío]</td><td id="cell-B2">B2: [Vacío]</td></tr>
                 </tbody>
             </table>
         </div>
-
-        <!-- Teclado Rápido Virtual -->
-        <div class="virtual-keyboard">
-            <div class="vk-row">
-                <button>K</button><button>L</button><button>M</button><button>N</button>
-                <button>O</button><button>P</button><button>Q</button><button>R</button>
-                <button>S</button><button>T</button><button class="vk-action">Acción</button>
-            </div>
-        </div>
     </div>
 
-    <!-- Tesseract CDN -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/app.js"></script>
 </body>
