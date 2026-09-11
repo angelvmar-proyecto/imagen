@@ -42,10 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalImageBackup = null; 
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
-    let modoDibujoLinea = null; // 'H' o 'V'
+    let modoDibujoLinea = null; // 'H', 'V' o null
     let isBloqueado = false;   
-    let manualLines = []; // Almacena las líneas manuales [{type: 'H'|'V', pos: number}]
-    let selectedLineIndex = null; // Para arrastrar/mover líneas existentes
+    let manualLines = []; 
+    let selectedLineIndex = null; 
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
     let isProcessingOCR = false;
@@ -53,16 +53,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
-    // Panning fluido y arrastre de líneas
+    // Control unificado de eventos de puntero (Ratón y Táctil) para Panning y Líneas
     viewport.addEventListener('mousedown', (e) => {
         if (isBloqueado) return;
         
-        // Si hay una línea seleccionada o estamos en modo dibujo, manejamos posición
+        // Si hay un modo de línea activo, priorizamos crear o mover líneas
         if (modoDibujoLinea) {
             manejarAccionLinea(e.clientX, e.clientY, 'start');
             return;
         }
 
+        // Si no estamos dibujando y hay zoom, activamos Panning fluido
         if (currentZoom > 1.0) {
             isPanning = true;
             viewport.style.cursor = 'grabbing';
@@ -71,18 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
             scrollLeft = viewport.scrollLeft;
             scrollTop = viewport.scrollTop;
         }
-    });
-
-    viewport.addEventListener('mouseleave', () => { 
-        isPanning = false; 
-        selectedLineIndex = null;
-        viewport.style.cursor = 'grab'; 
-    });
-
-    viewport.addEventListener('mouseup', () => { 
-        isPanning = false; 
-        selectedLineIndex = null;
-        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; 
     });
 
     viewport.addEventListener('mousemove', (e) => {
@@ -100,12 +89,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Soporte táctil móvil para panning y arrastre de líneas
+    viewport.addEventListener('mouseup', () => { 
+        isPanning = false; 
+        selectedLineIndex = null;
+        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; 
+    });
+
+    viewport.addEventListener('mouseleave', () => { 
+        isPanning = false; 
+        selectedLineIndex = null;
+        viewport.style.cursor = 'grab'; 
+    });
+
+    // Eventos táctiles para móviles (Samsung / Android)
     viewport.addEventListener('touchstart', (e) => {
         if (isBloqueado || e.touches.length !== 1) return;
         const touch = e.touches[0];
         if (modoDibujoLinea) {
             manejarAccionLinea(touch.clientX, touch.clientY, 'start');
+        } else if (currentZoom > 1.0) {
+            isPanning = true;
+            startX = touch.pageX - viewport.offsetLeft;
+            startY = touch.pageY - viewport.offsetTop;
+            scrollLeft = viewport.scrollLeft;
+            scrollTop = viewport.scrollTop;
         }
     }, { passive: true });
 
@@ -114,14 +121,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectedLineIndex !== null) {
             const touch = e.touches[0];
             actualizarPosicionLinea(touch.clientX, touch.clientY);
+        } else if (isPanning && currentZoom > 1.0) {
+            const touch = e.touches[0];
+            viewport.scrollLeft = scrollLeft - (touch.pageX - viewport.offsetLeft - startX);
+            viewport.scrollTop = scrollTop - (touch.pageY - viewport.offsetTop - startY);
         }
     }, { passive: true });
 
     viewport.addEventListener('touchend', () => {
+        isPanning = false;
         selectedLineIndex = null;
     });
 
-    // Motores OCR con porcentaje
+    // Motores OCR con actualización limpia y forzada
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
@@ -133,7 +145,13 @@ document.addEventListener('DOMContentLoaded', () => {
             activeEngine = tab.getAttribute('data-engine');
             registrarLog(`Motor seleccionado manualmente: ${activeEngine.toUpperCase()}`);
             excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}. Procesando...`;
-            if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+            
+            // Limpiar tabla anterior antes de pintar el nuevo resultado
+            excelTbody.innerHTML = '';
+            
+            if (currentImage) {
+                ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+            }
         });
     });
 
@@ -165,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Añade líneas finas, arrástralas, bloquea y procesa.";
+                excelStatus.textContent = "Imagen lista. Mueve la imagen, añade líneas o procesa.";
             }
             img.src = event.target.result;
         }
@@ -187,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnV) btnV.style.background = '';
 
             btnBloquear.style.background = isBloqueado ? '#27ae60' : '';
-            const msg = isBloqueado ? "🔒 Bloqueado: Líneas fijas. Selecciona tu motor." : "🔓 Desbloqueado: Puedes mover o editar líneas.";
+            const msg = isBloqueado ? "🔒 Bloqueado: Líneas fijas. Selecciona tu motor." : "🔓 Desbloqueado: Puedes mover imagen o líneas.";
             excelStatus.textContent = msg;
             registrarLog(msg);
         });
@@ -202,14 +220,24 @@ document.addEventListener('DOMContentLoaded', () => {
             alert("El visor está bloqueado. Desbloquéalo primero.");
             return;
         }
-        modoDibujoLinea = tipo;
         
+        // Si se vuelve a presionar el mismo botón, se desactiva el modo línea para volver a hacer panning libre
+        if (modoDibujoLinea === tipo) {
+            modoDibujoLinea = null;
+            if (btnH) btnH.style.background = '';
+            if (btnV) btnV.style.background = '';
+            excelStatus.textContent = "Modo dibujo desactivado. Panning libre activo.";
+            registrarLog("Modo de línea desactivado manualmente.");
+            return;
+        }
+
+        modoDibujoLinea = tipo;
         if (btnH) btnH.style.background = (tipo === 'H') ? '#f39c12' : '';
         if (btnV) btnV.style.background = (tipo === 'V') ? '#f39c12' : '';
 
-        const mensaje = (tipo === 'H') ? "▶ Toca o arrastra para crear/mover Línea Horizontal" : "▶ Toca o arrastra para crear/mover Línea Vertical";
+        const mensaje = (tipo === 'H') ? "▶ Modo Línea Horizontal activo (Toca para crear/mover)" : "▶ Modo Línea Vertical activo (Toca para crear/mover)";
         excelStatus.textContent = mensaje;
-        registrarLog(`Activado modo de línea ${tipo === 'H' ? 'horizontal' : 'vertical'}.`);
+        registrarLog(`Activado modo de línea ${tipo}.`);
     }
 
     if (btnH) {
@@ -242,7 +270,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Lógica para crear y mover líneas con precisión (grosor fino de 1px o 2px)
     function manejarAccionLinea(clientX, clientY, action) {
         if (!currentImage || isBloqueado) return;
 
@@ -253,8 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const y = (clientY - rect.top) * scaleY;
 
         if (action === 'start') {
-            // Verificar si tocamos cerca de una línea existente del mismo tipo para moverla
-            const tolerancia = 25 * scaleX;
+            const tolerancia = 30 * scaleX;
             let encontrada = -1;
             
             manualLines.forEach((l, idx) => {
@@ -266,9 +292,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (encontrada !== -1) {
                 selectedLineIndex = encontrada;
-                registrarLog(`Seleccionada línea ${manualLines[encontrada].type} existente para reposicionar.`);
+                registrarLog(`Seleccionada línea ${manualLines[encontrada].type} para reposicionar.`);
             } else {
-                // Crear nueva línea
                 const nuevaPos = (modoDibujoLinea === 'H') ? y : x;
                 manualLines.push({ type: modoDibujoLinea, pos: nuevaPos });
                 selectedLineIndex = manualLines.length - 1;
@@ -308,8 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.putImageData(imgData, 0, 0);
 
-        // Dibujar líneas manuales finas y precisas (grosor 1 a 2px según resolución)
-        const grosorFino = Math.max(1, Math.round(width / 800));
+        const grosorFino = Math.max(1, Math.round(width / 900));
         ctx.lineWidth = grosorFino;
         ctx.strokeStyle = '#000000';
 
@@ -351,7 +375,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 180);
 
-            let psmConfig = engine === 'paddle' ? 6 : (engine === 'mlkit' ? 11 : 3);
+            // Configuraciones distintas por motor para forzar variaciones reales de reconocimiento
+            let psmConfig = 3;
+            if (engine === 'paddle') psmConfig = 6;
+            else if (engine === 'mlkit') psmConfig = 11;
+            else if (engine === 'tesseract') psmConfig = 4;
 
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => {
@@ -383,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
-    // Separación real en celdas independientes (<td>) dentro del Mini Excel
     function procesarMatrizYConstruirExcel(lines, engineName) {
         let filasAgrupadas = [];
         let toleranciaY = 22; 
@@ -420,10 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
         filasAgrupadas.slice(0, 150).forEach((filaArr, rowIndex) => {
             let tr = document.createElement('tr');
             let celdasLimpias = [];
-            let bufferCelda = "";
 
             filaArr.forEach(fragmento => {
-                // Separación por espacios múltiples, tabulaciones o fragmentos estructurados
                 const partes = fragmento.split(/\s{2,}|\t|\|/);
                 partes.forEach(p => {
                     let limpio = p.trim();
@@ -435,7 +460,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
 
-            // Construir columnas reales <td> para separación visual limpia en celdas
             let tdIndex = document.createElement('td');
             tdIndex.style.cssText = "border:1px solid #444;padding:6px;background:#1a1a1a;color:#f39c12;font-weight:bold;";
             tdIndex.textContent = `R${rowIndex + 1}`;
@@ -452,8 +476,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas con celdas separadas.`);
-        excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas`;
+        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas procesadas.`);
+        excelStatus.textContent = `Mini Excel (${engineName.toUpperCase()}) - ${filasAgrupadas.length} filas`;
         
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
@@ -478,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
-    // Botón Vaciar SELECTIVO: Borra únicamente el texto obtenido, tabla y CSV, manteniendo la imagen intacta
+    // Botón Vaciar SELECTIVO: Borra tabla y texto, conserva la imagen
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
             excelTbody.innerHTML = '';
