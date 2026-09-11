@@ -37,11 +37,11 @@
             <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
 
-        <!-- Selector de Motores Dual (Tesseract / Paddle OCR & ML Kit) -->
+        <!-- Selector de Motores Reales (Tesseract y Tesseract Tabla) -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
             <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
-            <button class="engine-tab" data-engine="paddle">Paddle / ML Kit</button>
+            <button class="engine-tab" data-engine="table">Tesseract Tabla</button>
         </div>
 
         <!-- Lienzo de Previsualización -->
@@ -51,7 +51,7 @@
             </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span class="loading-title" id="loading-status-title">Procesando OCR matricial...</span>
+                <span class="loading-title" id="loading-status-title">Procesando OCR real...</span>
                 <span id="progress-text">0%</span>
             </div>
         </div>

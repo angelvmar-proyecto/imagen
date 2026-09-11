@@ -23,10 +23,10 @@ document.addEventListener('DOMContentLoaded', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            console.log(`Motor seleccionado: ${activeEngine}`);
+            console.log(`Motor OCR seleccionado: ${activeEngine}`);
 
             if (currentImage) {
-                ejecutarMotorOCR(parseInt(umbralSlider.value), activeEngine);
+                ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
             }
         });
     });
@@ -52,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressText.textContent = '30%';
 
                 setTimeout(() => {
-                    ejecutarMotorOCR(parseInt(umbralSlider.value), activeEngine);
+                    ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
                 }, 100);
             }
             img.src = event.target.result;
@@ -68,8 +68,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Ejecutor OCR Inteligente con distribución Matricial
-    async function ejecutarMotorOCR(thresholdValue, engine) {
+    // Ejecutor OCR 100% Real (Sin simulaciones de prueba)
+    async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage) return;
 
         loadingOverlay.style.display = 'flex';
@@ -78,55 +78,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const imageDataURL = canvas.toDataURL('image/png');
         let lineasExtraidas = [];
 
-        if (engine === 'tesseract') {
-            loadingStatusTitle.textContent = 'Procesando Tesseract Local...';
-            try {
-                const worker = await Tesseract.createWorker('spa', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const percent = Math.round(m.progress * 100);
-                            progressText.textContent = `${percent}%`;
-                        } else if (m.status) {
-                            loadingStatusTitle.textContent = m.status;
-                        }
+        try {
+            loadingStatusTitle.textContent = `Inicializando ${engine === 'table' ? 'Tesseract Tabla' : 'Tesseract'}...`;
+            
+            // Configuramos PSM (Page Segmentation Mode) dependiendo del motor elegido
+            // PSM 3 = Automático (Tesseract normal), PSM 6 = Bloque uniforme de texto / Tabla (Tesseract Tabla)
+            const psmMode = engine === 'table' ? 6 : 3;
+
+            const worker = await Tesseract.createWorker('spa', 1, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        const percent = Math.round(m.progress * 100);
+                        progressText.textContent = `${percent}%`;
+                    } else if (m.status) {
+                        loadingStatusTitle.textContent = m.status;
                     }
-                });
-
-                const ret = await worker.recognize(imageDataURL);
-                await worker.terminate();
-
-                const textoCrudo = ret.data.text.trim();
-                lineasExtraidas = textoCrudo.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-
-            } catch (err) {
-                console.error("Error Tesseract:", err);
-                lineasExtraidas = ["Error de lectura local Tesseract"];
-            }
-        } else {
-            // Motor Paddle / ML Kit Simulado con Estructuración Avanzada por Bloques
-            loadingStatusTitle.textContent = 'Ejecutando Paddle OCR / ML Kit...';
-            let step = 0;
-            await new Promise(resolve => {
-                const interval = setInterval(() => {
-                    step += 25;
-                    progressText.textContent = `${Math.min(step, 100)}%`;
-                    if (step >= 100) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, 80);
+                }
             });
 
-            // Simulando extracción estructurada matricial típica de tablas logísticas (MAR Caribe)
-            lineasExtraidas = [
-                "HOTEL MAR CARIBE - REPORTE LOGISTICO",
-                "Huesped: Juan Perez | Habitacion: 204",
-                "Traslado Aeropuerto -> Hotel | 10:30 AM",
-                "Estatus: Confirmado / Pagado Local"
-            ];
+            await worker.setParameters({
+                tessedit_pageseg_mode: psmMode,
+            });
+
+            const ret = await worker.recognize(imageDataURL);
+            await worker.terminate();
+
+            const textoCrudo = ret.data.text.trim();
+            console.log("Texto OCR real obtenido:", textoCrudo);
+            
+            lineasExtraidas = textoCrudo.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        } catch (err) {
+            console.error("Error crítico en Tesseract OCR:", err);
+            loadingStatusTitle.textContent = 'Error de lectura OCR';
+            lineasExtraidas = ["Error al procesar la imagen con Tesseract"];
         }
 
-        // Volcar datos distribuidos en la cuadrícula del Mini Excel
+        // Volcar datos distribuidos en la cuadrícula del Mini Excel de forma real
         poblarMiniExcelMatricial(lineasExtraidas, engine);
 
         setTimeout(() => {
@@ -148,14 +136,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             cellValueInput.value = lineas[0];
             activeCellLabel.textContent = "A1";
-            excelStatus.textContent = `Mini Excel (${engineName}) - ${lineas.length} elementos mapeados`;
+            excelStatus.textContent = `Mini Excel (${engineName}) - ${lineas.length} líneas detectadas`;
         } else {
-            cellA1.textContent = "A1: [Sin datos]";
-            cellB1.textContent = "B1: [Sin datos]";
-            cellA2.textContent = "A2: [Sin datos]";
-            cellB2.textContent = "B2: [Sin datos]";
-            cellValueInput.value = "No se detectó texto estructurado";
-            excelStatus.textContent = `Mini Excel (${engineName}) - Sin resultados`;
+            cellA1.textContent = "A1: [Vacío]";
+            cellB1.textContent = "B1: [Vacío]";
+            cellA2.textContent = "A2: [Vacío]";
+            cellB2.textContent = "B2: [Vacío]";
+            cellValueInput.value = "No se detectó texto legible";
+            excelStatus.textContent = `Mini Excel (${engineName}) - Sin texto`;
         }
     }
 
