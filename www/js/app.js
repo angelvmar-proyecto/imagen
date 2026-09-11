@@ -15,17 +15,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeCellLabel = document.getElementById('active-cell-label');
     const excelTbody = document.getElementById('excel-tbody');
     
-    // Selectores flexibles para los botones de la barra superior
     const btnH = document.getElementById('btn-h') || document.querySelector('[data-action="line-h"]') || document.querySelectorAll('.toolbar-btn')[2];
     const btnV = document.getElementById('btn-v') || document.querySelector('[data-action="line-v"]') || document.querySelectorAll('.toolbar-btn')[3];
     const btnResetL = document.getElementById('reset-l') || document.querySelectorAll('.toolbar-btn')[1];
-    const btnBloquear = document.getElementById('bloquear') || document.querySelectorAll('.toolbar-btn')[0];
+    const btnBloquear = document.getElementById('btn-bloquear') || document.querySelectorAll('.toolbar-btn')[0];
     
     const btnExportar = document.getElementById('btn-exportar');
     const btnSearch = document.getElementById('btn-search');
     const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
 
     let currentImage = null;
+    let originalImageBackup = null; // Para poder resetear las líneas con Reset L
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
     let modoDibujoLinea = null; // 'H' o 'V'
@@ -36,9 +36,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
-    // Control de Panning / Desplazamiento táctil y de mouse en el viewport
+    // Panning / Desplazamiento táctil y de mouse
     viewport.addEventListener('mousedown', (e) => {
-        if (currentZoom <= 1.0) return;
+        if (currentZoom <= 1.0 || modoDibujoLinea) return; // Si estamos dibujando línea, priorizamos el toque sobre el canvas
         isPanning = true;
         viewport.style.cursor = 'grabbing';
         startX = e.pageX - viewport.offsetLeft;
@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', () => {
     viewport.addEventListener('mouseleave', () => { isPanning = false; viewport.style.cursor = 'grab'; });
     viewport.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; });
     viewport.addEventListener('mousemove', (e) => {
-        if (!isPanning) return;
+        if (!isPanning || modoDibujoLinea) return;
         e.preventDefault();
         viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
         viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Carga de imagen y renderizado inmediato en el canvas para evitar pantalla en negro
+    // Carga de imagen
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -86,18 +86,20 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
-                // Ajustar dimensiones del canvas físico a la imagen real
                 canvas.width = img.width;
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
                 
-                // Guardar respaldo de imagen original procesada con umbral
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                // Guardar copia limpia para Reset L
+                originalImageBackup = ctx.createImageData(canvas.width, canvas.height);
+                originalImageBackup.data.set(currentImage.data);
+
                 aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
                 
-                registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
+                registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Elige motor o dibuja líneas.";
+                excelStatus.textContent = "Imagen lista. Selecciona L.H. o L.V. para trazar líneas.";
             }
             img.src = event.target.result;
         }
@@ -110,43 +112,65 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentImage) aplicarUmbralInstantaneo(parseInt(val));
     });
 
-    // Activación de herramientas de líneas manuales
-    if (btnH) {
-        btnH.addEventListener('click', () => { 
-            modoDibujoLinea = 'H'; 
-            excelStatus.textContent = "Modo activo: Toca el cuadro de imagen para trazar línea horizontal"; 
-            registrarLog("Activado modo de línea horizontal manual.");
-        });
-    }
-    if (btnV) {
-        btnV.addEventListener('click', () => { 
-            modoDibujoLinea = 'V'; 
-            excelStatus.textContent = "Modo activo: Toca el cuadro de imagen para trazar línea vertical"; 
-            registrarLog("Activado modo de línea vertical manual.");
-        });
-    }
-
-    // Mapeo preciso de coordenadas de clic en la pantalla visible (considerando Zoom y Scroll del Viewport)
-    canvas.addEventListener('click', (e) => {
+    // Función auxiliar para activar modo línea con respuesta visual inmediata
+    function activarModoLinea(tipo) {
         if (!currentImage) {
-            alert("Primero debes cargar una imagen.");
+            alert("Primero carga una imagen.");
             return;
         }
-        if (!modoDibujoLinea) {
-            excelStatus.textContent = "Selecciona L.H. o L.V. antes de tocar la imagen.";
+        modoDibujoLinea = tipo;
+        
+        // Estilos visuales de botones activos
+        if (btnH) btnH.style.background = (tipo === 'H') ? '#27ae60' : '';
+        if (btnV) btnV.style.background = (tipo === 'V') ? '#27ae60' : '';
+
+        const mensaje = (tipo === 'H') ? "▶ MODO LÍNEA HORIZONTAL: Toca cualquier parte de la imagen" : "▶ MODO LÍNEA VERTICAL: Toca cualquier parte de la imagen";
+        excelStatus.textContent = mensaje;
+        registrarLog(`Activado modo manual: ${tipo}`);
+    }
+
+    // Soporte robusto para eventos tanto click como touch en botones de línea
+    if (btnH) {
+        btnH.addEventListener('click', () => activarModoLinea('H'));
+        btnH.addEventListener('touchend', (e) => { e.preventDefault(); activarModoLinea('H'); });
+    }
+    if (btnV) {
+        btnV.addEventListener('click', () => activarModoLinea('V'));
+        btnV.addEventListener('touchend', (e) => { e.preventDefault(); activarModoLinea('V'); });
+    }
+
+    // Botón Reset L (limpiar líneas trazadas)
+    if (btnResetL) {
+        const ejecutarResetL = () => {
+            if (!originalImageBackup) return;
+            ctx.putImageData(originalImageBackup, 0, 0);
+            currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
+            modoDibujoLinea = null;
+            if (btnH) btnH.style.background = '';
+            if (btnV) btnV.style.background = '';
+            excelStatus.textContent = "Líneas restablecidas a la imagen original.";
+            registrarLog("Reset L ejecutado: Se eliminaron las líneas manuales.");
+        };
+        btnResetL.addEventListener('click', ejecutarResetL);
+        btnResetL.addEventListener('touchend', (e) => { e.preventDefault(); ejecutarResetL(); });
+    }
+
+    // Trazado de línea directamente sobre el canvas al hacer clic o tocar
+    const manejarTrazadoLinea = (clientX, clientY) => {
+        if (!currentImage || !modoDibujoLinea) {
+            excelStatus.textContent = "Aviso: Selecciona L.H. o L.V. antes de tocar la imagen.";
             return;
         }
 
         const rect = canvas.getBoundingClientRect();
-        // Coordenadas relativas exactas al canvas escalado y desplazado
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        const x = (e.clientX - rect.left) * scaleX;
-        const y = (e.clientY - rect.top) * scaleY;
+        const x = (clientX - rect.left) * scaleX;
+        const y = (clientY - rect.top) * scaleY;
 
-        // Dibujar línea negra permanente sobre el canvas
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = Math.max(2, Math.round(canvas.width / 400));
+        ctx.lineWidth = Math.max(3, Math.round(canvas.width / 350));
         ctx.beginPath();
         if (modoDibujoLinea === 'H') { 
             ctx.moveTo(0, y); 
@@ -157,15 +181,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.stroke();
 
-        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
+        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en X:${Math.round(x)}, Y:${Math.round(y)}`);
         
-        // Actualizar datos de imagen con la línea incorporada
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const tipoLinea = modoDibujoLinea;
-        modoDibujoLinea = null;
+        const tipoAplicado = modoDibujoLinea;
         
-        excelStatus.textContent = `Línea ${tipoLinea} aplicada. Procesando con ${activeEngine}...`;
+        // Desactivar modo de dibujo y restaurar colores de botones
+        modoDibujoLinea = null;
+        if (btnH) btnH.style.background = '';
+        if (btnV) btnV.style.background = '';
+
+        excelStatus.textContent = `Línea ${tipoAplicado} aplicada. Procesando con ${activeEngine}...`;
         ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+    };
+
+    canvas.addEventListener('click', (e) => {
+        manejarTrazadoLinea(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('touchend', (e) => {
+        if (!modoDibujoLinea) return;
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        if (touch) {
+            manejarTrazadoLinea(touch.clientX, touch.clientY);
+        }
     });
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
@@ -326,10 +366,10 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
-    // Botón de Vaciar / Limpiar datos
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
             currentImage = null;
+            originalImageBackup = null;
             excelTbody.innerHTML = '';
             ultimoCsvGenerado = "";
             cellValueInput.value = "";
@@ -340,7 +380,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Modal de Logs y CSV
     btnSearch.addEventListener('click', () => {
         const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
         
