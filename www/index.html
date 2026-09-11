@@ -2,95 +2,84 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe – Mini Excel Multimotor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MAR Caribe – Mini Excel Pro</title>
     <link rel="stylesheet" href="css/style.css">
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@paddlejs/paddlejs-core/lib/index.js"></script>
 </head>
 <body>
+    <div class="app-container">
+        <!-- Cabecera y Botón Principal -->
+        <header class="app-header">
+            <h1 class="app-title">MAR Caribe – Mini Excel</h1>
+            <label class="btn-primary" id="btn-cargar">
+                📁 Cargar Imagen
+                <input type="file" id="file-input" accept="image/*" hidden>
+            </label>
+        </header>
 
-    <header class="app-header">
-        <h1>MAR Caribe – Mini Excel</h1>
-        <div>
-            <button id="loadBtn" class="btn btn-primary">📁 Cargar Imagen</button>
-            <input type="file" id="fileInput" accept="image/*" style="display:none;">
-        </div>
-    </header>
-
-    <div class="toolbar-section">
-        <button id="lockBtn" class="btn btn-secondary">🔒 Bloquear</button>
-        <button id="resetBtn" class="btn btn-secondary">🔄 Reset L</button>
-        <button id="addLineHBtn" class="btn btn-secondary text-gold">➕ H</button>
-        <button id="addLineVBtn" class="btn btn-secondary text-blue">➕ V</button>
-        
-        <div class="threshold-box">
-            <span>Umbral:</span>
-            <input type="range" id="binThresholdSlider" min="50" max="220" value="128">
-            <span id="binThresholdVal" class="text-gold">128</span>
+        <!-- Barra de Controles y Auditoría (Ordenada y Compacta) -->
+        <div class="toolbar-grid">
+            <button class="btn-tool" id="btn-bloquear">🔒 Bloquear</button>
+            <button class="btn-tool" id="btn-reset">🔄 Reset L</button>
+            <button class="btn-tool" id="btn-h">➕ H</button>
+            <button class="btn-tool" id="btn-v">➕ V</button>
         </div>
 
-        <div class="zoom-group">
-            <button id="zoomOutBtn" class="btn btn-secondary">🔍-</button>
-            <button id="zoomResetBtn" class="btn btn-secondary">1:1</button>
-            <button id="zoomInBtn" class="btn btn-secondary">🔍+</button>
+        <div class="slider-container">
+            <span class="slider-label">Umbral Dinámico (LiDAR):</span>
+            <input type="range" id="umbral-slider" min="0" max="100" value="50">
+            <span id="umbral-val">50</span>
         </div>
-    </div>
 
-    <div class="engines-section">
-        <span class="engine-label">Motores:</span>
-        <button id="btnTess" class="btn btn-engine btn-green">⚙️ Tesseract</button>
-        <button id="btnPaddle" class="btn btn-engine btn-dark">🚀 Paddle.js</button>
-        <button id="btnMLKit" class="btn btn-engine btn-purple">🧠 ML Kit / Local</button>
-        
-        <div id="progressContainer" class="progress-container" style="display:none;">
-            <div id="progressBar" class="progress-bar"></div>
-            <div id="progressText" class="progress-text">Procesando...</div>
+        <div class="zoom-toolbar">
+            <button class="btn-zoom" id="zoom-out">🔍 -</button>
+            <button class="btn-zoom" id="zoom-reset">1:1</button>
+            <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
-    </div>
 
-    <div id="canvasBox" class="canvas-box">
-        <canvas id="workspaceCanvas"></canvas>
-        <canvas id="sourceCanvas" style="display:none;"></canvas>
-        <div id="placeholderText" class="placeholder-text">Cargue una imagen para procesamiento inteligente</div>
-    </div>
+        <!-- Selector de Motores Minimalista (Tesseract & Paddle) -->
+        <div class="engines-bar">
+            <span class="engines-label">MOTOR:</span>
+            <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
+            <button class="engine-tab" data-engine="paddle">Paddle.js</button>
+        </div>
 
-    <div class="formula-section">
-        <span id="selectedCellLabel" class="selected-cell-label">A1</span>
-        <input type="text" id="formulaBar" placeholder="Valor de celda unificado en un renglón..." class="formula-input">
-        <input type="text" id="searchInput" placeholder="🔍 Buscar..." class="search-input">
-    </div>
-
-    <div class="table-container-wrapper">
-        <div class="table-toolbar">
-            <span id="statusInfo" class="status-info">Mini Excel - 0 filas, 1 columnas</span>
-            <div class="table-actions">
-                <button id="addRowBtn" class="btn btn-secondary">+ Fila</button>
-                <button id="addColBtn" class="btn btn-secondary">+ Col</button>
-                <button id="clearTableBtn" class="btn btn-secondary text-red">🗑️ Vaciar</button>
-                <button id="exportBtn" class="btn btn-primary">📤 Exportar</button>
+        <!-- Lienzo de Previsualización y Procesamiento Óptico -->
+        <div class="canvas-viewport" id="viewport">
+            <canvas id="processing-canvas"></canvas>
+            <div class="processing-overlay" id="loading-overlay" style="display: none;">
+                <div class="spinner"></div>
+                <span>Aplicando Fotogrametría y Filtros Ópticos...</span>
             </div>
         </div>
-        <div class="table-scroll-area">
-            <table id="excelTable" class="excel-table">
-                <thead>
-                    <tr id="excelHeaderRow">
-                        <th class="th-num">#</th>
-                        <th class="th-col text-gold">A</th>
-                        <th class="th-action">Acción</th>
-                    </tr>
-                </thead>
-                <tbody id="excelBody">
-                    <tr>
-                        <td class="td-num">1</td>
-                        <td contenteditable="true" class="excel-cell" data-row="0" data-col="0"></td>
-                        <td class="td-action"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>
-                    </tr>
-                </tbody>
-            </table>
+
+        <!-- Mini Excel Inferior y Panel de Datos -->
+        <div class="excel-footer-panel">
+            <div class="excel-status" id="excel-status">Mini Excel - 3 filas, 20 columnas</div>
+            <div class="excel-actions">
+                <button class="btn-table" id="btn-add-fila">➕ Fila</button>
+                <button class="btn-table" id="btn-add-col">➕ Col</button>
+                <button class="btn-table btn-danger" id="btn-vaciar">🗑️ Vaciar</button>
+                <button class="btn-table btn-success" id="btn-exportar">📤 Exportar</button>
+            </div>
+        </div>
+
+        <!-- Barra de Celdas Activas A1 -->
+        <div class="cell-inspector">
+            <span class="cell-tag">A1</span>
+            <input type="text" id="cell-value-input" value="Valor de celda unificado en un r..." readonly>
+            <button class="btn-search-cell">🔍 Buscar...</button>
+        </div>
+
+        <!-- Teclado Rápido Virtual -->
+        <div class="virtual-keyboard">
+            <div class="vk-row">
+                <button>K</button><button>L</button><button>M</button><button>N</button>
+                <button>O</button><button>P</button><button>Q</button><button>R</button>
+                <button>S</button><button>T</button><button class="vk-action">Acción</button>
+            </div>
         </div>
     </div>
-
     <script src="js/app.js"></script>
 </body>
 </html>
