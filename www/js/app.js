@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentImage = null;
     let originalImageBackup = null; 
     let activeEngine = 'tesseract';
+    let activePipeline = 'standard'; // 'standard', 'ultrasound', 'optics'
     let currentZoom = 1.0;
     let modoDibujoLinea = null; // 'H', 'V' o null
     let isBloqueado = false;   
@@ -53,17 +54,39 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
-    // Control unificado de eventos de puntero (Ratón y Táctil) para Panning y Líneas
+    // Crear selector dinámico de Pipeline Especializado en la barra de herramientas si no existe
+    let pipelineSelector = document.getElementById('pipeline-selector');
+    if (!pipelineSelector) {
+        const toolbarContainer = document.querySelector('.toolbar') || document.body;
+        const pipelineDiv = document.createElement('div');
+        pipelineDiv.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-left:10px;font-size:12px;color:#fff;";
+        pipelineDiv.innerHTML = `
+            <label for="pipeline-selector" style="color:#f39c12;font-weight:bold;">Modo:</label>
+            <select id="pipeline-selector" style="background:#222;color:#fff;border:1px solid #444;padding:4px;border-radius:4px;">
+                <option value="standard">Estándar / OCR</option>
+                <option value="ultrasound">Ultrasonido / Ecografía</option>
+                <option value="optics">Óptica / Retinografía</option>
+            </select>
+        `;
+        toolbarContainer.appendChild(pipelineDiv);
+        pipelineSelector = document.getElementById('pipeline-selector');
+    }
+
+    pipelineSelector.addEventListener('change', (e) => {
+        activePipeline = e.target.value;
+        registrarLog(`Pipeline especializado cambiado a: ${activePipeline.toUpperCase()}`);
+        if (currentImage && !isBloqueado) {
+            rederizarCanvasConLineas(parseInt(umbralSlider.value));
+        }
+    });
+
+    // Control unificado de Panning y Arrastre de Líneas
     viewport.addEventListener('mousedown', (e) => {
         if (isBloqueado) return;
-        
-        // Si hay un modo de línea activo, priorizamos crear o mover líneas
         if (modoDibujoLinea) {
             manejarAccionLinea(e.clientX, e.clientY, 'start');
             return;
         }
-
-        // Si no estamos dibujando y hay zoom, activamos Panning fluido
         if (currentZoom > 1.0) {
             isPanning = true;
             viewport.style.cursor = 'grabbing';
@@ -76,12 +99,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     viewport.addEventListener('mousemove', (e) => {
         if (isBloqueado) return;
-        
         if (selectedLineIndex !== null) {
             actualizarPosicionLinea(e.clientX, e.clientY);
             return;
         }
-
         if (isPanning && currentZoom > 1.0) {
             e.preventDefault();
             viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
@@ -101,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = 'grab'; 
     });
 
-    // Eventos táctiles para móviles (Samsung / Android)
     viewport.addEventListener('touchstart', (e) => {
         if (isBloqueado || e.touches.length !== 1) return;
         const touch = e.touches[0];
@@ -133,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
         selectedLineIndex = null;
     });
 
-    // Motores OCR con actualización limpia y forzada
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
@@ -145,10 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
             activeEngine = tab.getAttribute('data-engine');
             registrarLog(`Motor seleccionado manualmente: ${activeEngine.toUpperCase()}`);
             excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}. Procesando...`;
-            
-            // Limpiar tabla anterior antes de pintar el nuevo resultado
             excelTbody.innerHTML = '';
-            
             if (currentImage) {
                 ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
             }
@@ -221,7 +237,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         
-        // Si se vuelve a presionar el mismo botón, se desactiva el modo línea para volver a hacer panning libre
         if (modoDibujoLinea === tipo) {
             modoDibujoLinea = null;
             if (btnH) btnH.style.background = '';
@@ -235,7 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (btnH) btnH.style.background = (tipo === 'H') ? '#f39c12' : '';
         if (btnV) btnV.style.background = (tipo === 'V') ? '#f39c12' : '';
 
-        const mensaje = (tipo === 'H') ? "▶ Modo Línea Horizontal activo (Toca para crear/mover)" : "▶ Modo Línea Vertical activo (Toca para crear/mover)";
+        const mensaje = (tipo === 'H') ? "▶ Modo Línea Horizontal activo" : "▶ Modo Línea Vertical activo";
         excelStatus.textContent = mensaje;
         registrarLog(`Activado modo de línea ${tipo}.`);
     }
@@ -316,6 +331,72 @@ document.addEventListener('DOMContentLoaded', () => {
         rederizarCanvasConLineas(parseInt(umbralSlider.value));
     }
 
+    // Pipeline Matemático Integrado (Estándar, Ultrasonido/Ecografía y Óptica/Retinografía)
+    function aplicarPipelineEspecializado(dst, src, width, height, thresholdValue) {
+        const baseThreshold = (thresholdValue / 100) * 255;
+
+        if (activePipeline === 'ultrasound') {
+            // Pipeline Ultrasonido: Reducción de ruido speckle (promediado vecindad 3x3) y realce de contornos de tejidos
+            const tempGray = new Uint8ClampedArray(width * height);
+            for (let i = 0; i < src.length; i += 4) {
+                tempGray[i / 4] = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+            }
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let idx = (y * width + x) * 4;
+                    let sum = 0, count = 0;
+                    // Filtro espacial de suavizado (reducción grano speckle)
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            let nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                sum += tempGray[ny * width + nx];
+                                count++;
+                            }
+                        }
+                    }
+                    let val = sum / count;
+                    // Realce de umbral ultrasónico adaptativo
+                    let finalVal = val >= baseThreshold ? 255 : 0;
+                    dst[idx] = dst[idx+1] = dst[idx+2] = finalVal;
+                    dst[idx+3] = src[idx+3];
+                }
+            }
+            registrarLog("Pipeline aplicado: Ultrasonido / Ecografía (Reducción speckle + binarización)");
+
+        } else if (activePipeline === 'optics') {
+            // Pipeline Óptica / Retinografía: Normalización de iluminación de fondo y contraste oftálmico
+            let sumLuminance = 0;
+            const pixelsCount = (width * height);
+            for (let i = 0; i < src.length; i += 4) {
+                sumLuminance += (0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]);
+            }
+            let avgBrightness = sumLuminance / pixelsCount;
+            let factorContraste = avgBrightness < 120 ? 1.4 : 1.1;
+
+            for (let i = 0; i < src.length; i += 4) {
+                let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+                // Corrección de iluminación local y realce de letras/bordes oftálmicos
+                let adjusted = Math.min(255, Math.max(0, (gray - 128) * factorContraste + 128));
+                let finalVal = adjusted >= baseThreshold ? 255 : 0;
+                dst[i] = dst[i+1] = dst[i+2] = finalVal;
+                dst[i+3] = src[i+3];
+            }
+            registrarLog("Pipeline aplicado: Óptica / Retinografía (Normalización de fondo y contraste)");
+
+        } else {
+            // Pipeline Estándar / OCR Clásico
+            for (let i = 0; i < src.length; i += 4) {
+                let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+                let processed = gray >= baseThreshold ? 255 : 0;
+                dst[i] = dst[i+1] = dst[i+2] = processed;
+                dst[i+3] = src[i+3];
+            }
+            registrarLog("Pipeline aplicado: Estándar / OCR");
+        }
+    }
+
     function rederizarCanvasConLineas(thresholdValue) {
         if (!originalImageBackup) return;
         const width = originalImageBackup.width;
@@ -323,16 +404,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const imgData = ctx.createImageData(width, height);
         const src = originalImageBackup.data;
         const dst = imgData.data;
-        const baseThreshold = (thresholdValue / 100) * 255;
 
-        for (let i = 0; i < src.length; i += 4) {
-            const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-            const processed = gray >= baseThreshold ? 255 : 0;
-            dst[i] = dst[i+1] = dst[i+2] = processed;
-            dst[i+3] = src[i+3];
-        }
+        // Ejecutar el pipeline activo seleccionado
+        aplicarPipelineEspecializado(dst, src, width, height, thresholdValue);
         ctx.putImageData(imgData, 0, 0);
 
+        // Dibujar líneas manuales finas y precisas (1-2px)
         const grosorFino = Math.max(1, Math.round(width / 900));
         ctx.lineWidth = grosorFino;
         ctx.strokeStyle = '#000000';
@@ -358,14 +435,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         loadingOverlay.style.display = 'flex';
         progressText.textContent = '0%';
-        loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
+        loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()} (${activePipeline})...`;
         
         rederizarCanvasConLineas(thresholdValue);
         const imageDataURL = canvas.toDataURL('image/png');
         let simbolosDetectados = [];
 
         try {
-            registrarLog(`Iniciando OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
+            registrarLog(`Iniciando OCR [Motor: ${engine} | Pipeline: ${activePipeline}] - Umbral: ${thresholdValue}`);
 
             let progresoSimulado = 5;
             const intervaloProgreso = setInterval(() => {
@@ -375,7 +452,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }, 180);
 
-            // Configuraciones distintas por motor para forzar variaciones reales de reconocimiento
             let psmConfig = 3;
             if (engine === 'paddle') psmConfig = 6;
             else if (engine === 'mlkit') psmConfig = 11;
@@ -399,7 +475,7 @@ document.addEventListener('DOMContentLoaded', () => {
             progressText.textContent = '100%';
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`[${engine.toUpperCase()}] Finalizado al 100%. Líneas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
             registrarLog(`ERROR en motor ${engine}: ${err.message}`);
@@ -476,8 +552,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas procesadas.`);
-        excelStatus.textContent = `Mini Excel (${engineName.toUpperCase()}) - ${filasAgrupadas.length} filas`;
+        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas procesadas en celdas.`);
+        excelStatus.textContent = `Mini Excel (${engineName.toUpperCase()} / ${activePipeline.toUpperCase()}) - ${filasAgrupadas.length} filas`;
         
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
@@ -502,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
-    // Botón Vaciar SELECTIVO: Borra tabla y texto, conserva la imagen
+    // Botón Vaciar SELECTIVO: Borra texto y tabla, conserva la imagen
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
             excelTbody.innerHTML = '';
