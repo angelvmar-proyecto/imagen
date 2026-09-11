@@ -1,11 +1,10 @@
-// --- MAR CARIBE - APP PROMOTORES (Híbrido / Intersecciones 90°) ---
+// --- MAR CARIBE - APP PROMOTORES (Versión Estable + Motores Híbridos Seguros) ---
 
 let canvas, ctx;
 let srcCanvas, srcCtx;
 let loadedImg = new Image();
 let isImageLoaded = false;
 
-// Variables de Estado y Cuadrícula
 let linesH = [];
 let linesV = [];
 let isLocked = false;
@@ -21,7 +20,8 @@ let startX = 0;
 let startY = 0;
 
 window.addEventListener('DOMContentLoaded', () => {
-    canvas = document.getElementById('mainCanvas');
+    canvas = document.getElementById('mainCanvas') || document.querySelector('canvas');
+    if (!canvas) return;
     ctx = canvas.getContext('2d');
 
     srcCanvas = document.createElement('canvas');
@@ -32,6 +32,7 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function resizeCanvasToDisplay() {
+    if (!canvas) return;
     const container = canvas.parentElement;
     canvas.width = container.clientWidth - 16;
     canvas.height = 300;
@@ -52,41 +53,42 @@ function initEvents() {
                     srcCtx.drawImage(loadedImg, 0, 0);
                     isImageLoaded = true;
                     
-                    // Reset grid para la nueva imagen
-                    linesH = [0, loadedImg.height];
-                    linesV = [0, loadedImg.width];
+                    // Inicializar retícula base adaptada a la imagen
+                    linesH = [0, loadedImg.height * 0.3, loadedImg.height * 0.7, loadedImg.height];
+                    linesV = [0, loadedImg.width * 0.5, loadedImg.width];
                     isLocked = false;
                     
                     resetZoom();
                     redraw();
-                }
+                };
                 loadedImg.src = evt.target.result;
             };
             reader.readAsDataURL(file);
         });
     }
 
-    // Eventos táctiles para zoom y pan en el canvas
-    canvas.addEventListener('mousedown', startPan);
-    canvas.addEventListener('mousemove', doPan);
-    canvas.addEventListener('mouseup', endPan);
-    canvas.addEventListener('mouseleave', endPan);
+    if (canvas) {
+        canvas.addEventListener('mousedown', startPan);
+        canvas.addEventListener('mousemove', doPan);
+        canvas.addEventListener('mouseup', endPan);
+        canvas.addEventListener('mouseleave', endPan);
 
-    canvas.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1) {
-            startPan({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
-        }
-    });
-    canvas.addEventListener('touchmove', (e) => {
-        if (e.touches.length === 1) {
-            doPan({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
-        }
-    });
-    canvas.addEventListener('touchend', endPan);
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                startPan({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+            }
+        });
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1) {
+                doPan({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+            }
+        });
+        canvas.addEventListener('touchend', endPan);
+    }
 }
 
 function resetZoom() {
-    if (!isImageLoaded) return;
+    if (!isImageLoaded || !canvas) return;
     let hRatio = canvas.width / loadedImg.width;
     let vRatio = canvas.height / loadedImg.height;
     scale = Math.min(hRatio, vRatio);
@@ -116,7 +118,9 @@ function endPan() {
 }
 
 function redraw() {
+    if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
     if (!isImageLoaded) {
         ctx.fillStyle = '#9e9e9e';
         ctx.font = '14px sans-serif';
@@ -130,7 +134,7 @@ function redraw() {
     ctx.scale(scale, scale);
     ctx.drawImage(loadedImg, 0, 0);
 
-    // Dibujar líneas horizontales
+    // Dibujar líneas H
     ctx.strokeStyle = '#d4af37';
     ctx.lineWidth = 2 / scale;
     linesH.forEach(y => {
@@ -140,7 +144,9 @@ function redraw() {
         ctx.stroke();
     });
 
-    // Dibujar líneas verticales
+    // Dibujar líneas V
+    ctx.strokeStyle = '#2196F3';
+    ctx.lineWidth = 2 / scale;
     linesV.forEach(x => {
         ctx.beginPath();
         ctx.moveTo(x, 0);
@@ -195,14 +201,59 @@ function updateThreshold(val) {
     if (lbl) lbl.innerText = binThreshold;
 }
 
+// DETECCIÓN DE INTERSECCIONES DE 90 GRADOS (AUTO)
 function detectExcelGridCorners90() {
-    // Algoritmo de detección de esquinas / celdas por intersección
-    if (linesH.length < 2) linesH = [0, loadedImg.height];
-    if (linesV.length < 2) linesV = [0, loadedImg.width];
+    if (!isImageLoaded) return;
+    let w = loadedImg.width;
+    let h = loadedImg.height;
+    let imgData = srcCtx.getImageData(0, 0, w, h);
+    let data = imgData.data;
+
+    let bin = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            let i = (y * w + x) * 4;
+            let avg = (data[i] * 0.3 + data[i+1] * 0.59 + data[i+2] * 0.11);
+            bin[y * w + x] = avg < 160 ? 1 : 0;
+        }
+    }
+
+    let hLines = [];
+    let minHLength = w * 0.3;
+    for (let y = 5; y < h - 5; y += 2) {
+        let count = 0;
+        for (let x = 0; x < w; x++) count += bin[y * w + x];
+        if (count >= minHLength) hLines.push(y);
+    }
+
+    let vLines = [];
+    let minVLength = h * 0.3;
+    for (let x = 5; x < w - 5; x += 2) {
+        let count = 0;
+        for (let y = 0; y < h; y++) count += bin[y * w + x];
+        if (count >= minVLength) vLines.push(x);
+    }
+
+    let cleanH = [0];
+    for (let y of hLines) {
+        if (y - cleanH[cleanH.length - 1] > 15) cleanH.push(y);
+    }
+    cleanH.push(h);
+
+    let cleanV = [0];
+    for (let x of vLines) {
+        if (x - cleanV[cleanV.length - 1] > 15) cleanV.push(x);
+    }
+    cleanV.push(w);
+
+    if (cleanH.length > 2) linesH = cleanH;
+    if (cleanV.length > 2) linesV = cleanV;
 }
 
+// MOTOR HÍBRIDO OPTIMIZADO CON CONCURRENCIA PARALELA
 async function runEngine(engineName) {
     if (!isImageLoaded) { alert("Cargue imagen primero."); return; }
+    
     const pContainer = document.getElementById('progressContainer');
     const pBar = document.getElementById('progressBar');
     const pText = document.getElementById('progressText');
@@ -223,16 +274,12 @@ async function runEngine(engineName) {
     if (engineName === 'tesseract' && !worker) {
         try {
             worker = await Tesseract.createWorker('spa+eng');
-        } catch(e) {
-            console.error("Error al iniciar worker Tesseract", e);
-        }
+        } catch(e) {}
     }
 
-    // Corrección sintáctica de inicialización de matriz bidimensional
     let matrixData = Array(sH.length - 1).fill(0).map(() => Array(sV.length - 1).fill(""));
     let cellTasks = [];
     let processed = 0;
-
     let candidateThresholds = [binThreshold, 200, 115];
 
     for (let r = 0; r < sH.length - 1; r++) {
@@ -305,18 +352,33 @@ async function runEngine(engineName) {
 }
 
 function buildExcelTable(data) {
-    const container = document.getElementById('excelTableContainer');
+    const container = document.getElementById('excelTableContainer') || document.getElementById('excelBody');
     if (!container) return;
-    let html = '<table border="1" style="width:100%; border-collapse:collapse; color:#fff; font-size:12px;">';
-    data.forEach(row => {
-        html += '<tr>';
-        row.forEach(cell => {
-            html += `<td style="padding:4px; border:1px solid #444;">${cell || ''}</td>`;
+    
+    // Si es un tbody directamente o un contenedor general
+    if (container.tagName === 'TBODY') {
+        container.innerHTML = "";
+        data.forEach((rowVals, rIdx) => {
+            const tr = document.createElement('tr');
+            let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
+            rowVals.forEach((val, cIdx) => {
+                rowHTML += `<td contenteditable="true" class="excel-cell" style="padding:6px; border:1px solid #444; text-align:left; color:#fff;">${val}</td>`;
+            });
+            tr.innerHTML = rowHTML;
+            container.appendChild(tr);
         });
-        html += '</tr>';
-    });
-    html += '</table>';
-    container.innerHTML = html;
+    } else {
+        let html = '<table border="1" style="width:100%; border-collapse:collapse; color:#fff; font-size:12px;">';
+        data.forEach(row => {
+            html += '<tr>';
+            row.forEach(cell => {
+                html += `<td style="padding:4px; border:1px solid #444;">${cell || ''}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
 }
 
 function exportStandardJson() {
