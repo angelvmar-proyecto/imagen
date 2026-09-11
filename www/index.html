@@ -17,7 +17,7 @@
             </label>
         </header>
 
-        <!-- Barra de Controles y Auditoría (Ordenada y Compacta) -->
+        <!-- Barra de Controles y Auditoría -->
         <div class="toolbar-grid">
             <button class="btn-tool" id="btn-bloquear">🔒 Bloquear</button>
             <button class="btn-tool" id="btn-reset">🔄 Reset L</button>
@@ -37,7 +37,7 @@
             <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
 
-        <!-- Selector de Motores Minimalista (Tesseract & Paddle) -->
+        <!-- Selector de Motores Funcional -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
             <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
@@ -49,7 +49,8 @@
             <canvas id="processing-canvas"></canvas>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span>Aplicando Fotogrametría y Filtros Ópticos...</span>
+                <span>Aplicando Fotogrametría y Filtros...</span>
+                <span id="progress-text" style="font-size: 0.8rem; color: #ffc107;">0%</span>
             </div>
         </div>
 

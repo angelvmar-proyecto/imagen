@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('processing-canvas');
     const ctx = canvas.getContext('2d');
     const loadingOverlay = document.getElementById('loading-overlay');
+    const progressText = document.getElementById('progress-text');
     const umbralSlider = document.getElementById('umbral-slider');
     const umbralVal = document.getElementById('umbral-val');
     const engineTabs = document.querySelectorAll('.engine-tab');
@@ -10,7 +11,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentImage = null;
     let activeEngine = 'tesseract';
 
-    // Manejo de pestañas de motores sin saturar pantalla
+    // Manejo correcto del estado activo de los botones de motores
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
 
         loadingOverlay.style.display = 'flex';
+        progressText.textContent = '0%';
 
         const reader = new FileReader();
         reader.onload = function(event) {
@@ -36,16 +38,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0);
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                // Aplicar pipeline avanzado de ultrasonido (TGC) y fotogrametría
-                applyAdvancedOpticalPipeline(parseInt(umbralSlider.value));
-                loadingOverlay.style.display = 'none';
+                // Procesar con barra de porcentaje fluida
+                applyPipelineWithProgress(parseInt(umbralSlider.value));
             }
             img.src = event.target.result;
         }
         reader.readAsDataURL(file);
     });
 
-    // Control del umbral dinámico
+    // Control del umbral dinámico en tiempo real
     umbralSlider.addEventListener('input', (e) => {
         const val = e.target.value;
         umbralVal.textContent = val;
@@ -54,8 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Pipeline Matemático Avanzado: Inspirado en Ultrasonido (TGC) y LiDAR
-    function applyAdvancedOpticalPipeline(thresholdValue) {
+    // Pipeline por bloques con reporte de porcentaje para evitar congelar la UI móvil
+    function applyPipelineWithProgress(thresholdValue) {
         if (!currentImage) return;
 
         const width = currentImage.width;
@@ -66,13 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const baseThreshold = (thresholdValue / 100) * 255;
 
-        // Paso 1: Compensación de Ganancia por Zonas (TGC - Time Gain Compensation)
-        // Dividimos la imagen en franjas horizontales para corregir sombras de luz de celular
+        // TGC (Ultrasonido) - Cálculo de brillo por zonas
         const zones = 8; 
         const zoneHeight = height / zones;
         const zoneAverages = new Float32Array(zones);
 
-        // Calcular brillo promedio por zona vertical
         for (let y = 0; y < height; y++) {
             const z = Math.floor(y / zoneHeight);
             for (let x = 0; x < width; x++) {
@@ -90,33 +89,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const globalAverage = globalSum / zones;
 
-        // Paso 2: Aplicar transformación de píxeles con compensación de ganancia y umbral adaptativo
-        for (let y = 0; y < height; y++) {
-            const z = Math.floor(y / zoneHeight);
-            // Factor de ganancia para nivelar zonas oscuras o con sombra
-            const gainFactor = zoneAverages[z] > 0 ? (globalAverage / zoneAverages[z]) : 1.0;
+        // Procesamiento por lotes en trozos (chunks) para animar el porcentaje de carga
+        let currentY = 0;
+        const batchSize = Math.max(1, Math.floor(height / 10)); // 10 por ciento por lote
 
-            for (let x = 0; x < width; x++) {
-                const i = (y * width + x) * 4;
-                
-                const r = src[i];
-                const g = src[i+1];
-                const b = src[i+2];
+        function processChunk() {
+            const endY = Math.min(height, currentY + batchSize);
 
-                // Escala de grises con ganancia aplicada por zona (Efecto Ultrasonido Doppler)
-                let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                gray = Math.min(255, Math.max(0, gray * gainFactor));
+            for (let y = currentY; y < endY; y++) {
+                const z = Math.floor(y / zoneHeight);
+                const gainFactor = zoneAverages[z] > 0 ? (globalAverage / zoneAverages[z]) : 1.0;
 
-                // Umbralización final limpia para destacar celdas y texto de Excel
-                const processed = gray >= baseThreshold ? 255 : 0;
+                for (let x = 0; x < width; x++) {
+                    const i = (y * width + x) * 4;
+                    const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+                    const adjusted = Math.min(255, Math.max(0, gray * gainFactor));
+                    const processed = adjusted >= baseThreshold ? 255 : 0;
 
-                dst[i]     = processed;
-                dst[i+1]   = processed;
-                dst[i+2]   = processed;
-                dst[i+3]   = src[i+3]; // Mantener transparencia original
+                    dst[i]     = processed;
+                    dst[i+1]   = processed;
+                    dst[i+2]   = processed;
+                    dst[i+3]   = src[i+3];
+                }
+            }
+
+            currentY = endY;
+            const percent = Math.round((currentY / height) * 100);
+            progressText.textContent = `${percent}%`;
+
+            if (currentY < height) {
+                requestAnimationFrame(processChunk);
+            } else {
+                ctx.putImageData(imgData, 0, 0);
+                loadingOverlay.style.display = 'none';
             }
         }
 
+        requestAnimationFrame(processChunk);
+    }
+
+    // Pipeline instantáneo para cuando mueves el slider de umbral
+    function applyAdvancedOpticalPipeline(thresholdValue) {
+        if (!currentImage) return;
+
+        const width = currentImage.width;
+        const height = currentImage.height;
+        const imgData = ctx.createImageData(width, height);
+        const src = currentImage.data;
+        const dst = imgData.data;
+        
+        const baseThreshold = (thresholdValue / 100) * 255;
+
+        for (let i = 0; i < src.length; i += 4) {
+            const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+            const processed = gray >= baseThreshold ? 255 : 0;
+            dst[i]     = processed;
+            dst[i+1]   = processed;
+            dst[i+2]   = processed;
+            dst[i+3]   = src[i+3];
+        }
         ctx.putImageData(imgData, 0, 0);
     }
 
