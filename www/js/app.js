@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnH = document.getElementById('btn-h');
     const btnV = document.getElementById('btn-v');
     const btnExportar = document.getElementById('btn-exportar');
+    const btnSearch = document.getElementById('btn-search');
 
     let currentImage = null;
     let activeEngine = 'tesseract';
@@ -52,8 +53,14 @@ document.addEventListener('DOMContentLoaded', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Cambio de motor a: ${activeEngine}`);
-            if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+            registrarLog(`Cambio de motor seleccionado: ${activeEngine}`);
+            
+            if (activeEngine !== 'tesseract') {
+                alert(`El motor ${activeEngine.toUpperCase()} requiere librerías nativas adicionales. Usando Tesseract.js como motor principal optimizado.`);
+                registrarLog(`Aviso: Motor ${activeEngine} redirigido a Tesseract local.`);
+            }
+
+            if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract');
         });
     });
 
@@ -75,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
                 progressText.textContent = '30%';
-                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine), 100);
+                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract'), 100);
             }
             img.src = event.target.result;
         }
@@ -107,7 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Línea manual aplicada [${modoDibujoLinea}] en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         modoDibujoLinea = null;
-        ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+        ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract');
     });
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
@@ -118,14 +125,13 @@ document.addEventListener('DOMContentLoaded', () => {
         let simbolosDetectados = [];
 
         try {
-            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
-            registrarLog(`Inicio de reconocimiento OCR - Motor: ${engine} - Umbral: ${thresholdValue}`);
+            loadingStatusTitle.textContent = `Procesando con Tesseract...`;
+            registrarLog(`Inicio de reconocimiento OCR - Umbral: ${thresholdValue}`);
 
-            const psmMap = { tesseract: 3, paddle: 6, mlkit: 11 };
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => { if (m.status === 'recognizing text') progressText.textContent = `${Math.round(m.progress * 100)}%`; }
             });
-            await worker.setParameters({ tessedit_pageseg_mode: psmMap[engine] || 3 });
+            await worker.setParameters({ tessedit_pageseg_mode: 3 });
             const ret = await worker.recognize(imageDataURL);
             await worker.terminate();
 
@@ -133,16 +139,16 @@ document.addEventListener('DOMContentLoaded', () => {
             registrarLog(`OCR Finalizado. Líneas brutas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
-            registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
+            registrarLog(`ERROR CRITICO en motor OCR: ${err.message}`);
         }
 
-        procesarMatrizYConstruirExcel(simbolosDetectados, engine);
+        procesarMatrizYConstruirExcel(simbolosDetectados, 'tesseract');
         setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
     function procesarMatrizYConstruirExcel(lines, engineName) {
         let filasAgrupadas = [];
-        let toleranciaY = 15; 
+        let toleranciaY = 18; 
 
         let lineasOrdenadas = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0);
 
@@ -165,15 +171,20 @@ document.addEventListener('DOMContentLoaded', () => {
         let csvRows = [];
         excelTbody.innerHTML = '';
 
-        filasAgrupadas.slice(0, 50).forEach((filaArr, rowIndex) => {
+        filasAgrupadas.slice(0, 100).forEach((filaArr, rowIndex) => {
             let tr = document.createElement('tr');
-            let filaTextoCols = filaArr.join(" | "); 
-            csvRows.push(`"Fila ${rowIndex + 1}","${filaArr.join('","')}"`);
+            let textoFilaUnificado = filaArr.join(" ");
+            
+            // Separar columnas de manera inteligente simulando celdas de la tabla MAR Caribe
+            let partes = textoFilaUnificado.split(/[\s\|]{2,}|(?:\s-\s)/);
+            if (partes.length < 2) partes = [textoFilaUnificado];
+
+            csvRows.push(`"Fila ${rowIndex + 1}","${partes.join('","')}"`);
 
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
-            td.style.padding = "4px";
-            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ${filaTextoCols.replace(/\n/g, '<br>')}`;
+            td.style.padding = "6px";
+            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join(' | ');
             tr.appendChild(td);
             excelTbody.appendChild(tr);
         });
@@ -221,11 +232,42 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 
+    // Botón Log CSV funcional: Abre un modal o prompt interactivo para copiar el texto directamente en el móvil
+    btnSearch.addEventListener('click', () => {
+        const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
+        
+        let modal = document.getElementById('csv-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'csv-modal';
+            modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;padding:15px;box-sizing:border-box;";
+            modal.innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <h3 style="color:#f39c12;margin:0;font-size:16px;">📋 Log y CSV Generado</h3>
+                    <button id="btn-cerrar-modal" style="background:#e74c3c;color:white;border:none;padding:5px 12px;border-radius:4px;font-weight:bold;">X Cerrar</button>
+                </div>
+                <textarea id="csv-textarea" style="flex:1;background:#111;color:#0ff;padding:10px;border:1px solid #444;font-family:monospace;font-size:12px;resize:none;border-radius:6px;"></textarea>
+                <button id="btn-copiar-clipboard" style="background:#27ae60;color:white;border:none;padding:12px;border-radius:6px;margin-top:10px;font-weight:bold;font-size:14px;">📋 Copiar al Portapapeles</button>
+            `;
+            document.body.appendChild(modal);
+
+            document.getElementById('btn-cerrar-modal').addEventListener('click', () => { modal.style.display = 'none'; });
+            document.getElementById('btn-copiar-clipboard').addEventListener('click', () => {
+                const ta = document.getElementById('csv-textarea');
+                ta.select();
+                navigator.clipboard.writeText(ta.value).then(() => {
+                    alert("¡Copiado al portapapeles con éxito!");
+                }).catch(() => {
+                    alert("Selecciona el texto manualmente para copiarlo.");
+                });
+            });
+        }
+        
+        document.getElementById('csv-textarea').value = contenidoVentana;
+        modal.style.display = 'flex';
+    });
+
     btnExportar.addEventListener('click', () => {
-        console.log("--- LOG DE DEPURACION COMPLETO ---");
-        console.log(logDepuracion.join("\n"));
-        console.log("--- FORMATO CSV FINAL ---");
-        console.log(ultimoCsvGenerado);
-        alert("Log de depuración y CSV impreso en la consola del navegador (F12 / Termux console).");
+        btnSearch.click(); // Dispara el mismo visor interactivo para asegurar exportación visual inmediata
     });
 });
