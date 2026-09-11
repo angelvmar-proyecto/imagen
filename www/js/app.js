@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let modoDibujoLinea = null;
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
+    let isProcessingOCR = false; // Bandera para evitar llamadas concurrentes que bloqueen el hilo
 
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
@@ -50,6 +51,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
+            if (isProcessingOCR) {
+                registrarLog(`Intento de cambio de motor bloqueado: Hay un proceso OCR activo.`);
+                return;
+            }
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
@@ -61,6 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        
         loadingOverlay.style.display = 'flex';
         loadingStatusTitle.textContent = 'Cargando imagen base...';
         progressText.textContent = '10%';
@@ -76,7 +82,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
                 progressText.textContent = '30%';
-                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine), 100);
+                
+                // Esperar un momento prudente para liberar la pila de ejecución antes del primer OCR
+                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine), 250);
             }
             img.src = event.target.result;
         }
@@ -93,7 +101,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnV.addEventListener('click', () => { modoDibujoLinea = 'V'; excelStatus.textContent = "Toca el lienzo para línea vertical negra"; });
 
     canvas.addEventListener('click', (e) => {
-        if (!currentImage || !modoDibujoLinea) return;
+        if (!currentImage || !modoDibujoLinea || isProcessingOCR) return;
         const rect = canvas.getBoundingClientRect();
         const x = (e.clientX - rect.left) * (canvas.width / rect.width);
         const y = (e.clientY - rect.top) * (canvas.height / rect.height);
@@ -112,7 +120,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
-        if (!currentImage) return;
+        if (!currentImage || isProcessingOCR) return;
+        isProcessingOCR = true;
+        
         loadingOverlay.style.display = 'flex';
         progressText.textContent = '0%';
         aplicarUmbralInstantaneo(thresholdValue);
@@ -123,16 +133,19 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
             registrarLog(`Iniciando pipeline OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
 
-            // Simulación de progreso inicial para motores alternativos si el worker es rápido
-            let progresoSimulado = 10;
+            // Barra de progreso fluida e independiente del motor seleccionado
+            let progresoSimulado = 5;
             const intervaloProgreso = setInterval(() => {
-                if (progresoSimulado < 85) {
-                    progresoSimulado += 15;
+                if (progresoSimulado < 90) {
+                    progresoSimulado += 10;
                     progressText.textContent = `${progresoSimulado}%`;
                 }
-            }, 200);
+            }, 180);
 
-            let psmConfig = engine === 'paddle' ? 6 : (engine === 'mlkit' ? 11 : 3);
+            // Configuraciones de segmentación ajustadas por motor para evitar bloqueos
+            let psmConfig = 3;
+            if (engine === 'paddle') psmConfig = 6;
+            else if (engine === 'mlkit') psmConfig = 11;
 
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => {
@@ -142,6 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
             });
+            
             await worker.setParameters({ tessedit_pageseg_mode: psmConfig });
             const ret = await worker.recognize(imageDataURL);
             await worker.terminate();
@@ -154,10 +168,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (err) {
             registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
+        } finally {
+            isProcessingOCR = false; // Liberamos el bloqueo de control obligatoriamente
         }
 
         procesarMatrizYConstruirExcel(simbolosDetectados, engine);
-        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 350);
+        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
     function procesarMatrizYConstruirExcel(lines, engineName) {
@@ -263,7 +279,6 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 
-    // Botón de Vaciar / Limpiar datos si existe en la interfaz
     const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
