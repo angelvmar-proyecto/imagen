@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSearch = document.getElementById('btn-search');
     const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
 
-    // Selección inteligente de los botones de la barra superior por texto interno
     const toolbarButtons = document.querySelectorAll('.toolbar button, .toolbar-btn');
     let btnBloquear = null;
     let btnResetL = null;
@@ -37,12 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btnH) btnH = document.getElementById('btn-h');
     if (!btnV) btnV = document.getElementById('btn-v');
     if (!btnResetL) btnResetL = document.getElementById('reset-l');
+    if (!btnBloquear) btnBloquear = document.getElementById('btn-bloquear');
 
     let currentImage = null;
     let originalImageBackup = null; 
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
     let modoDibujoLinea = null; // 'H' o 'V'
+    let isBloqueado = false;   
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
     let isProcessingOCR = false;
@@ -50,9 +51,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
-    // Panning / Desplazamiento táctil y de mouse
+    // Desplazamiento panorámico (Panning) fluido con mouse y táctil
     viewport.addEventListener('mousedown', (e) => {
-        if (currentZoom <= 1.0 || modoDibujoLinea) return; 
+        if (currentZoom <= 1.0 || modoDibujoLinea || isBloqueado) return; 
         isPanning = true;
         viewport.style.cursor = 'grabbing';
         startX = e.pageX - viewport.offsetLeft;
@@ -64,13 +65,13 @@ document.addEventListener('DOMContentLoaded', () => {
     viewport.addEventListener('mouseleave', () => { isPanning = false; viewport.style.cursor = 'grab'; });
     viewport.addEventListener('mouseup', () => { isPanning = false; viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; });
     viewport.addEventListener('mousemove', (e) => {
-        if (!isPanning || modoDibujoLinea) return;
+        if (!isPanning || modoDibujoLinea || isBloqueado) return;
         e.preventDefault();
         viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
         viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
     });
 
-    // Conmutación de motores OCR
+    // Conmutación de motores OCR con visualizador de porcentaje
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
@@ -80,8 +81,8 @@ document.addEventListener('DOMContentLoaded', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Motor seleccionado: ${activeEngine.toUpperCase()}`);
-            excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}`;
+            registrarLog(`Motor seleccionado manualmente: ${activeEngine.toUpperCase()}`);
+            excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}. Procesando...`;
             if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
         });
     });
@@ -109,10 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 originalImageBackup.data.set(currentImage.data);
 
                 aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
+                isBloqueado = false;
+                if (btnBloquear) btnBloquear.style.background = '';
                 
                 registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Dibuja tus líneas y usa un motor para procesar.";
+                excelStatus.textContent = "Imagen lista. Toca L.H. o L.V. para trazar, o desplázate libremente.";
             }
             img.src = event.target.result;
         }
@@ -122,41 +125,54 @@ document.addEventListener('DOMContentLoaded', () => {
     umbralSlider.addEventListener('input', (e) => {
         const val = e.target.value;
         umbralVal.textContent = val;
-        if (currentImage) aplicarUmbralInstantaneo(parseInt(val));
+        if (currentImage && !isBloqueado) aplicarUmbralInstantaneo(parseInt(val));
     });
 
-    // Función de activación de modo línea con realce visual verde
+    if (btnBloquear) {
+        const toggleBloqueo = () => {
+            isBloqueado = !isBloqueado;
+            modoDibujoLinea = null;
+            if (btnH) btnH.style.background = '';
+            if (btnV) btnV.style.background = '';
+
+            btnBloquear.style.background = isBloqueado ? '#27ae60' : '';
+            const msg = isBloqueado ? "🔒 Bloqueado: Imagen fija. Selecciona tu motor OCR." : "🔓 Desbloqueado: Puedes mover o editar.";
+            excelStatus.textContent = msg;
+            registrarLog(msg);
+        };
+        ['click', 'touchstart', 'touchend'].forEach(evt => {
+            btnBloquear.addEventListener(evt, (e) => { e.preventDefault(); toggleBloqueo(); });
+        });
+    }
+
     function activarModoLinea(tipo) {
         if (!currentImage) {
-            alert("Primero carga una imagen antes de trazar líneas.");
-            registrarLog("Intento de activar línea manual sin imagen cargada.");
+            alert("Primero carga una imagen.");
+            return;
+        }
+        if (isBloqueado) {
+            alert("Desbloquea la imagen para poder agregar líneas.");
             return;
         }
         modoDibujoLinea = tipo;
         
-        if (btnH) btnH.style.background = (tipo === 'H') ? '#27ae60' : '';
-        if (btnV) btnV.style.background = (tipo === 'V') ? '#27ae60' : '';
+        if (btnH) btnH.style.background = (tipo === 'H') ? '#f39c12' : '';
+        if (btnV) btnV.style.background = (tipo === 'V') ? '#f39c12' : '';
 
-        const mensaje = (tipo === 'H') ? "▶ MODO LÍNEA H: Toca la imagen para trazar" : "▶ MODO LÍNEA V: Toca la imagen para trazar";
+        const mensaje = (tipo === 'H') ? "▶ Toca el canvas para trazar Línea Horizontal" : "▶ Toca el canvas para trazar Línea Vertical";
         excelStatus.textContent = mensaje;
         registrarLog(`Activado modo de línea ${tipo === 'H' ? 'horizontal' : 'vertical'} manual.`);
     }
 
     if (btnH) {
         ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnH.addEventListener(evt, (e) => {
-                e.preventDefault();
-                activarModoLinea('H');
-            });
+            btnH.addEventListener(evt, (e) => { e.preventDefault(); activarModoLinea('H'); });
         });
     }
 
     if (btnV) {
         ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnV.addEventListener(evt, (e) => {
-                e.preventDefault();
-                activarModoLinea('V');
-            });
+            btnV.addEventListener(evt, (e) => { e.preventDefault(); activarModoLinea('V'); });
         });
     }
 
@@ -167,25 +183,21 @@ document.addEventListener('DOMContentLoaded', () => {
             currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
             aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
             modoDibujoLinea = null;
+            isBloqueado = false;
             if (btnH) btnH.style.background = '';
             if (btnV) btnV.style.background = '';
-            excelStatus.textContent = "Líneas restablecidas a la imagen original.";
-            registrarLog("Limpieza general ejecutada (Reset L).");
+            if (btnBloquear) btnBloquear.style.background = '';
+            excelStatus.textContent = "Líneas restablecidas a la original.";
+            registrarLog("Reset L ejecutado.");
         };
         ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnResetL.addEventListener(evt, (e) => {
-                e.preventDefault();
-                ejecutarResetL();
-            });
+            btnResetL.addEventListener(evt, (e) => { e.preventDefault(); ejecutarResetL(); });
         });
     }
 
-    // Trazado de línea SIN disparar OCR automáticamente (para que puedas poner todas las que quieras)
+    // Trazado de línea único y liberación inmediata para permitir movimiento
     const manejarTrazadoLinea = (clientX, clientY) => {
-        if (!currentImage || !modoDibujoLinea) {
-            excelStatus.textContent = "Aviso: Selecciona L.H. o L.V. primero.";
-            return;
-        }
+        if (!currentImage || !modoDibujoLinea || isBloqueado) return;
 
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -206,30 +218,23 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.stroke();
 
         registrarLog(`Línea manual [${modoDibujoLinea}] trazada en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
-        
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
-        // Mantenemos el modo activo para que puedas seguir tirando más líneas si gustas,
-        // o puedes hacer clic en un motor OCR cuando termines.
-        excelStatus.textContent = `Línea ${modoDibujoLinea} trazada. Toca otro lugar para más líneas o presiona un Motor OCR para procesar.`;
-        
-        // Apagamos el color verde del botón individual pero conservamos la capacidad de seguir dibujando
-        if (btnH && modoDibujoLinea === 'H') btnH.style.background = '';
-        if (btnV && modoDibujoLinea === 'V') btnV.style.background = '';
-        modoDibujoLinea = null; 
+        // Limpiamos el estado de dibujo para liberar el movimiento panorámico de inmediato
+        const tipoAnterior = modoDibujoLinea;
+        modoDibujoLinea = null;
+        if (btnH) btnH.style.background = '';
+        if (btnV) btnV.style.background = '';
+
+        excelStatus.textContent = `Línea ${tipoAnterior} trazada. Ya puedes moverte, hacer zoom o elegir motor.`;
     };
 
-    canvas.addEventListener('click', (e) => {
-        manejarTrazadoLinea(e.clientX, e.clientY);
-    });
-
+    canvas.addEventListener('click', (e) => { manejarTrazadoLinea(e.clientX, e.clientY); });
     canvas.addEventListener('touchend', (e) => {
-        if (!modoDibujoLinea) return;
+        if (!modoDibujoLinea || isBloqueado) return;
         e.preventDefault();
         const touch = e.changedTouches[0];
-        if (touch) {
-            manejarTrazadoLinea(touch.clientX, touch.clientY);
-        }
+        if (touch) manejarTrazadoLinea(touch.clientX, touch.clientY);
     });
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
@@ -238,21 +243,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         loadingOverlay.style.display = 'flex';
         progressText.textContent = '0%';
+        loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
+        
         aplicarUmbralInstantaneo(thresholdValue);
         const imageDataURL = canvas.toDataURL('image/png');
         let simbolosDetectados = [];
 
         try {
-            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
             registrarLog(`Iniciando OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
 
             let progresoSimulado = 5;
             const intervaloProgreso = setInterval(() => {
-                if (progresoSimulado < 90) {
-                    progresoSimulado += 10;
+                if (progresoSimulado < 85) {
+                    progresoSimulado += 8;
                     progressText.textContent = `${progresoSimulado}%`;
                 }
-            }, 200);
+            }, 180);
 
             let psmConfig = engine === 'paddle' ? 6 : (engine === 'mlkit' ? 11 : 3);
 
@@ -260,7 +266,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 logger: m => {
                     if (m.status === 'recognizing text' && m.progress) {
                         clearInterval(intervaloProgreso);
-                        progressText.textContent = `${Math.round(m.progress * 100)}%`;
+                        const porcentajeReal = Math.round(m.progress * 100);
+                        progressText.textContent = `${porcentajeReal}%`;
                     }
                 }
             });
@@ -273,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             progressText.textContent = '100%';
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] Finalizado al 100%. Líneas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
             registrarLog(`ERROR en motor ${engine}: ${err.message}`);
@@ -379,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(logEntry);
     }
 
-    // Controles de Zoom
     document.getElementById('zoom-in').addEventListener('click', () => { currentZoom = Math.min(currentZoom + 0.25, 4.0); actualizarZoom(); });
     document.getElementById('zoom-out').addEventListener('click', () => { currentZoom = Math.max(currentZoom - 0.25, 0.5); actualizarZoom(); });
     document.getElementById('zoom-reset').addEventListener('click', () => { currentZoom = 1.0; actualizarZoom(); });
@@ -394,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnVaciar.addEventListener('click', () => {
             currentImage = null;
             originalImageBackup = null;
+            isBloqueado = false;
             excelTbody.innerHTML = '';
             ultimoCsvGenerado = "";
             cellValueInput.value = "";
