@@ -53,14 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Cambio de motor seleccionado: ${activeEngine}`);
-            
-            if (activeEngine !== 'tesseract') {
-                alert(`El motor ${activeEngine.toUpperCase()} requiere librerías nativas adicionales. Usando Tesseract.js como motor principal optimizado.`);
-                registrarLog(`Aviso: Motor ${activeEngine} redirigido a Tesseract local.`);
-            }
-
-            if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract');
+            registrarLog(`Cambio de motor a: ${activeEngine}`);
+            if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
         });
     });
 
@@ -82,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
                 progressText.textContent = '30%';
-                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract'), 100);
+                setTimeout(() => ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine), 100);
             }
             img.src = event.target.result;
         }
@@ -114,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Línea manual aplicada [${modoDibujoLinea}] en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         modoDibujoLinea = null;
-        ejecutarMotorOCRReal(parseInt(umbralSlider.value), 'tesseract');
+        ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
     });
 
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
@@ -125,24 +119,26 @@ document.addEventListener('DOMContentLoaded', () => {
         let simbolosDetectados = [];
 
         try {
-            loadingStatusTitle.textContent = `Procesando con Tesseract...`;
-            registrarLog(`Inicio de reconocimiento OCR - Umbral: ${thresholdValue}`);
+            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
+            registrarLog(`Inicio de reconocimiento OCR - Motor: ${engine} - Umbral: ${thresholdValue}`);
 
+            // Lógica por motor con mapeo PSM independiente respetando su arquitectura
+            const psmMap = { tesseract: 3, paddle: 6, mlkit: 11 };
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => { if (m.status === 'recognizing text') progressText.textContent = `${Math.round(m.progress * 100)}%`; }
             });
-            await worker.setParameters({ tessedit_pageseg_mode: 3 });
+            await worker.setParameters({ tessedit_pageseg_mode: psmMap[engine] || 3 });
             const ret = await worker.recognize(imageDataURL);
             await worker.terminate();
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`OCR Finalizado. Líneas brutas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`OCR Finalizado con ${engine}. Líneas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
-            registrarLog(`ERROR CRITICO en motor OCR: ${err.message}`);
+            registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
         }
 
-        procesarMatrizYConstruirExcel(simbolosDetectados, 'tesseract');
+        procesarMatrizYConstruirExcel(simbolosDetectados, engine);
         setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
@@ -157,12 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         lineasOrdenadas.forEach(item => {
             let yCentro = (item.bbox.y0 + item.bbox.y1) / 2;
+            let textoLimpio = item.text.trim();
+            if (!textoLimpio) return;
+
             if (ultimoY === -1 || Math.abs(yCentro - ultimoY) <= toleranciaY) {
-                filaActual.push(item.text.trim());
+                filaActual.push(textoLimpio);
                 ultimoY = yCentro;
             } else {
                 if (filaActual.length > 0) filasAgrupadas.push([...filaActual]);
-                filaActual = [item.text.trim()];
+                filaActual = [textoLimpio];
                 ultimoY = yCentro;
             }
         });
@@ -171,11 +170,10 @@ document.addEventListener('DOMContentLoaded', () => {
         let csvRows = [];
         excelTbody.innerHTML = '';
 
-        filasAgrupadas.slice(0, 100).forEach((filaArr, rowIndex) => {
+        filasAgrupadas.slice(0, 120).forEach((filaArr, rowIndex) => {
             let tr = document.createElement('tr');
             let textoFilaUnificado = filaArr.join(" ");
             
-            // Separar columnas de manera inteligente simulando celdas de la tabla MAR Caribe
             let partes = textoFilaUnificado.split(/[\s\|]{2,}|(?:\s-\s)/);
             if (partes.length < 2) partes = [textoFilaUnificado];
 
@@ -184,13 +182,13 @@ document.addEventListener('DOMContentLoaded', () => {
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
             td.style.padding = "6px";
-            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join(' | ');
+            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join('<br>');
             tr.appendChild(td);
             excelTbody.appendChild(tr);
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`CSV Generado con ${filasAgrupadas.length} filas estructuradas.`);
+        registrarLog(`CSV Generado (${engineName}) con ${filasAgrupadas.length} filas.`);
         excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas mapeadas`;
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
@@ -232,7 +230,6 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 
-    // Botón Log CSV funcional: Abre un modal o prompt interactivo para copiar el texto directamente en el móvil
     btnSearch.addEventListener('click', () => {
         const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
         
@@ -268,6 +265,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     btnExportar.addEventListener('click', () => {
-        btnSearch.click(); // Dispara el mismo visor interactivo para asegurar exportación visual inmediata
+        btnSearch.click();
     });
 });
