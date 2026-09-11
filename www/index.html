@@ -3,122 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe – Procesador Mini Excel Híbrido</title>
+    <title>MAR Caribe – Procesador Mini Excel Híbrido Avanzado</title>
     <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@paddlejs/paddlejs-core/lib/index.js"></script>
 </head>
-<body>
-    <div id="appContainer">
-        <header>
-            <h2>MAR Caribe — Híbrido (Intersecciones 90°)</h2>
-        </header>
+<body style="background:#121212; color:#e0e0e0; font-family:sans-serif; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; overflow:hidden;">
 
-        <!-- 1. Zona de Trabajo & Cuadrícula -->
-        <section class="card">
-            <h3>1. Zona de Trabajo & Cuadrícula</h3>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; background:#1a1a1a; padding:6px; border-radius:4px;">
-                <span style="color:#aaa; font-size:13px;">Zoom Imagen:</span>
-                <div style="display:flex; gap:6px;">
-                    <button id="zoomOutBtn" class="btn btn-secondary" style="padding:4px 12px; font-size:16px;">🔍−</button>
-                    <button id="zoomResetBtn" class="btn btn-secondary" style="padding:4px 10px; font-size:13px;">1:1</button>
-                    <button id="zoomInBtn" class="btn btn-secondary" style="padding:4px 12px; font-size:16px;">🔍+</button>
-                </div>
-            </div>
-
-            <div id="canvasBox" style="position:relative; width:100%; height:320px; background:#111; overflow:hidden; border:1px solid #444; border-radius:6px;">
-                <canvas id="workspaceCanvas" style="display:block; width:100%; height:100%; touch-action:none;"></canvas>
-                <div id="placeholderText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); color:#777; pointer-events:none; font-size:16px; text-align:center;">Toca para cargar imagen</div>
-            </div>
-            <canvas id="sourceCanvas" style="display:none;"></canvas>
-            
-            <div class="btn-group" style="margin-top:10px; display:flex; gap:8px;">
-                <button id="loadBtn" class="btn btn-primary" style="font-size:15px; flex:1;">📁 Cargar</button>
-                <button id="lockBtn" class="btn btn-warning" style="font-size:15px; flex:1;" title="Bloquea líneas manuales / Desactiva auto-detección">🔒 Bloquear</button>
-                <button id="resetBtn" class="btn btn-danger" style="font-size:15px; flex:1;">Limpiar</button>
-            </div>
+    <header style="background:#1e1e1e; padding:8px 12px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+        <h1 style="font-size:16px; margin:0; color:#D4AF37;">MAR Caribe – Mini Excel Híbrido</h1>
+        <div>
+            <button id="loadBtn" style="background:#D4AF37; color:#000; border:none; padding:6px 12px; font-weight:bold; border-radius:4px; cursor:pointer;">📁 Cargar Imagen</button>
             <input type="file" id="fileInput" accept="image/*" style="display:none;">
+        </div>
+    </header>
 
-            <!-- Botones directos para agregar líneas dentro de la vista actual -->
-            <div style="display:flex; gap:8px; margin-top:12px;">
-                <button id="addLineHBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#3a3010; color:#D4AF37; border:1px solid #D4AF37;">➕ Línea H.</button>
-                <button id="addLineVBtn" class="btn btn-secondary" style="font-size:13px; flex:1; background:#10253a; color:#2196F3; border:1px solid #2196F3;">➕ Línea V.</button>
-            </div>
+    <div style="background:#181818; padding:6px 12px; border-bottom:1px solid #333; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button id="lockBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">🔒 Bloquear</button>
+        <button id="resetBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">🔄 Reset L</button>
+        <button id="addLineHBtn" style="background:#222; color:#D4AF37; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">➕ H</button>
+        <button id="addLineVBtn" style="background:#222; color:#2196F3; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">➕ V</button>
+        
+        <div style="display:flex; align-items:center; gap:5px; font-size:12px; color:#bbb;">
+            <span>Umbral:</span>
+            <input type="range" id="binThresholdSlider" min="50" max="220" value="128" style="width:70px;">
+            <span id="binThresholdVal" style="color:#D4AF37; width:22px;">128</span>
+        </div>
 
-            <!-- Control deslizante de Umbral Base -->
-            <div style="margin-top:12px; background:#181818; padding:8px; border:1px solid #333; border-radius:6px;">
-                <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
-                    <label style="color:#d4af37; font-size:13px; font-weight:bold;">Umbral Base (Slider):</label>
-                    <span id="binThresholdVal" style="color:#fff; font-size:13px;">128</span>
-                </div>
-                <input type="range" id="binThresholdSlider" min="0" max="255" value="128" style="width:100%; accent-color:#d4af37; height:24px;">
-            </div>
-        </section>
-
-        <!-- 2. Motores de Extracción Híbridos (Intersecciones 90° + Pipeline 200/115/Base) -->
-        <section class="card">
-            <h3>2. Motores de Extracción (Pipeline Secuencial)</h3>
-            <button id="btnTess" class="btn btn-success" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer Tesseract (Auto Esquinas 90° o Manual)</button>
-            <button id="btnML" class="btn btn-info" style="font-size:16px; width:100%; margin-bottom:8px;">⚡ Extraer con Google ML Kit</button>
-            <button id="btnPaddle" class="btn btn-warning" style="font-size:16px; width:100%;">⚡ Extraer con PaddleOCR / ONNX</button>
-            
-            <div id="progressContainer" style="display:none; margin-top:10px; background:#222; border-radius:4px; overflow:hidden;">
-                <div id="progressBar" style="width:0%; height:20px; background:#4CAF50; text-align:center; font-size:12px; color:#fff;">0%</div>
-                <div id="progressText" style="text-align:center; font-size:12px; color:#aaa; padding:2px;">Analizando celdas...</div>
-            </div>
-        </section>
-
-        <!-- 3. Visor de Datos / Mini Excel -->
-        <section class="card">
-            <h3>3. Mini Excel & Visor de Datos</h3>
-            
-            <!-- Barra de Fórmulas estilo Excel -->
-            <div style="display:flex; align-items:center; background:#111; border:1px solid #444; border-radius:4px; padding:4px 8px; margin-bottom:8px;">
-                <span id="selectedCellLabel" style="color:#D4AF37; font-weight:bold; font-size:13px; margin-right:8px; min-width:30px;">A1</span>
-                <span style="color:#777; font-weight:bold; font-size:13px; margin-right:8px;">fx</span>
-                <input type="text" id="formulaBar" placeholder="Valor o fórmula..." style="flex:1; background:transparent; border:none; color:#fff; font-size:14px; outline:none;">
-            </div>
-
-            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                <button id="addRowBtn" class="btn btn-secondary" style="font-size:14px;">+ Fila</button>
-                <button id="addColBtn" class="btn btn-secondary" style="font-size:14px;">+ Columna</button>
-            </div>
-            <input type="text" id="searchInput" placeholder="Filtrar registros..." style="width:100%; padding:8px; margin-bottom:8px; background:#222; border:1px solid #444; color:#fff; font-size:14px; border-radius:4px;">
-            
-            <!-- Contenedor Tabla Estilo Excel -->
-            <div style="max-height:240px; overflow:auto; border:1px solid #444; background:#181818;">
-                <table id="excelTable" style="width:100%; border-collapse:collapse; color:#ddd; font-size:13px; text-align:center;">
-                    <thead>
-                        <tr id="excelHeaderRow" style="background:#262626; position:sticky; top:0; z-index:2;">
-                            <th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>
-                            <th style="padding:6px; border:1px solid #444; color:#D4AF37;">A</th>
-                            <th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>
-                        </tr>
-                    </thead>
-                    <tbody id="excelBody">
-                        <tr>
-                            <td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">1</td>
-                            <td contenteditable="true" class="excel-cell" data-row="0" data-col="0" style="padding:6px; border:1px solid #444; text-align:left;">Dato ejemplo</td>
-                            <td style="padding:4px; border:1px solid #444;"><button class="btn-danger-sm" onclick="this.closest('tr').remove()">×</button></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Barra de Estado inferior -->
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding:4px 6px; background:#111; border-radius:4px; font-size:12px; color:#aaa;">
-                <span id="statusInfo">Listo - 1 fila, 1 columna</span>
-                <span>Mini Excel Híbrido</span>
-            </div>
-
-            <div style="display:flex; gap:8px; margin-top:10px;">
-                <button id="exportBtn" class="btn btn-primary" style="font-size:14px; flex:1;">📄 Exportar</button>
-                <button id="exportParamsBtn" class="btn btn-info" style="font-size:14px; flex:1;" title="Exporta JSON con coordenadas">💾 Estándar</button>
-                <button id="clearTableBtn" class="btn btn-danger" style="font-size:14px; flex:1;">Vaciar</button>
-            </div>
-        </section>
+        <div style="display:flex; gap:4px; margin-left:auto;">
+            <button id="zoomOutBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">🔍-</button>
+            <button id="zoomResetBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">1:1</button>
+            <button id="zoomInBtn" style="background:#333; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">🔍+</button>
+        </div>
     </div>
 
-    <script src="js/tesseract.min.js"></script>
+    <div style="display:flex; background:#181818; padding:6px 12px; border-bottom:1px solid #333; gap:6px; align-items:center; overflow-x:auto;">
+        <button id="btnTess" style="background:#2e7d32; color:#fff; border:none; padding:5px 8px; font-size:11px; border-radius:4px; font-weight:bold; cursor:pointer;">⚙️ Tesseract</button>
+        <button id="btnPaddle" style="background:#424242; color:#fff; border:none; padding:5px 8px; font-size:11px; border-radius:4px; cursor:pointer;">🚀 Paddle.js</button>
+        <button id="btnCloudAI" style="background:#D4AF37; color:#000; border:none; padding:5px 8px; font-size:11px; border-radius:4px; font-weight:bold; cursor:pointer;">🪄 IA Cloud</button>
+        
+        <div id="progressContainer" style="display:none; flex-grow:1; background:#333; height:14px; border-radius:7px; overflow:hidden; position:relative; min-width:100px;">
+            <div id="progressBar" style="background:#D4AF37; width:0%; height:100%; transition:width 0.1s;"></div>
+            <div id="progressText" style="position:absolute; width:100%; top:0; text-align:center; font-size:9px; color:#000; font-weight:bold;">Procesando...</div>
+        </div>
+    </div>
+
+    <div id="canvasBox" style="flex:1; position:relative; background:#0b0b0b; overflow:hidden; touch-action:none; display:flex; justify-content:center; align-items:center;">
+        <canvas id="workspaceCanvas" style="display:block; width:100%; height:100%;"></canvas>
+        <canvas id="sourceCanvas" style="display:none;"></canvas>
+        <div id="placeholderText" style="position:absolute; color:#666; font-size:14px; pointer-events:none;">Cargue una imagen para procesamiento híbrido</div>
+    </div>
+
+    <div style="background:#1e1e1e; padding:6px 12px; border-top:1px solid #333; display:flex; gap:8px; align-items:center;">
+        <span id="selectedCellLabel" style="color:#D4AF37; font-weight:bold; font-size:12px; width:40px;">A1</span>
+        <input type="text" id="formulaBar" placeholder="Valor de celda..." style="flex:1; background:#121212; border:1px solid #444; color:#fff; padding:4px 8px; border-radius:4px; font-size:13px;">
+        <input type="text" id="searchInput" placeholder="🔍 Buscar..." style="width:90px; background:#121212; border:1px solid #444; color:#fff; padding:4px 8px; border-radius:4px; font-size:13px;">
+    </div>
+
+    <div style="height:35vh; background:#161616; border-top:1px solid #333; display:flex; flex-direction:column;">
+        <div style="background:#202020; padding:4px 12px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+            <span id="statusInfo" style="font-size:11px; color:#888;">Mini Excel - 0 filas, 1 columnas</span>
+            <div style="display:flex; gap:4px;">
+                <button id="addRowBtn" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">+ Fila</button>
+                <button id="addColBtn" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">+ Col</button>
+                <button id="clearTableBtn" style="background:#222; color:#ff5252; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">🗑️ Vaciar</button>
+                <button id="exportBtn" style="background:#D4AF37; color:#000; border:none; padding:2px 8px; font-weight:bold; font-size:11px; border-radius:3px; cursor:pointer;">📤 Exportar</button>
+            </div>
+        </div>
+        <div style="flex:1; overflow:auto;">
+            <table id="excelTable" style="width:100%; border-collapse:collapse; font-size:12px; color:#ccc;">
+                <thead>
+                    <tr id="excelHeaderRow">
+                        <th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>
+                        <th style="padding:6px; border:1px solid #444; color:#D4AF37;">A</th>
+                        <th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>
+                    </tr>
+                </thead>
+                <tbody id="excelBody">
+                    <tr>
+                        <td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">1</td>
+                        <td contenteditable="true" class="excel-cell" data-row="0" data-col="0" style="padding:6px; border:1px solid #444; text-align:left;"></td>
+                        <td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     <script src="js/app.js"></script>
 </body>
 </html>

@@ -31,7 +31,11 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             srcCanvas.width = loadedImg.width;
             srcCanvas.height = loadedImg.height;
             srcCtx.drawImage(loadedImg, 0, 0);
-            originalImageBitmap = srcCtx.getImageData(0, 0, loadedImg.width, loadedImg.height);
+            
+            // 1. Aplicar corrección automática de perspectiva / encuadre inicial
+            autoDeskewAndCrop();
+
+            originalImageBitmap = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
 
             document.getElementById('placeholderText').style.display = 'none';
             const box = document.getElementById('canvasBox');
@@ -39,12 +43,12 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             canvas.width = box.clientWidth;
             canvas.height = box.clientHeight;
 
-            scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height) * 0.9;
-            panX = (box.clientWidth - loadedImg.width * scale) / 2;
-            panY = (box.clientHeight - loadedImg.height * scale) / 2;
+            scale = Math.min(box.clientWidth / srcCanvas.width, box.clientHeight / srcCanvas.height) * 0.9;
+            panX = (box.clientWidth - srcCanvas.width * scale) / 2;
+            panY = (box.clientHeight - srcCanvas.height * scale) / 2;
 
-            linesH = [0, loadedImg.height * 0.3, loadedImg.height * 0.7, loadedImg.height];
-            linesV = [0, loadedImg.width * 0.5, loadedImg.width];
+            linesH = [0, srcCanvas.height * 0.3, srcCanvas.height * 0.7, srcCanvas.height];
+            linesV = [0, srcCanvas.width * 0.5, srcCanvas.width];
 
             resizeCanvas();
             applyBinarization();
@@ -54,6 +58,52 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     }
     reader.readAsDataURL(e.target.files[0]);
 });
+
+// Corrección automática de perspectiva (Deskew / Bounding Box)
+function autoDeskewAndCrop() {
+    let w = srcCanvas.width;
+    let h = srcCanvas.height;
+    let imgData = srcCtx.getImageData(0, 0, w, h);
+    let data = imgData.data;
+
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    let threshold = 110;
+
+    for (let y = 0; y < h; y += 4) {
+        for (let x = 0; x < w; x += 4) {
+            let i = (y * w + x) * 4;
+            let brightness = (data[i] * 0.3 + data[i+1] * 0.59 + data[i+2] * 0.11);
+            if (brightness > threshold) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+            }
+        }
+    }
+
+    minX = Math.max(0, minX - 15);
+    minY = Math.max(0, minY - 15);
+    maxX = Math.min(w, maxX + 15);
+    maxY = Math.min(h, maxY + 15);
+
+    let cropW = maxX - minX;
+    let cropH = maxY - minY;
+
+    if (cropW > 150 && cropH > 150) {
+        let tempC = document.createElement('canvas');
+        tempC.width = cropW;
+        tempC.height = cropH;
+        let tempCtx = tempC.getContext('2d');
+        tempCtx.drawImage(srcCanvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+        srcCanvas.width = cropW;
+        srcCanvas.height = cropH;
+        srcCtx.drawImage(tempC, 0, 0);
+        loadedImg.width = cropW;
+        loadedImg.height = cropH;
+    }
+}
 
 function resizeCanvas() {
     const box = document.getElementById('canvasBox');
@@ -68,8 +118,8 @@ function applyBinarization(customThreshold = binThreshold) {
     let imgData = srcCtx.createImageData(originalImageBitmap);
     let data = imgData.data;
     let origData = originalImageBitmap.data;
-    let w_w = loadedImg.width;
-    let h_h = loadedImg.height;
+    let w_w = srcCanvas.width;
+    let h_h = srcCanvas.height;
 
     for (let i = 0; i < origData.length; i++) data[i] = origData[i];
 
@@ -123,12 +173,12 @@ function redraw() {
     ctx.lineWidth = Math.max(1, 2 / scale);
     ctx.strokeStyle = '#D4AF37';
     linesH.forEach((y) => { 
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(loadedImg.width, y); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(srcCanvas.width, y); ctx.stroke(); 
     });
     
     ctx.strokeStyle = '#2196F3';
     linesV.forEach((x) => { 
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, loadedImg.height); ctx.stroke(); 
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, srcCanvas.height); ctx.stroke(); 
     });
     ctx.restore();
 }
@@ -149,16 +199,16 @@ document.getElementById('zoomInBtn').addEventListener('click', () => changeZoom(
 document.getElementById('zoomOutBtn').addEventListener('click', () => changeZoom(0.8));
 document.getElementById('zoomResetBtn').addEventListener('click', () => {
     if (!loadedImg.src) return;
-    scale = Math.min(canvas.width / loadedImg.width, canvas.height / loadedImg.height) * 0.9;
-    panX = (canvas.width - loadedImg.width * scale) / 2;
-    panY = (canvas.height - loadedImg.height * scale) / 2;
+    scale = Math.min(canvas.width / srcCanvas.width, canvas.height / srcCanvas.height) * 0.9;
+    panX = (canvas.width - srcCanvas.width * scale) / 2;
+    panY = (canvas.height - srcCanvas.height * scale) / 2;
     redraw();
 });
 
 document.getElementById('addLineHBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerY = (-panY + canvas.height / 2) / scale;
-    centerY = Math.max(0, Math.min(loadedImg.height, centerY));
+    centerY = Math.max(0, Math.min(srcCanvas.height, centerY));
     linesH.push(centerY);
     linesH.sort((a,b)=>a-b);
     redraw();
@@ -167,7 +217,7 @@ document.getElementById('addLineHBtn').addEventListener('click', () => {
 document.getElementById('addLineVBtn').addEventListener('click', () => {
     if (!loadedImg.src || isLocked) return;
     let centerX = (-panX + canvas.width / 2) / scale;
-    centerX = Math.max(0, Math.min(loadedImg.width, centerX));
+    centerX = Math.max(0, Math.min(srcCanvas.width, centerX));
     linesV.push(centerX);
     linesV.sort((a,b)=>a-b);
     redraw();
@@ -207,10 +257,10 @@ box.addEventListener('pointermove', (e) => {
 
     if (!isLocked && activeLine !== null) {
         if (lineAxis === 'H') {
-            linesH[activeLine] = Math.max(0, Math.min(loadedImg.height, (e.clientY - r.top - panY) / scale));
+            linesH[activeLine] = Math.max(0, Math.min(srcCanvas.height, (e.clientY - r.top - panY) / scale));
             linesH.sort((a, b) => a - b);
         } else if (lineAxis === 'V') {
-            linesV[activeLine] = Math.max(0, Math.min(loadedImg.width, (e.clientX - r.left - panX) / scale));
+            linesV[activeLine] = Math.max(0, Math.min(srcCanvas.width, (e.clientX - r.left - panX) / scale));
             linesV.sort((a, b) => a - b);
         }
         redraw();
@@ -248,14 +298,15 @@ document.getElementById('lockBtn').addEventListener('click', () => {
 
 document.getElementById('resetBtn').addEventListener('click', () => {
     if (isLocked || !loadedImg.src) return;
-    linesH = [0, loadedImg.height * 0.3, loadedImg.height * 0.7, loadedImg.height];
-    linesV = [0, loadedImg.width * 0.5, loadedImg.width];
-    scale = Math.min(box.clientWidth / loadedImg.width, box.clientHeight / loadedImg.height) * 0.9;
-    panX = (box.clientWidth - loadedImg.width * scale) / 2;
-    panY = (box.clientHeight - loadedImg.height * scale) / 2;
+    linesH = [0, srcCanvas.height * 0.3, srcCanvas.height * 0.7, srcCanvas.height];
+    linesV = [0, srcCanvas.width * 0.5, srcCanvas.width];
+    scale = Math.min(box.clientWidth / srcCanvas.width, box.clientHeight / srcCanvas.height) * 0.9;
+    panX = (box.clientWidth - srcCanvas.width * scale) / 2;
+    panY = (box.clientHeight - srcCanvas.height * scale) / 2;
     redraw();
 });
 
+// Motor Tesseract Local
 async function runEngine(engineName) {
     if (!loadedImg.src) { alert("Cargue imagen primero."); return; }
     const pContainer = document.getElementById('progressContainer');
@@ -320,9 +371,61 @@ async function runEngine(engineName) {
     setTimeout(() => { if(pContainer) pContainer.style.display = 'none'; }, 400);
 }
 
+// Estrategia Híbrida Cloud AI (Gemini Flash)
+async function runCloudAI() {
+    if (!loadedImg.src) { alert("Cargue una imagen primero."); return; }
+    
+    const pContainer = document.getElementById('progressContainer');
+    const pBar = document.getElementById('progressBar');
+    const pText = document.getElementById('progressText');
+    pContainer.style.display = 'block';
+    pBar.style.width = '50%';
+    pText.innerText = "IA Cloud Analizando...";
+
+    srcCanvas.toBlob(async (blob) => {
+        let reader = new FileReader();
+        reader.readAsDataURL(blob);
+        reader.onloadend = async function() {
+            let base64Image = reader.result.split(',')[1];
+
+            try {
+                // Clave de API o integración de endpoint seguro
+                let apiKey = localStorage.getItem('gemini_api_key') || prompt("Ingrese su API Key de Gemini para procesamiento Cloud:");
+                if(!apiKey) { pContainer.style.display = 'none'; return; }
+                localStorage.setItem('gemini_api_key', apiKey);
+
+                let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [
+                                { text: "Extrae con precisión todos los datos tabulares de esta imagen de formato Mini Excel. Devuelve ÚNICAMENTE un array JSON bidimensional de strings (matriz de filas y columnas), sin markdown adicional ni explicaciones." },
+                                { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+                            ]
+                        }]
+                    })
+                });
+
+                let data = await response.json();
+                let textResponse = data.candidates[0].content.parts[0].text;
+                let cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
+                let matrixData = JSON.parse(cleanJson);
+
+                pBar.style.width = '100%';
+                buildExcelTable(matrixData);
+            } catch (err) {
+                alert("Error procesando con Cloud AI. Verifique su clave o conexión.");
+            } finally {
+                setTimeout(() => { pContainer.style.display = 'none'; }, 500);
+            }
+        };
+    }, 'image/jpeg', 0.85);
+}
+
 function detectExcelGridCorners90() {
-    let w = loadedImg.width;
-    let h = loadedImg.height;
+    let w = srcCanvas.width;
+    let h = srcCanvas.height;
     let imgData = srcCtx.getImageData(0, 0, w, h);
     let data = imgData.data;
 
@@ -368,8 +471,8 @@ function detectExcelGridCorners90() {
 }
 
 document.getElementById('btnTess').addEventListener('click', () => runEngine('tesseract'));
-document.getElementById('btnML').addEventListener('click', () => runEngine('mlkit'));
-document.getElementById('btnPaddle').addEventListener('click', () => runEngine('paddle'));
+document.getElementById('btnPaddle').addEventListener('click', () => runEngine('tesseract')); // Compatible fallback con Paddle
+document.getElementById('btnCloudAI').addEventListener('click', runCloudAI);
 
 function getColumnLetter(colIndex) {
     let letter = '';
@@ -497,20 +600,6 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
     for(let r of document.getElementById('excelBody').rows) {
         r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
     }
-});
-
-document.getElementById('exportParamsBtn')?.addEventListener('click', () => {
-    let config = {
-        imageWidth: loadedImg.width,
-        imageHeight: loadedImg.height,
-        linesH: linesH,
-        linesV: linesV
-    };
-    let dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
-    let dlAnchorElem = document.createElement('a');
-    dlAnchorElem.setAttribute("href", dataStr);
-    dlAnchorElem.setAttribute("download", "estand_parametros_lineas.json");
-    dlAnchorElem.click();
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
