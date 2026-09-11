@@ -14,15 +14,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const cellValueInput = document.getElementById('cell-value-input');
     const activeCellLabel = document.getElementById('active-cell-label');
     const excelTbody = document.getElementById('excel-tbody');
-    const btnH = document.getElementById('btn-h');
-    const btnV = document.getElementById('btn-v');
+    
+    // Selectores flexibles para los botones de la barra superior
+    const btnH = document.getElementById('btn-h') || document.querySelector('[data-action="line-h"]') || document.querySelectorAll('.toolbar-btn')[2];
+    const btnV = document.getElementById('btn-v') || document.querySelector('[data-action="line-v"]') || document.querySelectorAll('.toolbar-btn')[3];
+    const btnResetL = document.getElementById('reset-l') || document.querySelectorAll('.toolbar-btn')[1];
+    const btnBloquear = document.getElementById('bloquear') || document.querySelectorAll('.toolbar-btn')[0];
+    
     const btnExportar = document.getElementById('btn-exportar');
     const btnSearch = document.getElementById('btn-search');
+    const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
 
     let currentImage = null;
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
-    let modoDibujoLinea = null;
+    let modoDibujoLinea = null; // 'H' o 'V'
     let ultimoCsvGenerado = "";
     let logDepuracion = [];
     let isProcessingOCR = false;
@@ -30,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isPanning = false;
     let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
+    // Control de Panning / Desplazamiento táctil y de mouse en el viewport
     viewport.addEventListener('mousedown', (e) => {
         if (currentZoom <= 1.0) return;
         isPanning = true;
@@ -49,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
     });
 
+    // Conmutación de motores OCR
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             if (isProcessingOCR) {
@@ -64,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Carga de imagen SIN auto-ejecutar Tesseract para dar libertad de elegir motor
+    // Carga de imagen y renderizado inmediato en el canvas para evitar pantalla en negro
     fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
@@ -78,13 +86,18 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = function(event) {
             const img = new Image();
             img.onload = function() {
+                // Ajustar dimensiones del canvas físico a la imagen real
                 canvas.width = img.width;
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
+                
+                // Guardar respaldo de imagen original procesada con umbral
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                registrarLog(`Imagen lista en canvas: ${img.width}x${img.height}px`);
+                aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
+                
+                registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen cargada. Elige motor o dibuja líneas.";
+                excelStatus.textContent = "Imagen lista. Elige motor o dibuja líneas.";
             }
             img.src = event.target.result;
         }
@@ -97,26 +110,43 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentImage) aplicarUmbralInstantaneo(parseInt(val));
     });
 
-    btnH.addEventListener('click', () => { 
-        modoDibujoLinea = 'H'; 
-        excelStatus.textContent = "Toca la zona visible para trazar línea horizontal"; 
-    });
-    btnV.addEventListener('click', () => { 
-        modoDibujoLinea = 'V'; 
-        excelStatus.textContent = "Toca la zona visible para trazar línea vertical"; 
-    });
+    // Activación de herramientas de líneas manuales
+    if (btnH) {
+        btnH.addEventListener('click', () => { 
+            modoDibujoLinea = 'H'; 
+            excelStatus.textContent = "Modo activo: Toca el cuadro de imagen para trazar línea horizontal"; 
+            registrarLog("Activado modo de línea horizontal manual.");
+        });
+    }
+    if (btnV) {
+        btnV.addEventListener('click', () => { 
+            modoDibujoLinea = 'V'; 
+            excelStatus.textContent = "Modo activo: Toca el cuadro de imagen para trazar línea vertical"; 
+            registrarLog("Activado modo de línea vertical manual.");
+        });
+    }
 
-    // Mapeo preciso de coordenadas de clic en pantalla visible bajo zoom y scroll
+    // Mapeo preciso de coordenadas de clic en la pantalla visible (considerando Zoom y Scroll del Viewport)
     canvas.addEventListener('click', (e) => {
-        if (!currentImage || !modoDibujoLinea || isProcessingOCR) return;
+        if (!currentImage) {
+            alert("Primero debes cargar una imagen.");
+            return;
+        }
+        if (!modoDibujoLinea) {
+            excelStatus.textContent = "Selecciona L.H. o L.V. antes de tocar la imagen.";
+            return;
+        }
+
         const rect = canvas.getBoundingClientRect();
+        // Coordenadas relativas exactas al canvas escalado y desplazado
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
         const x = (e.clientX - rect.left) * scaleX;
         const y = (e.clientY - rect.top) * scaleY;
 
+        // Dibujar línea negra permanente sobre el canvas
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = Math.max(2, Math.round(canvas.width / 400));
         ctx.beginPath();
         if (modoDibujoLinea === 'H') { 
             ctx.moveTo(0, y); 
@@ -127,7 +157,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.stroke();
 
-        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en X:${Math.round(x)}, Y:${Math.round(y)}`);
+        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
+        
+        // Actualizar datos de imagen con la línea incorporada
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const tipoLinea = modoDibujoLinea;
         modoDibujoLinea = null;
@@ -177,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
             progressText.textContent = '100%';
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
             registrarLog(`ERROR en motor ${engine}: ${err.message}`);
@@ -238,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (bufferCelda) celdasLimpias.push(bufferCelda.trim());
             if (celdasLimpias.length === 0) celdasLimpias = filaArr;
 
-5           csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
+            csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
 
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
@@ -283,6 +315,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(logEntry);
     }
 
+    // Controles de Zoom
     document.getElementById('zoom-in').addEventListener('click', () => { currentZoom = Math.min(currentZoom + 0.25, 4.0); actualizarZoom(); });
     document.getElementById('zoom-out').addEventListener('click', () => { currentZoom = Math.max(currentZoom - 0.25, 0.5); actualizarZoom(); });
     document.getElementById('zoom-reset').addEventListener('click', () => { currentZoom = 1.0; actualizarZoom(); });
@@ -290,9 +323,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function actualizarZoom() {
         canvasScaler.style.transform = `scale(${currentZoom})`;
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
+        registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
-    const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
+    // Botón de Vaciar / Limpiar datos
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
             currentImage = null;
@@ -300,11 +334,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ultimoCsvGenerado = "";
             cellValueInput.value = "";
             excelStatus.textContent = "Estado: Vacío";
-            registrarLog("Limpieza ejecutada.");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            registrarLog("Limpieza general ejecutada.");
             alert("¡Datos vaciados correctamente!");
         });
     }
 
+    // Modal de Logs y CSV
     btnSearch.addEventListener('click', () => {
         const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
         
