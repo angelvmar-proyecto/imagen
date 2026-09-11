@@ -15,17 +15,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const activeCellLabel = document.getElementById('active-cell-label');
     const excelTbody = document.getElementById('excel-tbody');
     
-    const btnH = document.getElementById('btn-h') || document.querySelector('[data-action="line-h"]') || document.querySelectorAll('.toolbar-btn')[2];
-    const btnV = document.getElementById('btn-v') || document.querySelector('[data-action="line-v"]') || document.querySelectorAll('.toolbar-btn')[3];
-    const btnResetL = document.getElementById('reset-l') || document.querySelectorAll('.toolbar-btn')[1];
-    const btnBloquear = document.getElementById('btn-bloquear') || document.querySelectorAll('.toolbar-btn')[0];
-    
     const btnExportar = document.getElementById('btn-exportar');
     const btnSearch = document.getElementById('btn-search');
     const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
 
+    // Selección robusta de los botones de la barra superior buscando por ID o por contenido de texto ("L.H.", "L.V.", "Reset L")
+    const toolbarButtons = document.querySelectorAll('.toolbar button, .toolbar-btn');
+    let btnBloquear = null;
+    let btnResetL = null;
+    let btnH = null;
+    let btnV = null;
+
+    toolbarButtons.forEach(btn => {
+        const txt = btn.textContent.trim().toLowerCase();
+        if (txt.includes('bloquear')) btnBloquear = btn;
+        else if (txt.includes('reset')) btnResetL = btn;
+        else if (txt.includes('l.h.') || txt.includes('h.')) btnH = btn;
+        else if (txt.includes('l.v.') || txt.includes('v.')) btnV = btn;
+    });
+
+    // Fallbacks por si acaso usando querySelector tradicional
+    if (!btnH) btnH = document.getElementById('btn-h');
+    if (!btnV) btnV = document.getElementById('btn-v');
+    if (!btnResetL) btnResetL = document.getElementById('reset-l');
+
     let currentImage = null;
-    let originalImageBackup = null; // Para poder resetear las líneas con Reset L
+    let originalImageBackup = null; 
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
     let modoDibujoLinea = null; // 'H' o 'V'
@@ -38,7 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Panning / Desplazamiento táctil y de mouse
     viewport.addEventListener('mousedown', (e) => {
-        if (currentZoom <= 1.0 || modoDibujoLinea) return; // Si estamos dibujando línea, priorizamos el toque sobre el canvas
+        if (currentZoom <= 1.0 || modoDibujoLinea) return; 
         isPanning = true;
         viewport.style.cursor = 'grabbing';
         startX = e.pageX - viewport.offsetLeft;
@@ -91,13 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0);
                 
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                // Guardar copia limpia para Reset L
                 originalImageBackup = ctx.createImageData(canvas.width, canvas.height);
                 originalImageBackup.data.set(currentImage.data);
 
                 aplicarUmbralInstantaneo(parseInt(umbralSlider.value));
                 
-                registrarLog(`Imagen cargada en canvas: ${img.width}x${img.height}px`);
+                registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
                 excelStatus.textContent = "Imagen lista. Selecciona L.H. o L.V. para trazar líneas.";
             }
@@ -112,34 +126,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentImage) aplicarUmbralInstantaneo(parseInt(val));
     });
 
-    // Función auxiliar para activar modo línea con respuesta visual inmediata
+    // Función de activación de modo línea con realce visual verde
     function activarModoLinea(tipo) {
         if (!currentImage) {
-            alert("Primero carga una imagen.");
+            alert("Primero carga una imagen antes de trazar líneas.");
+            registrarLog("Intento de activar línea manual sin imagen cargada.");
             return;
         }
         modoDibujoLinea = tipo;
         
-        // Estilos visuales de botones activos
         if (btnH) btnH.style.background = (tipo === 'H') ? '#27ae60' : '';
         if (btnV) btnV.style.background = (tipo === 'V') ? '#27ae60' : '';
 
-        const mensaje = (tipo === 'H') ? "▶ MODO LÍNEA HORIZONTAL: Toca cualquier parte de la imagen" : "▶ MODO LÍNEA VERTICAL: Toca cualquier parte de la imagen";
+        const mensaje = (tipo === 'H') ? "▶ MODO LÍNEA H: Toca la imagen para trazar" : "▶ MODO LÍNEA V: Toca la imagen para trazar";
         excelStatus.textContent = mensaje;
         registrarLog(`Activado modo manual: ${tipo}`);
     }
 
-    // Soporte robusto para eventos tanto click como touch en botones de línea
+    // Vinculación con eventos múltiples (click, touchstart, touchend) para máxima compatibilidad móvil
     if (btnH) {
-        btnH.addEventListener('click', () => activarModoLinea('H'));
-        btnH.addEventListener('touchend', (e) => { e.preventDefault(); activarModoLinea('H'); });
-    }
-    if (btnV) {
-        btnV.addEventListener('click', () => activarModoLinea('V'));
-        btnV.addEventListener('touchend', (e) => { e.preventDefault(); activarModoLinea('V'); });
+        ['click', 'touchstart', 'touchend'].forEach(evt => {
+            btnH.addEventListener(evt, (e) => {
+                e.preventDefault();
+                activarModoLinea('H');
+            });
+        });
     }
 
-    // Botón Reset L (limpiar líneas trazadas)
+    if (btnV) {
+        ['click', 'touchstart', 'touchend'].forEach(evt => {
+            btnV.addEventListener(evt, (e) => {
+                e.preventDefault();
+                activarModoLinea('V');
+            });
+        });
+    }
+
     if (btnResetL) {
         const ejecutarResetL = () => {
             if (!originalImageBackup) return;
@@ -152,14 +174,18 @@ document.addEventListener('DOMContentLoaded', () => {
             excelStatus.textContent = "Líneas restablecidas a la imagen original.";
             registrarLog("Reset L ejecutado: Se eliminaron las líneas manuales.");
         };
-        btnResetL.addEventListener('click', ejecutarResetL);
-        btnResetL.addEventListener('touchend', (e) => { e.preventDefault(); ejecutarResetL(); });
+        ['click', 'touchstart', 'touchend'].forEach(evt => {
+            btnResetL.addEventListener(evt, (e) => {
+                e.preventDefault();
+                ejecutarResetL();
+            });
+        });
     }
 
-    // Trazado de línea directamente sobre el canvas al hacer clic o tocar
+    // Trazado de línea en coordenadas exactas del canvas
     const manejarTrazadoLinea = (clientX, clientY) => {
         if (!currentImage || !modoDibujoLinea) {
-            excelStatus.textContent = "Aviso: Selecciona L.H. o L.V. antes de tocar la imagen.";
+            excelStatus.textContent = "Aviso: Selecciona L.H. o L.V. primero.";
             return;
         }
 
@@ -186,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const tipoAplicado = modoDibujoLinea;
         
-        // Desactivar modo de dibujo y restaurar colores de botones
         modoDibujoLinea = null;
         if (btnH) btnH.style.background = '';
         if (btnV) btnV.style.background = '';
