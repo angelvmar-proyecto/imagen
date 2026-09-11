@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnSearch = document.getElementById('btn-search');
     const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
 
-    // Selección robusta de los botones de la barra superior buscando por ID o por contenido de texto ("L.H.", "L.V.", "Reset L")
+    // Selección inteligente de los botones de la barra superior por texto interno
     const toolbarButtons = document.querySelectorAll('.toolbar button, .toolbar-btn');
     let btnBloquear = null;
     let btnResetL = null;
@@ -34,7 +34,6 @@ document.addEventListener('DOMContentLoaded', () => {
         else if (txt.includes('l.v.') || txt.includes('v.')) btnV = btn;
     });
 
-    // Fallbacks por si acaso usando querySelector tradicional
     if (!btnH) btnH = document.getElementById('btn-h');
     if (!btnV) btnV = document.getElementById('btn-v');
     if (!btnResetL) btnResetL = document.getElementById('reset-l');
@@ -113,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
                 setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Selecciona L.H. o L.V. para trazar líneas.";
+                excelStatus.textContent = "Imagen lista. Dibuja tus líneas y usa un motor para procesar.";
             }
             img.src = event.target.result;
         }
@@ -140,10 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const mensaje = (tipo === 'H') ? "▶ MODO LÍNEA H: Toca la imagen para trazar" : "▶ MODO LÍNEA V: Toca la imagen para trazar";
         excelStatus.textContent = mensaje;
-        registrarLog(`Activado modo manual: ${tipo}`);
+        registrarLog(`Activado modo de línea ${tipo === 'H' ? 'horizontal' : 'vertical'} manual.`);
     }
 
-    // Vinculación con eventos múltiples (click, touchstart, touchend) para máxima compatibilidad móvil
     if (btnH) {
         ['click', 'touchstart', 'touchend'].forEach(evt => {
             btnH.addEventListener(evt, (e) => {
@@ -172,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnH) btnH.style.background = '';
             if (btnV) btnV.style.background = '';
             excelStatus.textContent = "Líneas restablecidas a la imagen original.";
-            registrarLog("Reset L ejecutado: Se eliminaron las líneas manuales.");
+            registrarLog("Limpieza general ejecutada (Reset L).");
         };
         ['click', 'touchstart', 'touchend'].forEach(evt => {
             btnResetL.addEventListener(evt, (e) => {
@@ -182,7 +180,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Trazado de línea en coordenadas exactas del canvas
+    // Trazado de línea SIN disparar OCR automáticamente (para que puedas poner todas las que quieras)
     const manejarTrazadoLinea = (clientX, clientY) => {
         if (!currentImage || !modoDibujoLinea) {
             excelStatus.textContent = "Aviso: Selecciona L.H. o L.V. primero.";
@@ -207,17 +205,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         ctx.stroke();
 
-        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en X:${Math.round(x)}, Y:${Math.round(y)}`);
+        registrarLog(`Línea manual [${modoDibujoLinea}] trazada en coordenadas X:${Math.round(x)}, Y:${Math.round(y)}`);
         
         currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const tipoAplicado = modoDibujoLinea;
         
-        modoDibujoLinea = null;
-        if (btnH) btnH.style.background = '';
-        if (btnV) btnV.style.background = '';
-
-        excelStatus.textContent = `Línea ${tipoAplicado} aplicada. Procesando con ${activeEngine}...`;
-        ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+        // Mantenemos el modo activo para que puedas seguir tirando más líneas si gustas,
+        // o puedes hacer clic en un motor OCR cuando termines.
+        excelStatus.textContent = `Línea ${modoDibujoLinea} trazada. Toca otro lugar para más líneas o presiona un Motor OCR para procesar.`;
+        
+        // Apagamos el color verde del botón individual pero conservamos la capacidad de seguir dibujando
+        if (btnH && modoDibujoLinea === 'H') btnH.style.background = '';
+        if (btnV && modoDibujoLinea === 'V') btnV.style.background = '';
+        modoDibujoLinea = null; 
     };
 
     canvas.addEventListener('click', (e) => {
