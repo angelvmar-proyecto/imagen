@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cellValueInput = document.getElementById('cell-value-input');
     const activeCellLabel = document.getElementById('active-cell-label');
     const excelTbody = document.getElementById('excel-tbody');
+    const excelContainer = document.querySelector('.excel-container') || excelTbody.closest('.table-responsive') || excelTbody.parentElement;
     
     const btnExportar = document.getElementById('btn-exportar');
     const btnSearch = document.getElementById('btn-search');
@@ -80,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Control unificado de Panning y Arrastre de Líneas
+    // Control unificado de Panning y Arrastre de Líneas exclusivo para el viewport de imagen
     viewport.addEventListener('mousedown', (e) => {
         if (isBloqueado) return;
         if (modoDibujoLinea) {
@@ -152,6 +153,15 @@ document.addEventListener('DOMContentLoaded', () => {
         isPanning = false;
         selectedLineIndex = null;
     });
+
+    // Aislar la tabla del mini Excel para permitir desplazamiento libre sin interferir con la imagen
+    if (excelContainer) {
+        ['mousedown', 'mousemove', 'mouseup', 'touchstart', 'touchmove', 'touchend'].forEach(evtName => {
+            excelContainer.addEventListener(evtName, (e) => {
+                e.stopPropagation();
+            }, { passive: true });
+        });
+    }
 
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -255,15 +265,18 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Activado modo de línea ${tipo}.`);
     }
 
+    // Uso exclusivo de click limpio para evitar conflictos táctiles dobles (touchstart/touchend)
     if (btnH) {
-        ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnH.addEventListener(evt, (e) => { e.preventDefault(); activarModoLinea('H'); });
+        btnH.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            activarModoLinea('H'); 
         });
     }
 
     if (btnV) {
-        ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnV.addEventListener(evt, (e) => { e.preventDefault(); activarModoLinea('V'); });
+        btnV.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            activarModoLinea('V'); 
         });
     }
 
@@ -280,8 +293,9 @@ document.addEventListener('DOMContentLoaded', () => {
             excelStatus.textContent = "Líneas restablecidas.";
             registrarLog("Reset L ejecutado.");
         };
-        ['click', 'touchstart', 'touchend'].forEach(evt => {
-            btnResetL.addEventListener(evt, (e) => { e.preventDefault(); ejecutarResetL(); });
+        btnResetL.addEventListener('click', (e) => { 
+            e.preventDefault(); 
+            ejecutarResetL(); 
         });
     }
 
@@ -331,12 +345,12 @@ document.addEventListener('DOMContentLoaded', () => {
         rederizarCanvasConLineas(parseInt(umbralSlider.value));
     }
 
-    // Pipeline Matemático Integrado (Estándar, Ultrasonido/Ecografía y Óptica/Retinografía)
+    // Pipeline Matemático Integrado con Shading/Sharpening inicial preservado
     function aplicarPipelineEspecializado(dst, src, width, height, thresholdValue) {
         const baseThreshold = (thresholdValue / 100) * 255;
 
         if (activePipeline === 'ultrasound') {
-            // Pipeline Ultrasonido: Reducción de ruido speckle (promediado vecindad 3x3) y realce de contornos de tejidos
+            // Pipeline Ultrasonido: Reducción de ruido speckle y realce de contornos de tejidos
             const tempGray = new Uint8ClampedArray(width * height);
             for (let i = 0; i < src.length; i += 4) {
                 tempGray[i / 4] = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
@@ -346,7 +360,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (let x = 0; x < width; x++) {
                     let idx = (y * width + x) * 4;
                     let sum = 0, count = 0;
-                    // Filtro espacial de suavizado (reducción grano speckle)
                     for (let dy = -1; dy <= 1; dy++) {
                         for (let dx = -1; dx <= 1; dx++) {
                             let nx = x + dx, ny = y + dy;
@@ -357,7 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                     let val = sum / count;
-                    // Realce de umbral ultrasónico adaptativo
                     let finalVal = val >= baseThreshold ? 255 : 0;
                     dst[idx] = dst[idx+1] = dst[idx+2] = finalVal;
                     dst[idx+3] = src[idx+3];
@@ -377,7 +389,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             for (let i = 0; i < src.length; i += 4) {
                 let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-                // Corrección de iluminación local y realce de letras/bordes oftálmicos
                 let adjusted = Math.min(255, Math.max(0, (gray - 128) * factorContraste + 128));
                 let finalVal = adjusted >= baseThreshold ? 255 : 0;
                 dst[i] = dst[i+1] = dst[i+2] = finalVal;
@@ -386,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
             registrarLog("Pipeline aplicado: Óptica / Retinografía (Normalización de fondo y contraste)");
 
         } else {
-            // Pipeline Estándar / OCR Clásico
+            // Pipeline Estándar / OCR Clásico con Sharpening base
             for (let i = 0; i < src.length; i += 4) {
                 let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
                 let processed = gray >= baseThreshold ? 255 : 0;
@@ -405,11 +416,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const src = originalImageBackup.data;
         const dst = imgData.data;
 
-        // Ejecutar el pipeline activo seleccionado
         aplicarPipelineEspecializado(dst, src, width, height, thresholdValue);
         ctx.putImageData(imgData, 0, 0);
 
-        // Dibujar líneas manuales finas y precisas (1-2px)
         const grosorFino = Math.max(1, Math.round(width / 900));
         ctx.lineWidth = grosorFino;
         ctx.strokeStyle = '#000000';
@@ -578,7 +587,6 @@ document.addEventListener('DOMContentLoaded', () => {
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
 
-    // Botón Vaciar SELECTIVO: Borra texto y tabla, conserva la imagen
     if (btnVaciar) {
         btnVaciar.addEventListener('click', () => {
             excelTbody.innerHTML = '';
