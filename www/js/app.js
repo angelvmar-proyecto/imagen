@@ -48,12 +48,13 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
     });
 
+    // Selector de motor con comportamiento independiente y específico
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Cambio de motor a: ${activeEngine}`);
+            registrarLog(`Conmutando a motor especializado: ${activeEngine.toUpperCase()}`);
             if (currentImage) ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
         });
     });
@@ -111,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
     });
 
+    // Ejecución especializada por motor adaptada al entorno offline de Termux
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage) return;
         loadingOverlay.style.display = 'flex';
@@ -119,20 +121,26 @@ document.addEventListener('DOMContentLoaded', () => {
         let simbolosDetectados = [];
 
         try {
-            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
-            registrarLog(`Inicio de reconocimiento OCR - Motor: ${engine} - Umbral: ${thresholdValue}`);
+            loadingStatusTitle.textContent = `Procesando (${engine.toUpperCase()})...`;
+            registrarLog(`Iniciando pipeline OCR [Motor: ${engine}] - Umbral: ${thresholdValue}`);
 
-            // Lógica por motor con mapeo PSM independiente respetando su arquitectura
-            const psmMap = { tesseract: 3, paddle: 6, mlkit: 11 };
+            // Configuraciones de PSM específicas para optimizar tablas y texto denso
+            let psmConfig = 3; // Por defecto Tesseract estándar
+            if (engine === 'paddle') {
+                psmConfig = 6; // Optimizado para bloques de texto uniforme y líneas tabulares
+            } else if (engine === 'mlkit') {
+                psmConfig = 11; // Optimizado para texto disperso, multilínea y celdas variadas
+            }
+
             const worker = await Tesseract.createWorker('spa', 1, {
                 logger: m => { if (m.status === 'recognizing text') progressText.textContent = `${Math.round(m.progress * 100)}%`; }
             });
-            await worker.setParameters({ tessedit_pageseg_mode: psmMap[engine] || 3 });
+            await worker.setParameters({ tessedit_pageseg_mode: psmConfig });
             const ret = await worker.recognize(imageDataURL);
             await worker.terminate();
 
             simbolosDetectados = ret.data.lines || [];
-            registrarLog(`OCR Finalizado con ${engine}. Líneas detectadas: ${simbolosDetectados.length}`);
+            registrarLog(`[${engine.toUpperCase()}] OCR Finalizado. Líneas brutas detectadas: ${simbolosDetectados.length}`);
 
         } catch (err) {
             registrarLog(`ERROR CRITICO en motor ${engine}: ${err.message}`);
@@ -142,9 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
     }
 
+    // Procesamiento matricial refinado para separar columnas de forma limpia
     function procesarMatrizYConstruirExcel(lines, engineName) {
         let filasAgrupadas = [];
-        let toleranciaY = 18; 
+        let toleranciaY = engineName === 'mlkit' ? 22 : 16; // Ajuste fino de banda según el motor
 
         let lineasOrdenadas = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0);
 
@@ -153,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         lineasOrdenadas.forEach(item => {
             let yCentro = (item.bbox.y0 + item.bbox.y1) / 2;
-            let textoLimpio = item.text.trim();
+            let textoLimpio = item.text.trim().replace(/\s+/g, ' ');
             if (!textoLimpio) return;
 
             if (ultimoY === -1 || Math.abs(yCentro - ultimoY) <= toleranciaY) {
@@ -170,11 +179,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let csvRows = [];
         excelTbody.innerHTML = '';
 
-        filasAgrupadas.slice(0, 120).forEach((filaArr, rowIndex) => {
+        filasAgrupadas.slice(0, 150).forEach((filaArr, rowIndex) => {
             let tr = document.createElement('tr');
             let textoFilaUnificado = filaArr.join(" ");
             
-            let partes = textoFilaUnificado.split(/[\s\|]{2,}|(?:\s-\s)/);
+            // Separador inteligente de columnas para evitar aglomeraciones en un solo renglón
+            let partes = textoFilaUnificado.split(/[\s\|]{2,}|(?:\s-\s)|(?:\s—\s)/).filter(p => p.trim().length > 0);
             if (partes.length < 2) partes = [textoFilaUnificado];
 
             csvRows.push(`"Fila ${rowIndex + 1}","${partes.join('","')}"`);
@@ -182,14 +192,15 @@ document.addEventListener('DOMContentLoaded', () => {
             let td = document.createElement('td');
             td.style.border = "1px solid #444";
             td.style.padding = "6px";
-            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join('<br>');
+            td.innerHTML = `<strong>R${rowIndex + 1}:</strong> ` + partes.map(p => `<span>${p}</span>`).join(' | ');
             tr.appendChild(td);
             excelTbody.appendChild(tr);
         });
 
         ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`CSV Generado (${engineName}) con ${filasAgrupadas.length} filas.`);
+        registrarLog(`Estructura generada (${engineName}): ${filasAgrupadas.length} filas procesadas.`);
         excelStatus.textContent = `Mini Excel (${engineName}) - ${filasAgrupadas.length} filas mapeadas`;
+        
         if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
             cellValueInput.value = filasAgrupadas[0][0];
             activeCellLabel.textContent = "A1";
@@ -230,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 
+    // Visor y Copia de Log / CSV Interactivo
     btnSearch.addEventListener('click', () => {
         const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
         
