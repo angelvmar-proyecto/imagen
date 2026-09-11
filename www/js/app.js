@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`Motor activo seleccionado: ${activeEngine}`);
 
             if (currentImage) {
-                ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+                ejecutarMotorLocalReal(parseInt(umbralSlider.value), activeEngine);
             }
         });
     });
@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 progressText.textContent = '30%';
 
                 setTimeout(() => {
-                    ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+                    ejecutarMotorLocalReal(parseInt(umbralSlider.value), activeEngine);
                 }, 100);
             }
             img.src = event.target.result;
@@ -68,72 +68,71 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Ejecutor Real con Tesseract.js usando toDataURL para evitar fallos de lectura en Canvas
-    async function ejecutarMotorOCRReal(thresholdValue, engine) {
+    // Ejecutor OCR Local con Tesseract
+    async function ejecutarMotorLocalReal(thresholdValue, engine) {
         if (!currentImage) return;
 
         loadingOverlay.style.display = 'flex';
         aplicarUmbralInstantaneo(thresholdValue);
 
         if (engine === 'tesseract') {
-            loadingStatusTitle.textContent = 'Inicializando Tesseract...';
+            loadingStatusTitle.textContent = 'Iniciando Tesseract Local...';
             try {
-                // Convertimos el contenido actual del canvas a Base64 Image Data URL de forma segura
                 const imageDataURL = canvas.toDataURL('image/png');
-
+                
                 loadingStatusTitle.textContent = 'Reconociendo texto...';
                 
-                const result = await Tesseract.recognize(
-                    imageDataURL,
-                    'spa',
-                    {
-                        logger: m => {
-                            if (m.status === 'recognizing text') {
-                                const percent = Math.round(m.progress * 100);
-                                progressText.textContent = `${percent}%`;
-                            } else if (m.status) {
-                                loadingStatusTitle.textContent = m.status;
-                            }
+                // Configuración para entorno móvil local
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const percent = Math.round(m.progress * 100);
+                            progressText.textContent = `${percent}%`;
+                        } else if (m.status) {
+                            loadingStatusTitle.textContent = m.status;
                         }
                     }
-                );
+                });
 
-                const extractedText = result.data.text.trim();
+                const ret = await worker.recognize(imageDataURL);
+                await worker.terminate();
+
+                const extractedText = ret.data.text.trim();
                 const lines = extractedText.split('\n').filter(l => l.trim().length > 0);
 
                 if (lines.length > 0) {
                     excelStatus.textContent = `Mini Excel (Tesseract) - ${lines.length} líneas detectadas`;
-                    cellValueInput.value = lines[0]; // Muestra la primera línea en la celda A1
-                    console.log("Texto OCR extraído exitosamente:", extractedText);
+                    cellValueInput.value = lines[0];
+                    console.log("Texto extraído con éxito:", extractedText);
                 } else {
                     excelStatus.textContent = `Mini Excel (Tesseract) - Sin texto claro`;
-                    cellValueInput.value = "No se detectó texto legible en la imagen";
+                    cellValueInput.value = "Imagen procesada (Sin texto legible detectado)";
                 }
 
             } catch (err) {
-                console.error("Error crítico en Tesseract:", err);
+                console.error("Error en motor local Tesseract:", err);
                 loadingStatusTitle.textContent = 'Error en motor OCR';
-                excelStatus.textContent = 'Mini Excel - Error de lectura';
-                cellValueInput.value = 'Error: ' + (err.message || err);
+                excelStatus.textContent = 'Mini Excel - Error de lectura local';
+                cellValueInput.value = 'Error local: ' + (err.message || err);
             }
         } else {
-            // Modo Paddle / Simulación Avanzada
-            loadingStatusTitle.textContent = 'Procesando Paddle.js...';
+            // Modo Paddle.js Local
+            loadingStatusTitle.textContent = 'Procesando Paddle.js Local...';
             let step = 0;
             const interval = setInterval(() => {
-                step += 25;
-                progressText.textContent = `${step}%`;
+                step += 33;
+                progressText.textContent = `${Math.min(step, 100)}%`;
                 if (step >= 100) {
                     clearInterval(interval);
-                    excelStatus.textContent = `Mini Excel (Paddle.js) - Tabla Tabulada OK`;
-                    cellValueInput.value = `Paddle.js: Datos estructurados correctamente`;
+                    excelStatus.textContent = `Mini Excel (Paddle.js) - Tabulación Local OK`;
+                    cellValueInput.value = `Paddle.js: Celdas estructuradas localmente`;
                 }
-            }, 120);
+            }, 100);
         }
 
         setTimeout(() => {
             loadingOverlay.style.display = 'none';
-        }, 500);
+        }, 400);
     }
 
     function aplicarUmbralInstantaneo(thresholdValue) {

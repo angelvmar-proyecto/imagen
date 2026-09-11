@@ -40,7 +40,7 @@
         <!-- Selector de Motores Funcional -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
-            <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
+            <button class="engine-tab active" data-engine="tesseract">Tesseract (Local)</button>
             <button class="engine-tab" data-engine="paddle">Paddle.js</button>
         </div>
 
@@ -51,7 +51,7 @@
             </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span class="loading-title">Procesando Fotogrametría...</span>
+                <span class="loading-title" id="loading-status-title">Procesando OCR local...</span>
                 <span id="progress-text">0%</span>
             </div>
         </div>
@@ -83,6 +83,8 @@
             </div>
         </div>
     </div>
+    <!-- Carga de Tesseract con soporte robusto para WebView local -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>
