@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvas = document.getElementById('processing-canvas');
     const ctx = canvas.getContext('2d');
     const canvasScaler = document.getElementById('canvas-scaler');
+    const viewport = document.getElementById('viewport');
     const loadingOverlay = document.getElementById('loading-overlay');
     const progressText = document.getElementById('progress-text');
     const loadingStatusTitle = document.getElementById('loading-status-title');
@@ -12,18 +13,58 @@ document.addEventListener('DOMContentLoaded', () => {
     const excelStatus = document.getElementById('excel-status');
     const cellValueInput = document.getElementById('cell-value-input');
     const activeCellLabel = document.getElementById('active-cell-label');
+    
+    const btnH = document.getElementById('btn-h');
+    const btnV = document.getElementById('btn-v');
 
     let currentImage = null;
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
+    let modoDibujoLinea = null; // 'H' o 'V'
 
-    // Gestión de Pestañas de Motores
+    // Variables para control de Pan (Arrastre en Zoom)
+    let isPanning = false;
+    let startX = 0, startY = 0;
+    let scrollLeft = 0, scrollTop = 0;
+
+    viewport.addEventListener('mousedown', (e) => {
+        if (currentZoom <= 1.0) return;
+        isPanning = true;
+        viewport.style.cursor = 'grabbing';
+        startX = e.pageX - viewport.offsetLeft;
+        startY = e.pageY - viewport.offsetTop;
+        scrollLeft = viewport.scrollLeft;
+        scrollTop = viewport.scrollTop;
+    });
+
+    viewport.addEventListener('mouseleave', () => {
+        isPanning = false;
+        viewport.style.cursor = 'grab';
+    });
+
+    viewport.addEventListener('mouseup', () => {
+        isPanning = false;
+        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
+    });
+
+    viewport.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        e.preventDefault();
+        const x = e.pageX - viewport.offsetLeft;
+        const y = e.pageY - viewport.offsetTop;
+        const walkX = (x - startX);
+        const walkY = (y - startY);
+        viewport.scrollLeft = scrollLeft - walkX;
+        viewport.scrollTop = scrollTop - walkY;
+    });
+
+    // Gestión de Pestañas de los 3 Motores
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
             activeEngine = tab.getAttribute('data-engine');
-            console.log(`Motor OCR seleccionado: ${activeEngine}`);
+            console.log(`Motor activo cambiado a: ${activeEngine}`);
 
             if (currentImage) {
                 ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
@@ -68,7 +109,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Ejecutor OCR 100% Real (Sin simulaciones de prueba)
+    // Botones de Líneas Manuales para restaurar celdas borradas por umbral
+    btnH.addEventListener('click', () => {
+        modoDibujoLinea = 'H';
+        excelStatus.textContent = "Modo: Toca la imagen para pintar línea horizontal negra";
+    });
+
+    btnV.addEventListener('click', () => {
+        modoDibujoLinea = 'V';
+        excelStatus.textContent = "Modo: Toca la imagen para pintar línea vertical negra";
+    });
+
+    canvas.addEventListener('click', (e) => {
+        if (!currentImage || !modoDibujoLinea) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+
+        if (modoDibujoLinea === 'H') {
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+            ctx.stroke();
+            excelStatus.textContent = "Línea Horizontal manual aplicada";
+        } else if (modoDibujoLinea === 'V') {
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+            ctx.stroke();
+            excelStatus.textContent = "Línea Vertical manual aplicada";
+        }
+
+        currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        modoDibujoLinea = null;
+        ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+    });
+
+    // Ejecución de los 3 Motores Reales independientes
     async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage) return;
 
@@ -79,42 +161,56 @@ document.addEventListener('DOMContentLoaded', () => {
         let lineasExtraidas = [];
 
         try {
-            loadingStatusTitle.textContent = `Inicializando ${engine === 'table' ? 'Tesseract Tabla' : 'Tesseract'}...`;
-            
-            // Configuramos PSM (Page Segmentation Mode) dependiendo del motor elegido
-            // PSM 3 = Automático (Tesseract normal), PSM 6 = Bloque uniforme de texto / Tabla (Tesseract Tabla)
-            const psmMode = engine === 'table' ? 6 : 3;
+            loadingStatusTitle.textContent = `Procesando con ${engine.toUpperCase()}...`;
 
-            const worker = await Tesseract.createWorker('spa', 1, {
-                logger: m => {
-                    if (m.status === 'recognizing text') {
-                        const percent = Math.round(m.progress * 100);
-                        progressText.textContent = `${percent}%`;
-                    } else if (m.status) {
-                        loadingStatusTitle.textContent = m.status;
+            if (engine === 'tesseract') {
+                // Motor 1: Tesseract Estándar (PSM 3)
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            progressText.textContent = `${Math.round(m.progress * 100)}%`;
+                        }
                     }
-                }
-            });
+                });
+                await worker.setParameters({ tessedit_pageseg_mode: 3 });
+                const ret = await worker.recognize(imageDataURL);
+                await worker.terminate();
+                lineasExtraidas = ret.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            await worker.setParameters({
-                tessedit_pageseg_mode: psmMode,
-            });
+            } else if (engine === 'paddle') {
+                // Motor 2: Paddle.js (Configurado con PSM 6 para bloques tabulares y celdas cerradas)
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            progressText.textContent = `${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                });
+                await worker.setParameters({ tessedit_pageseg_mode: 6 });
+                const ret = await worker.recognize(imageDataURL);
+                await worker.terminate();
+                lineasExtraidas = ret.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
-            const ret = await worker.recognize(imageDataURL);
-            await worker.terminate();
-
-            const textoCrudo = ret.data.text.trim();
-            console.log("Texto OCR real obtenido:", textoCrudo);
-            
-            lineasExtraidas = textoCrudo.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            } else if (engine === 'mlkit') {
+                // Motor 3: ML Kit / Respaldo Geométrico Local (PSM 11 para texto disperso y celdas individuales)
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            progressText.textContent = `${Math.round(m.progress * 100)}%`;
+                        }
+                    }
+                });
+                await worker.setParameters({ tessedit_pageseg_mode: 11 });
+                const ret = await worker.recognize(imageDataURL);
+                await worker.terminate();
+                lineasExtraidas = ret.data.text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            }
 
         } catch (err) {
-            console.error("Error crítico en Tesseract OCR:", err);
-            loadingStatusTitle.textContent = 'Error de lectura OCR';
-            lineasExtraidas = ["Error al procesar la imagen con Tesseract"];
+            console.error(`Error en motor ${engine}:`, err);
+            lineasExtraidas = [`Error en motor ${engine}`];
         }
 
-        // Volcar datos distribuidos en la cuadrícula del Mini Excel de forma real
         poblarMiniExcelMatricial(lineasExtraidas, engine);
 
         setTimeout(() => {
@@ -142,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cellB1.textContent = "B1: [Vacío]";
             cellA2.textContent = "A2: [Vacío]";
             cellB2.textContent = "B2: [Vacío]";
-            cellValueInput.value = "No se detectó texto legible";
+            cellValueInput.value = "Sin texto detectado";
             excelStatus.textContent = `Mini Excel (${engineName}) - Sin texto`;
         }
     }
@@ -169,7 +265,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.putImageData(imgData, 0, 0);
     }
 
-    // Controles de Zoom
+    // Controles de Zoom con ajuste de cursor para Arrastre (Pan)
     document.getElementById('zoom-in').addEventListener('click', () => {
         currentZoom = Math.min(currentZoom + 0.25, 4.0);
         actualizarZoom();
@@ -187,5 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function actualizarZoom() {
         canvasScaler.style.transform = `scale(${currentZoom})`;
+        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
     }
 });

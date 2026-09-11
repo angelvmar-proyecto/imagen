@@ -21,8 +21,8 @@
         <div class="toolbar-grid">
             <button class="btn-tool" id="btn-bloquear">🔒 Bloquear</button>
             <button class="btn-tool" id="btn-reset">🔄 Reset L</button>
-            <button class="btn-tool" id="btn-h">➕ H</button>
-            <button class="btn-tool" id="btn-v">➕ V</button>
+            <button class="btn-tool" id="btn-h" title="Dibujar Línea Horizontal Manual">➕ L.H.</button>
+            <button class="btn-tool" id="btn-v" title="Dibujar Línea Vertical Manual">➕ L.V.</button>
         </div>
 
         <div class="slider-container">
@@ -37,21 +37,22 @@
             <button class="btn-zoom" id="zoom-in">🔍 +</button>
         </div>
 
-        <!-- Selector de Motores Reales (Tesseract y Tesseract Tabla) -->
+        <!-- Selector de los 3 Motores Reales -->
         <div class="engines-bar">
             <span class="engines-label">MOTOR:</span>
             <button class="engine-tab active" data-engine="tesseract">Tesseract</button>
-            <button class="engine-tab" data-engine="table">Tesseract Tabla</button>
+            <button class="engine-tab" data-engine="paddle">Paddle.js</button>
+            <button class="engine-tab" data-engine="mlkit">ML Kit</button>
         </div>
 
-        <!-- Lienzo de Previsualización -->
-        <div class="canvas-viewport" id="viewport">
-            <div class="canvas-scaler" id="canvas-scaler">
+        <!-- Lienzo de Previsualización con Pan / Arrastre y Dibujo Manual -->
+        <div class="canvas-viewport" id="viewport" style="overflow: auto; position: relative; cursor: grab;">
+            <div class="canvas-scaler" id="canvas-scaler" style="transform-origin: top left; display: inline-block;">
                 <canvas id="processing-canvas"></canvas>
             </div>
             <div class="processing-overlay" id="loading-overlay" style="display: none;">
                 <div class="spinner"></div>
-                <span class="loading-title" id="loading-status-title">Procesando OCR real...</span>
+                <span class="loading-title" id="loading-status-title">Procesando OCR...</span>
                 <span id="progress-text">0%</span>
             </div>
         </div>
