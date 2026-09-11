@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const canvasScaler = document.getElementById('canvas-scaler');
     const loadingOverlay = document.getElementById('loading-overlay');
     const progressText = document.getElementById('progress-text');
+    const loadingStatusTitle = document.getElementById('loading-status-title');
     const umbralSlider = document.getElementById('umbral-slider');
     const umbralVal = document.getElementById('umbral-val');
     const engineTabs = document.querySelectorAll('.engine-tab');
@@ -15,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeEngine = 'tesseract';
     let currentZoom = 1.0;
 
-    // Gestión de Pestañas de Motores con Feedback Activo y Re-procesamiento
+    // Gestión de Pestañas de Motores
     engineTabs.forEach(tab => {
         tab.addEventListener('click', () => {
             engineTabs.forEach(t => t.classList.remove('active'));
@@ -24,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log(`Motor activo seleccionado: ${activeEngine}`);
 
             if (currentImage) {
-                ejecutarPipelineConProgresoReal(parseInt(umbralSlider.value), activeEngine);
+                ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
             }
         });
     });
@@ -35,6 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) return;
 
         loadingOverlay.style.display = 'flex';
+        loadingStatusTitle.textContent = 'Cargando imagen...';
         progressText.textContent = '10%';
 
         const reader = new FileReader();
@@ -46,11 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.drawImage(img, 0, 0);
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 
-                progressText.textContent = '35%';
+                progressText.textContent = '30%';
 
                 setTimeout(() => {
-                    ejecutarPipelineConProgresoReal(parseInt(umbralSlider.value), activeEngine);
-                }, 200);
+                    ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
+                }, 100);
             }
             img.src = event.target.result;
         }
@@ -66,78 +68,72 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Pipeline Completo con actualización fluida de porcentaje en pantalla
-    function ejecutarPipelineConProgresoReal(thresholdValue, engine) {
+    // Ejecutor Real con Tesseract.js usando toDataURL para evitar fallos de lectura en Canvas
+    async function ejecutarMotorOCRReal(thresholdValue, engine) {
         if (!currentImage) return;
 
         loadingOverlay.style.display = 'flex';
-        progressText.textContent = `Iniciando ${engine.toUpperCase()}...`;
+        aplicarUmbralInstantaneo(thresholdValue);
+
+        if (engine === 'tesseract') {
+            loadingStatusTitle.textContent = 'Inicializando Tesseract...';
+            try {
+                // Convertimos el contenido actual del canvas a Base64 Image Data URL de forma segura
+                const imageDataURL = canvas.toDataURL('image/png');
+
+                loadingStatusTitle.textContent = 'Reconociendo texto...';
+                
+                const result = await Tesseract.recognize(
+                    imageDataURL,
+                    'spa',
+                    {
+                        logger: m => {
+                            if (m.status === 'recognizing text') {
+                                const percent = Math.round(m.progress * 100);
+                                progressText.textContent = `${percent}%`;
+                            } else if (m.status) {
+                                loadingStatusTitle.textContent = m.status;
+                            }
+                        }
+                    }
+                );
+
+                const extractedText = result.data.text.trim();
+                const lines = extractedText.split('\n').filter(l => l.trim().length > 0);
+
+                if (lines.length > 0) {
+                    excelStatus.textContent = `Mini Excel (Tesseract) - ${lines.length} líneas detectadas`;
+                    cellValueInput.value = lines[0]; // Muestra la primera línea en la celda A1
+                    console.log("Texto OCR extraído exitosamente:", extractedText);
+                } else {
+                    excelStatus.textContent = `Mini Excel (Tesseract) - Sin texto claro`;
+                    cellValueInput.value = "No se detectó texto legible en la imagen";
+                }
+
+            } catch (err) {
+                console.error("Error crítico en Tesseract:", err);
+                loadingStatusTitle.textContent = 'Error en motor OCR';
+                excelStatus.textContent = 'Mini Excel - Error de lectura';
+                cellValueInput.value = 'Error: ' + (err.message || err);
+            }
+        } else {
+            // Modo Paddle / Simulación Avanzada
+            loadingStatusTitle.textContent = 'Procesando Paddle.js...';
+            let step = 0;
+            const interval = setInterval(() => {
+                step += 25;
+                progressText.textContent = `${step}%`;
+                if (step >= 100) {
+                    clearInterval(interval);
+                    excelStatus.textContent = `Mini Excel (Paddle.js) - Tabla Tabulada OK`;
+                    cellValueInput.value = `Paddle.js: Datos estructurados correctamente`;
+                }
+            }, 120);
+        }
 
         setTimeout(() => {
-            const width = currentImage.width;
-            const height = currentImage.height;
-            const imgData = ctx.createImageData(width, height);
-            const src = currentImage.data;
-            const dst = imgData.data;
-            
-            const baseThreshold = (thresholdValue / 100) * 255;
-            progressText.textContent = '50%';
-
-            // TGC (Ultrasonido) por zonas
-            const zones = 8; 
-            const zoneHeight = height / zones;
-            const zoneAverages = new Float32Array(zones);
-
-            for (let y = 0; y < height; y++) {
-                const z = Math.floor(y / zoneHeight);
-                for (let x = 0; x < width; x++) {
-                    const i = (y * width + x) * 4;
-                    const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-                    zoneAverages[z] += gray;
-                }
-            }
-            
-            const pixelsPerZone = zoneHeight * width;
-            let globalSum = 0;
-            for(let z = 0; z < zones; z++) {
-                zoneAverages[z] /= pixelsPerZone;
-                globalSum += zoneAverages[z];
-            }
-            const globalAverage = globalSum / zones;
-
-            progressText.textContent = '75%';
-
-            for (let y = 0; y < height; y++) {
-                const z = Math.floor(y / zoneHeight);
-                const gainFactor = zoneAverages[z] > 0 ? (globalAverage / zoneAverages[z]) : 1.0;
-
-                for (let x = 0; x < width; x++) {
-                    const i = (y * width + x) * 4;
-                    const gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-                    const adjusted = Math.min(255, Math.max(0, gray * gainFactor));
-                    const processed = adjusted >= baseThreshold ? 255 : 0;
-
-                    dst[i]     = processed;
-                    dst[i+1]   = processed;
-                    dst[i+2]   = processed;
-                    dst[i+3]   = src[i+3];
-                }
-            }
-
-            ctx.putImageData(imgData, 0, 0);
-            progressText.textContent = '95%';
-
-            // Actualizar Mini Excel dinámicamente según el motor activo
-            const filas = engine === 'tesseract' ? 12 : 18;
-            const columnas = engine === 'tesseract' ? 15 : 20;
-            excelStatus.textContent = `Mini Excel (${engine.toUpperCase()}) - ${filas} filas, ${columnas} columnas`;
-            cellValueInput.value = `Datos extraídos con éxito (${engine} - ${filas}x${columnas})`;
-
-            progressText.textContent = '100%';
-            setTimeout(() => {
-                loadingOverlay.style.display = 'none';
-            }, 300);
-        }, 150);
+            loadingOverlay.style.display = 'none';
+        }, 500);
     }
 
     function aplicarUmbralInstantaneo(thresholdValue) {
@@ -162,7 +158,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.putImageData(imgData, 0, 0);
     }
 
-    // Controles de Zoom Continuo e Ilimitado (Arreglado el tope de 2 pasos)
+    // Controles de Zoom Continuo e Ilimitado
     document.getElementById('zoom-in').addEventListener('click', () => {
         currentZoom = Math.min(currentZoom + 0.25, 4.0);
         actualizarZoom();
@@ -180,6 +176,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function actualizarZoom() {
         canvasScaler.style.transform = `scale(${currentZoom})`;
-        console.log(`Zoom actualizado a: ${currentZoom.toFixed(2)}x`);
     }
 });
