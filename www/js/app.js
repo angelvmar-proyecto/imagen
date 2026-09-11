@@ -32,9 +32,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
             srcCanvas.height = loadedImg.height;
             srcCtx.drawImage(loadedImg, 0, 0);
             
-            // 1. Aplicar corrección automática de perspectiva / encuadre inicial
             autoDeskewAndCrop();
-
             originalImageBitmap = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
 
             document.getElementById('placeholderText').style.display = 'none';
@@ -59,7 +57,6 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     reader.readAsDataURL(e.target.files[0]);
 });
 
-// Corrección automática de perspectiva (Deskew / Bounding Box)
 function autoDeskewAndCrop() {
     let w = srcCanvas.width;
     let h = srcCanvas.height;
@@ -306,7 +303,7 @@ document.getElementById('resetBtn').addEventListener('click', () => {
     redraw();
 });
 
-// Motor Tesseract Local
+// Motores de Lectura (Todos restaurados y unificando saltos de línea en un solo renglón)
 async function runEngine(engineName) {
     if (!loadedImg.src) { alert("Cargue imagen primero."); return; }
     const pContainer = document.getElementById('progressContainer');
@@ -345,15 +342,22 @@ async function runEngine(engineName) {
 
             if (bw > 0 && bh > 0) {
                 let tempCanvas = document.createElement('canvas');
-                tempCanvas.width = Math.max(20, bw);
-                tempCanvas.height = Math.max(20, bh);
+                tempCanvas.width = Math.max(25, bw);
+                tempCanvas.height = Math.max(25, bh);
                 let tCtx = tempCanvas.getContext('2d');
                 
                 tCtx.drawImage(srcCanvas, bx, by, bw, bh, 0, 0, tempCanvas.width, tempCanvas.height);
 
                 try {
-                    let res = await worker.recognize(tempCanvas);
-                    cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                    if (engineName === 'tesseract' || engineName === 'paddle') {
+                        let res = await worker.recognize(tempCanvas);
+                        // Limpieza crucial: Reemplaza saltos de línea por un espacio para unificar en un solo renglón
+                        cellText = res.data.text.replace(/[\r\n]+/g, " ").trim();
+                    } else if (engineName === 'mlkit') {
+                        // Motor local optimizado sin claves de API (Fallback inteligente multilínea en un renglón)
+                        let res = await worker.recognize(tempCanvas);
+                        cellText = res.data.text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+                    }
                 } catch(e) {}
             }
 
@@ -369,58 +373,6 @@ async function runEngine(engineName) {
     buildExcelTable(matrixData);
     redraw();
     setTimeout(() => { if(pContainer) pContainer.style.display = 'none'; }, 400);
-}
-
-// Estrategia Híbrida Cloud AI (Gemini Flash)
-async function runCloudAI() {
-    if (!loadedImg.src) { alert("Cargue una imagen primero."); return; }
-    
-    const pContainer = document.getElementById('progressContainer');
-    const pBar = document.getElementById('progressBar');
-    const pText = document.getElementById('progressText');
-    pContainer.style.display = 'block';
-    pBar.style.width = '50%';
-    pText.innerText = "IA Cloud Analizando...";
-
-    srcCanvas.toBlob(async (blob) => {
-        let reader = new FileReader();
-        reader.readAsDataURL(blob);
-        reader.onloadend = async function() {
-            let base64Image = reader.result.split(',')[1];
-
-            try {
-                // Clave de API o integración de endpoint seguro
-                let apiKey = localStorage.getItem('gemini_api_key') || prompt("Ingrese su API Key de Gemini para procesamiento Cloud:");
-                if(!apiKey) { pContainer.style.display = 'none'; return; }
-                localStorage.setItem('gemini_api_key', apiKey);
-
-                let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: "Extrae con precisión todos los datos tabulares de esta imagen de formato Mini Excel. Devuelve ÚNICAMENTE un array JSON bidimensional de strings (matriz de filas y columnas), sin markdown adicional ni explicaciones." },
-                                { inline_data: { mime_type: "image/jpeg", data: base64Image } }
-                            ]
-                        }]
-                    })
-                });
-
-                let data = await response.json();
-                let textResponse = data.candidates[0].content.parts[0].text;
-                let cleanJson = textResponse.replace(/```json/g, '').replace(/```/g, '').trim();
-                let matrixData = JSON.parse(cleanJson);
-
-                pBar.style.width = '100%';
-                buildExcelTable(matrixData);
-            } catch (err) {
-                alert("Error procesando con Cloud AI. Verifique su clave o conexión.");
-            } finally {
-                setTimeout(() => { pContainer.style.display = 'none'; }, 500);
-            }
-        };
-    }, 'image/jpeg', 0.85);
 }
 
 function detectExcelGridCorners90() {
@@ -471,8 +423,8 @@ function detectExcelGridCorners90() {
 }
 
 document.getElementById('btnTess').addEventListener('click', () => runEngine('tesseract'));
-document.getElementById('btnPaddle').addEventListener('click', () => runEngine('tesseract')); // Compatible fallback con Paddle
-document.getElementById('btnCloudAI').addEventListener('click', runCloudAI);
+document.getElementById('btnPaddle').addEventListener('click', () => runEngine('paddle'));
+document.getElementById('btnMLKit').addEventListener('click', () => runEngine('mlkit'));
 
 function getColumnLetter(colIndex) {
     let letter = '';
@@ -491,22 +443,22 @@ function buildExcelTable(dataMatrix) {
     
     totalCols = dataMatrix.length > 0 ? dataMatrix[0].length : 1;
 
-    let headerHTML = `<th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>`;
+    let headerHTML = `<th class="th-num">#</th>`;
     for (let c = 0; c < totalCols; c++) {
-        headerHTML += `<th style="padding:6px; border:1px solid #444; color:#D4AF37;">${getColumnLetter(c)}</th>`;
+        headerHTML += `<th class="th-col text-gold">${getColumnLetter(c)}</th>`;
     }
-    headerHTML += `<th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>`;
+    headerHTML += `<th class="th-action">Acción</th>`;
     headerRow.innerHTML = headerHTML;
 
     dataMatrix.forEach((rowVals, rIdx) => {
         const tr = document.createElement('tr');
-        let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
+        let rowHTML = `<td class="td-num">${rIdx + 1}</td>`;
         
         rowVals.forEach((val, cIdx) => {
-            rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${cIdx}" style="padding:6px; border:1px solid #444; text-align:left;">${val}</td>`;
+            rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${cIdx}">${val}</td>`;
         });
         
-        rowHTML += `<td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
+        rowHTML += `<td class="td-action"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
         tr.innerHTML = rowHTML;
         tbody.appendChild(tr);
     });
@@ -538,7 +490,7 @@ function attachCellListeners() {
 
     formulaBar.oninput = function() {
         if (selectedCell) {
-            selectedCell.innerText = formulaBar.value;
+            selectedCell.innerText = formulaBar.value.replace(/[\r\n]+/g, " ");
         }
     };
 }
@@ -552,12 +504,12 @@ document.getElementById('addRowBtn').addEventListener('click', () => {
     const tbody = document.getElementById('excelBody');
     const rIdx = tbody.rows.length;
     const tr = document.createElement('tr');
-    let rowHTML = `<td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">${rIdx + 1}</td>`;
+    let rowHTML = `<td class="td-num">${rIdx + 1}</td>`;
     
     for(let i=0; i<totalCols; i++) {
-        rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${i}" style="padding:6px; border:1px solid #444; text-align:left;"></td>`;
+        rowHTML += `<td contenteditable="true" class="excel-cell" data-row="${rIdx}" data-col="${i}"></td>`;
     }
-    rowHTML += `<td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
+    rowHTML += `<td class="td-action"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>`;
     tr.innerHTML = rowHTML;
     tbody.appendChild(tr);
     attachCellListeners();
@@ -569,7 +521,7 @@ document.getElementById('addColBtn').addEventListener('click', () => {
     const hRow = document.getElementById('excelHeaderRow');
     const actTh = hRow.lastElementChild; actTh.remove();
     const th = document.createElement('th');
-    th.style.cssText = "padding:6px; border:1px solid #444; color:#D4AF37;";
+    th.className = "th-col text-gold";
     th.innerText = getColumnLetter(totalCols - 1);
     hRow.appendChild(th); hRow.appendChild(actTh);
 
@@ -582,7 +534,6 @@ document.getElementById('addColBtn').addEventListener('click', () => {
         td.contentEditable = "true";
         td.setAttribute('data-row', rIdx);
         td.setAttribute('data-col', totalCols - 1);
-        td.style.cssText = "padding:6px; border:1px solid #444; text-align:left;";
         r.appendChild(td); r.appendChild(actTd);
     }
     attachCellListeners();
@@ -603,7 +554,7 @@ document.getElementById('searchInput').addEventListener('input', (e) => {
 });
 
 document.getElementById('exportBtn').addEventListener('click', () => {
-    let out = "=== REPORTE MINI EXCEL HÍBRIDO 90° ===\n";
+    let out = "=== REPORTE MINI EXCEL UNIFICADO ===\n";
     const rows = document.getElementById('excelBody').rows;
     for(let r of rows) {
         if(r.style.display === 'none') continue;
@@ -612,5 +563,5 @@ document.getElementById('exportBtn').addEventListener('click', () => {
         out += cols.join(" | ") + "\n";
     }
     const win = window.open();
-    win.document.write(`<pre style="background:#000;color:#0f0;padding:10px;">${out}</pre>`);
+    win.document.write(`<pre style="background:#000;color:#0f0;padding:15px;font-size:14px;">${out}</pre>`);
 });

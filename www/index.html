@@ -3,87 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MAR Caribe – Procesador Mini Excel Híbrido Avanzado</title>
+    <title>MAR Caribe – Mini Excel Multimotor</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@paddlejs/paddlejs-core/lib/index.js"></script>
 </head>
-<body style="background:#121212; color:#e0e0e0; font-family:sans-serif; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; overflow:hidden;">
+<body>
 
-    <header style="background:#1e1e1e; padding:8px 12px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-        <h1 style="font-size:16px; margin:0; color:#D4AF37;">MAR Caribe – Mini Excel Híbrido</h1>
+    <header class="app-header">
+        <h1>MAR Caribe – Mini Excel</h1>
         <div>
-            <button id="loadBtn" style="background:#D4AF37; color:#000; border:none; padding:6px 12px; font-weight:bold; border-radius:4px; cursor:pointer;">📁 Cargar Imagen</button>
+            <button id="loadBtn" class="btn btn-primary">📁 Cargar Imagen</button>
             <input type="file" id="fileInput" accept="image/*" style="display:none;">
         </div>
     </header>
 
-    <div style="background:#181818; padding:6px 12px; border-bottom:1px solid #333; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-        <button id="lockBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">🔒 Bloquear</button>
-        <button id="resetBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">🔄 Reset L</button>
-        <button id="addLineHBtn" style="background:#222; color:#D4AF37; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">➕ H</button>
-        <button id="addLineVBtn" style="background:#222; color:#2196F3; border:1px solid #444; padding:4px 8px; border-radius:4px; font-size:12px; cursor:pointer;">➕ V</button>
+    <div class="toolbar-section">
+        <button id="lockBtn" class="btn btn-secondary">🔒 Bloquear</button>
+        <button id="resetBtn" class="btn btn-secondary">🔄 Reset L</button>
+        <button id="addLineHBtn" class="btn btn-secondary text-gold">➕ H</button>
+        <button id="addLineVBtn" class="btn btn-secondary text-blue">➕ V</button>
         
-        <div style="display:flex; align-items:center; gap:5px; font-size:12px; color:#bbb;">
+        <div class="threshold-box">
             <span>Umbral:</span>
-            <input type="range" id="binThresholdSlider" min="50" max="220" value="128" style="width:70px;">
-            <span id="binThresholdVal" style="color:#D4AF37; width:22px;">128</span>
+            <input type="range" id="binThresholdSlider" min="50" max="220" value="128">
+            <span id="binThresholdVal" class="text-gold">128</span>
         </div>
 
-        <div style="display:flex; gap:4px; margin-left:auto;">
-            <button id="zoomOutBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">🔍-</button>
-            <button id="zoomResetBtn" style="background:#222; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">1:1</button>
-            <button id="zoomInBtn" style="background:#333; color:#fff; border:1px solid #444; padding:4px 6px; border-radius:4px; font-size:12px; cursor:pointer;">🔍+</button>
+        <div class="zoom-group">
+            <button id="zoomOutBtn" class="btn btn-secondary">🔍-</button>
+            <button id="zoomResetBtn" class="btn btn-secondary">1:1</button>
+            <button id="zoomInBtn" class="btn btn-secondary">🔍+</button>
         </div>
     </div>
 
-    <div style="display:flex; background:#181818; padding:6px 12px; border-bottom:1px solid #333; gap:6px; align-items:center; overflow-x:auto;">
-        <button id="btnTess" style="background:#2e7d32; color:#fff; border:none; padding:5px 8px; font-size:11px; border-radius:4px; font-weight:bold; cursor:pointer;">⚙️ Tesseract</button>
-        <button id="btnPaddle" style="background:#424242; color:#fff; border:none; padding:5px 8px; font-size:11px; border-radius:4px; cursor:pointer;">🚀 Paddle.js</button>
-        <button id="btnCloudAI" style="background:#D4AF37; color:#000; border:none; padding:5px 8px; font-size:11px; border-radius:4px; font-weight:bold; cursor:pointer;">🪄 IA Cloud</button>
+    <div class="engines-section">
+        <span class="engine-label">Motores:</span>
+        <button id="btnTess" class="btn btn-engine btn-green">⚙️ Tesseract</button>
+        <button id="btnPaddle" class="btn btn-engine btn-dark">🚀 Paddle.js</button>
+        <button id="btnMLKit" class="btn btn-engine btn-purple">🧠 ML Kit / Local</button>
         
-        <div id="progressContainer" style="display:none; flex-grow:1; background:#333; height:14px; border-radius:7px; overflow:hidden; position:relative; min-width:100px;">
-            <div id="progressBar" style="background:#D4AF37; width:0%; height:100%; transition:width 0.1s;"></div>
-            <div id="progressText" style="position:absolute; width:100%; top:0; text-align:center; font-size:9px; color:#000; font-weight:bold;">Procesando...</div>
+        <div id="progressContainer" class="progress-container" style="display:none;">
+            <div id="progressBar" class="progress-bar"></div>
+            <div id="progressText" class="progress-text">Procesando...</div>
         </div>
     </div>
 
-    <div id="canvasBox" style="flex:1; position:relative; background:#0b0b0b; overflow:hidden; touch-action:none; display:flex; justify-content:center; align-items:center;">
-        <canvas id="workspaceCanvas" style="display:block; width:100%; height:100%;"></canvas>
+    <div id="canvasBox" class="canvas-box">
+        <canvas id="workspaceCanvas"></canvas>
         <canvas id="sourceCanvas" style="display:none;"></canvas>
-        <div id="placeholderText" style="position:absolute; color:#666; font-size:14px; pointer-events:none;">Cargue una imagen para procesamiento híbrido</div>
+        <div id="placeholderText" class="placeholder-text">Cargue una imagen para procesamiento inteligente</div>
     </div>
 
-    <div style="background:#1e1e1e; padding:6px 12px; border-top:1px solid #333; display:flex; gap:8px; align-items:center;">
-        <span id="selectedCellLabel" style="color:#D4AF37; font-weight:bold; font-size:12px; width:40px;">A1</span>
-        <input type="text" id="formulaBar" placeholder="Valor de celda..." style="flex:1; background:#121212; border:1px solid #444; color:#fff; padding:4px 8px; border-radius:4px; font-size:13px;">
-        <input type="text" id="searchInput" placeholder="🔍 Buscar..." style="width:90px; background:#121212; border:1px solid #444; color:#fff; padding:4px 8px; border-radius:4px; font-size:13px;">
+    <div class="formula-section">
+        <span id="selectedCellLabel" class="selected-cell-label">A1</span>
+        <input type="text" id="formulaBar" placeholder="Valor de celda unificado en un renglón..." class="formula-input">
+        <input type="text" id="searchInput" placeholder="🔍 Buscar..." class="search-input">
     </div>
 
-    <div style="height:35vh; background:#161616; border-top:1px solid #333; display:flex; flex-direction:column;">
-        <div style="background:#202020; padding:4px 12px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-            <span id="statusInfo" style="font-size:11px; color:#888;">Mini Excel - 0 filas, 1 columnas</span>
-            <div style="display:flex; gap:4px;">
-                <button id="addRowBtn" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">+ Fila</button>
-                <button id="addColBtn" style="background:#222; color:#fff; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">+ Col</button>
-                <button id="clearTableBtn" style="background:#222; color:#ff5252; border:1px solid #444; padding:2px 6px; font-size:11px; border-radius:3px; cursor:pointer;">🗑️ Vaciar</button>
-                <button id="exportBtn" style="background:#D4AF37; color:#000; border:none; padding:2px 8px; font-weight:bold; font-size:11px; border-radius:3px; cursor:pointer;">📤 Exportar</button>
+    <div class="table-container-wrapper">
+        <div class="table-toolbar">
+            <span id="statusInfo" class="status-info">Mini Excel - 0 filas, 1 columnas</span>
+            <div class="table-actions">
+                <button id="addRowBtn" class="btn btn-secondary">+ Fila</button>
+                <button id="addColBtn" class="btn btn-secondary">+ Col</button>
+                <button id="clearTableBtn" class="btn btn-secondary text-red">🗑️ Vaciar</button>
+                <button id="exportBtn" class="btn btn-primary">📤 Exportar</button>
             </div>
         </div>
-        <div style="flex:1; overflow:auto;">
-            <table id="excelTable" style="width:100%; border-collapse:collapse; font-size:12px; color:#ccc;">
+        <div class="table-scroll-area">
+            <table id="excelTable" class="excel-table">
                 <thead>
                     <tr id="excelHeaderRow">
-                        <th style="padding:6px; border:1px solid #444; width:35px; color:#888; background:#202020;">#</th>
-                        <th style="padding:6px; border:1px solid #444; color:#D4AF37;">A</th>
-                        <th style="padding:6px; border:1px solid #444; width:40px; color:#888; background:#202020;">Acción</th>
+                        <th class="th-num">#</th>
+                        <th class="th-col text-gold">A</th>
+                        <th class="th-action">Acción</th>
                     </tr>
                 </thead>
                 <tbody id="excelBody">
                     <tr>
-                        <td style="padding:4px; border:1px solid #444; color:#888; background:#202020; font-weight:bold;">1</td>
-                        <td contenteditable="true" class="excel-cell" data-row="0" data-col="0" style="padding:6px; border:1px solid #444; text-align:left;"></td>
-                        <td style="padding:4px; border:1px solid #444; text-align:center;"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>
+                        <td class="td-num">1</td>
+                        <td contenteditable="true" class="excel-cell" data-row="0" data-col="0"></td>
+                        <td class="td-action"><button class="btn-danger-sm" onclick="this.closest('tr').remove(); updateExcelStatus();">×</button></td>
                     </tr>
                 </tbody>
             </table>
