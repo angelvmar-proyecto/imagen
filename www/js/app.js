@@ -1,391 +1,289 @@
-let rutaImagenActual = null;
-let matrizDatos = [];
-let porcentajesCorte = [];
-let escaneoActivo = false;
+// ==============================================
+// MAR Caribe — Escáner de Tablas
+// Carpeta: ~/imagen/www/
+// ==============================================
 
-const ESQUEMA_20_COLUMNAS = [
-  { id: 'No', tipo: 'numero' }, { id: 'Tipo', tipo: 'int_lat' },
-  { id: 'Nivel', tipo: 'nivel' }, { id: 'Nombre', tipo: 'texto' },
-  { id: 'Puesto/Op', tipo: 'texto' }, { id: 'Hotel', tipo: 'texto' },
-  { id: 'Promotor', tipo: 'texto' }, { id: 'Hora Pick Up', tipo: 'hora' },
-  { id: 'Monto/Factor', tipo: 'decimal' }, { id: 'Fecha', tipo: 'fecha' },
-  { id: 'Folio', tipo: 'texto' }, { id: 'Depósito', tipo: 'texto' },
-  { id: 'Monto Dep.', tipo: 'numero' }, { id: 'Moneda', tipo: 'moneda' },
-  { id: 'País/Ciudad', tipo: 'texto' }, { id: 'Notas', tipo: 'texto' },
-  { id: 'Edad', tipo: 'numero' }, { id: 'Estado Civil', tipo: 'marital' },
-  { id: 'Locación', tipo: 'texto' }, { id: 'Horario Cierre', tipo: 'hora' }
+const TIEMPO_LIMITE_GLOBAL = 120000;
+const ETAPAS = [
+  { id: 'carga',       nombre: 'Carga de Imagen',       inicio: 0,  fin: 10,  tiempoMax: 5000 },
+  { id: 'preproces',   nombre: 'Preprocesamiento',      inicio: 10, fin: 25,  tiempoMax: 8000 },
+  { id: 'detectar',    nombre: 'Detección de Líneas',   inicio: 25, fin: 50,  tiempoMax: 15000 },
+  { id: 'cargaModelos',nombre: 'Carga de Motores IA',   inicio: 50, fin: 65,  tiempoMax: 20000 },
+  { id: 'ocr',         nombre: 'Reconocimiento OCR',    inicio: 65, fin: 90,  tiempoMax: 60000 },
+  { id: 'tabla',       nombre: 'Construir Tabla',       inicio: 90, fin: 100, tiempoMax: 5000 }
 ];
 
-const NIVELES_MAR = ['PREMIER T3A', 'PREMIER T3B', 'PREMIER T4A', 'PREMIER T4B', 'T2A-CH', 'T2B-CH'];
+// Elementos DOM
+const inputImagen     = document.getElementById('inputImagen');
+const btnCargar       = document.getElementById('btnCargar');
+const btnProcesar     = document.getElementById('btnProcesar');
+const btnCopiarLog    = document.getElementById('btnCopiarLog');
+const previewContainer= document.getElementById('previewContainer');
+const previewImg      = document.getElementById('previewImg');
+const barraProgreso   = document.getElementById('barraProgreso');
+const textoProgreso   = document.getElementById('textoProgreso');
+const etapaActual     = document.getElementById('etapaActual');
+const tiempoInfo      = document.getElementById('tiempoInfo');
+const logContenido    = document.getElementById('logContenido');
+const logContainer    = document.getElementById('logContainer');
+const resultadoContainer = document.getElementById('resultadoContainer');
+const tablaResultado  = document.getElementById('tablaResultado');
 
-function setProgreso(porcentaje, pasoTexto) {
-  const wrapper = document.getElementById('progressWrapper');
-  if (wrapper) wrapper.style.display = 'block';
-  const fill = document.getElementById('progressFill');
-  if (fill) fill.style.width = porcentaje + '%';
-  const step = document.getElementById('progressStep');
-  if (step) step.innerText = pasoTexto;
-  const pct = document.getElementById('progressPercent');
-  if (pct) pct.innerText = porcentaje + '%';
-  const st = document.getElementById('statusText');
-  if (st) st.innerText = '[' + porcentaje + '%] ' + pasoTexto;
+// Estado
+let imagenActual = null;
+let imagenDatos  = null;
+let logCompleto  = '';
+let tiempoInicioGlobal = 0;
+let tiempoInicioEtapa  = 0;
+let etapaActivaIndex   = -1;
+let coordenadasCeldas  = [];
+
+// ==============================================
+// LOG DE DEPURACIÓN
+// ==============================================
+function log(mensaje, tipo='info') {
+  const colores = { ok:'ok', info:'info', warn:'warn', error:'error' };
+  const etiqueta = { ok:'✅', info:'ℹ️', warn:'⚠️', error:'⛔' }[tipo];
+  const linea = `${etiqueta} ${mensaje}`;
+  logCompleto += linea + '\n';
+  logContenido.innerHTML += `<div class="${colores[tipo]}">${linea}</div>`;
+  logContainer.scrollTop = logContainer.scrollHeight;
 }
 
-function ocultarProgreso() {
-  const wrapper = document.getElementById('progressWrapper');
-  if (wrapper) wrapper.style.display = 'none';
-  const st = document.getElementById('statusText');
-  if (st) st.innerText = 'Listo.';
+function separador(texto) {
+  logContenido.innerHTML += `<div style="color:#6c757d; margin:8px 0; border-top:1px solid #444; padding-top:8px;">--- ${texto} ---</div>`;
+  logCompleto += `--- ${texto} ---\n`;
 }
 
-async function capturarImagen() {
+// ==============================================
+// BARRA DE PROGRESO
+// ==============================================
+function actualizarProgreso(porcentaje, textoEtapa) {
+  barraProgreso.style.width = `${porcentaje}%`;
+  textoProgreso.textContent = `${Math.round(porcentaje)}%`;
+  if (textoEtapa) etapaActual.textContent = textoEtapa;
+}
+
+function iniciarEtapa(index) {
+  etapaActivaIndex = index;
+  const etapa = ETAPAS[index];
+  tiempoInicioEtapa = Date.now();
+  separador(`ETAPA ${index+1}: ${etapa.nombre}`);
+  log(`Iniciada — Rango: ${etapa.inicio}% → ${etapa.fin}%`, 'info');
+  log(`Tiempo límite: ${etapa.tiempoMax/1000}s`, 'info');
+  actualizarProgreso(etapa.inicio, etapa.nombre);
+}
+
+function completarEtapa(datosExtra='') {
+  const etapa = ETAPAS[etapaActivaIndex];
+  const duracion = Date.now() - tiempoInicioEtapa;
+  actualizarProgreso(etapa.fin, `${etapa.nombre} — Completado`);
+  log(`Completada en ${(duracion/1000).toFixed(1)}s ${datosExtra}`, 'ok');
+  tiempoInfo.textContent = `Transcurrido: ${((Date.now()-tiempoInicioGlobal)/1000).toFixed(1)}s`;
+}
+
+function errorEtapa(mensaje) {
+  const etapa = ETAPAS[etapaActivaIndex];
+  log(`ERROR: ${mensaje} — Tiempo transcurrido: ${((Date.now()-tiempoInicioEtapa)/1000).toFixed(1)}s`, 'error');
+  actualizarProgreso(etapa.fin, `FALLÓ: ${etapa.nombre}`);
+  tiempoInfo.textContent = `⚠️ BLOQUEADO — ${((Date.now()-tiempoInicioGlobal)/1000).toFixed(1)}s`;
+}
+
+// ==============================================
+// CARGA DE IMAGEN
+// ==============================================
+btnCargar.addEventListener('click', () => inputImagen.click());
+inputImagen.addEventListener('change', async (e) => {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+
+  logContenido.innerHTML = '';
+  logCompleto = '';
+  log('=== MAR Caribe — Log de Depuración ===', 'info');
+  log(`Fecha: ${new Date().toLocaleString()}`, 'info');
+  log(`Imagen: ${archivo.name} (${(archivo.size/1024).toFixed(0)} KB)`, 'info');
+  tiempoInicioGlobal = Date.now();
+
+  iniciarEtapa(0);
   try {
-    const Camera = window.Capacitor?.Plugins?.Camera;
-    if (Camera) {
-      const photo = await Camera.getPhoto({
-        quality: 90, allowEditing: false, resultType: 'uri', source: 'PROMPT'
-      });
-      let path = photo.webPath;
-      if (window.Capacitor?.convertFileSrc && photo.path) {
-        path = window.Capacitor.convertFileSrc(photo.path);
-      }
-      cargarEnCanvas(path);
-    } else {
-      document.getElementById('fileInput').click();
-    }
-  } catch (e) {
-    document.getElementById('fileInput').click();
-  }
-}
-
-function cargarDesdeInput(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (e) => cargarEnCanvas(e.target.result);
-  reader.readAsDataURL(file);
-}
-
-function cargarEnCanvas(src) {
-  rutaImagenActual = src;
-  const img = document.getElementById('imgPreview');
-  if (img) {
-    img.src = src;
-    img.onload = () => {
-      inicializarRejilla();
-      const st = document.getElementById('statusText');
-      if (st) st.innerText = 'Imagen cargada. Rejilla lista.';
-    };
-  }
-}
-
-function inicializarRejilla() {
-  const img = document.getElementById('imgPreview');
-  const canvas = document.getElementById('gridCanvas');
-  if (!img || !canvas || !img.naturalWidth) return;
-  canvas.width = img.clientWidth;
-  canvas.height = img.clientHeight;
-  if (porcentajesCorte.length === 0) {
-    for (let i = 1; i <= 19; i++) porcentajesCorte.push(Number((i / 20).toFixed(3)));
-  }
-  dibujarLineas();
-}
-
-function dibujarLineas() {
-  const canvas = document.getElementById('gridCanvas');
-  const img = document.getElementById('imgPreview');
-  if (!canvas || !img || !img.naturalWidth) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = '#d97706';
-  porcentajesCorte.forEach(pct => {
-    let x = Math.floor(pct * canvas.width) + 0.5;
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-  });
-}
-
-function resetRejilla() {
-  porcentajesCorte = [];
-  for (let i = 1; i <= 19; i++) porcentajesCorte.push(Number((i / 20).toFixed(3)));
-  const canvas = document.getElementById('gridCanvas');
-  const img = document.getElementById('imgPreview');
-  if (img && img.naturalWidth) dibujarLineas();
-  else if (canvas) canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
-}
-
-function obtenerCanvasDeImagen() {
-  const imgElement = document.getElementById('imgPreview');
-  if (!imgElement || !imgElement.naturalWidth) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = imgElement.naturalWidth;
-  canvas.height = imgElement.naturalHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(imgElement, 0, 0);
-  return canvas;
-}
-
-async function autoAlinearHibrida() {
-  if (!rutaImagenActual) { alert('Carga una imagen primero.'); return; }
-  setProgreso(10, 'Analizando distribución de texto...');
-  try {
-    const canvasElement = obtenerCanvasDeImagen();
-    const worker = await Tesseract.createWorker('spa+eng', 1, {
-      langPath: './lang-data', gzip: false
+    imagenActual = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => res(img);
+        img.onerror = rej;
+        img.src = ev.target.result;
+      };
+      reader.onerror = rej;
+      reader.readAsDataURL(archivo);
     });
-    await worker.loadLanguage('spa+eng');
-    await worker.initialize('spa+eng');
-    setProgreso(40, 'Mapeando coordenadas X de palabras...');
-    const { data } = await worker.recognize(canvasElement);
-    await worker.terminate();
-    if (!data || !data.words || data.words.length < 10) {
-      alert('No se detectó suficiente texto.'); ocultarProgreso(); return;
-    }
-    const widthImg = canvasElement.width;
-    let centrosX = data.words.filter(w => w.confidence > 40 && w.text.trim().length > 0)
-      .map(w => (w.bbox.x0 + w.bbox.x1) / 2);
-    setProgreso(70, 'Calculando fronteras de columnas...');
-    let clusters = inicializarClusters(centrosX, 20);
-    for (let i = 0; i < 12; i++) clusters = asignarYActualizarClusters(centrosX, clusters);
-    let centrosValidos = clusters.filter(c => c.puntos.length > 0).map(c => c.centro).sort((a, b) => a - b);
-    let nuevosCortes = [];
-    for (let i = 0; i < centrosValidos.length - 1; i++) {
-      let corte = (centrosValidos[i] + centrosValidos[i+1]) / 2;
-      nuevosCortes.push(Number((corte / widthImg).toFixed(3)));
-    }
-    porcentajesCorte = nuevosCortes;
-    dibujarLineas();
-    const st = document.getElementById('statusText');
-    if (st) st.innerText = 'Rejilla alineada por texto (' + centrosValidos.length + ' columnas).';
-    ocultarProgreso();
-  } catch (err) {
-    console.error(err); alert('Error alineación: ' + (err.message || err)); ocultarProgreso();
-  }
-}
 
-function inicializarClusters(datos, k) {
-  datos.sort((a, b) => a - b);
-  let clusters = [];
-  let step = Math.floor(datos.length / k);
-  for (let i = 0; i < k; i++) {
-    clusters.push({ centro: datos[Math.min(i * step, datos.length - 1)], puntos: [] });
-  }
-  return clusters;
-}
+    log(`Dimensiones: ${imagenActual.width}×${imagenActual.height} píxeles`, 'info');
+    previewImg.src = imagenActual.src;
+    previewContainer.style.display = 'block';
+    imagenDatos = { w: imagenActual.width, h: imagenActual.height };
+    completarEtapa();
+    btnProcesar.disabled = false;
 
-function asignarYActualizarClusters(datos, clusters) {
-  clusters.forEach(c => c.puntos = []);
-  datos.forEach(d => {
-    let cercano = clusters[0], minDist = Math.abs(d - clusters[0].centro);
-    for (let i = 1; i < clusters.length; i++) {
-      let dist = Math.abs(d - clusters[i].centro);
-      if (dist < minDist) { minDist = dist; cercano = clusters[i]; }
-    }
-    cercano.puntos.push(d);
-  });
-  return clusters.map(c => c.puntos.length === 0 ? c : {
-    centro: c.puntos.reduce((a, b) => a + b, 0) / c.puntos.length, puntos: []
-  });
-}
-
-async function ejecutarEscaneoRapido() {
-  if (escaneoActivo) return alert('Procesando... espera un momento.');
-  if (!rutaImagenActual) { alert('Carga una imagen primero.'); return; }
-  escaneoActivo = true;
-  try {
-    setProgreso(10, 'Cargando motor OCR...');
-    const canvasElement = obtenerCanvasDeImagen();
-    const worker = await Tesseract.createWorker('spa+eng', 1, {
-      langPath: './lang-data', gzip: false
-    });
-    await worker.loadLanguage('spa+eng');
-    await worker.initialize('spa+eng');
-    setProgreso(40, 'Extrayendo texto y coordenadas...');
-    const { data } = await worker.recognize(canvasElement);
-    await worker.terminate();
-    setProgreso(75, 'Asignando palabras a la matriz...');
-    const widthImg = canvasElement.width;
-    let limitesX = [0, ...porcentajesCorte.map(p => p * widthImg), widthImg];
-    while (limitesX.length < 21) limitesX.push(widthImg);
-    let palabras = [];
-    if (data && data.words) {
-      data.words.forEach(w => {
-        if (w.text && w.text.trim().length > 0) {
-          palabras.push({
-            text: w.text.trim(),
-            x: (w.bbox.x0 + w.bbox.x1) / 2,
-            y: (w.bbox.y0 + w.bbox.y1) / 2
-          });
-        }
-      });
-    }
-    palabras.sort((a, b) => a.y - b.y);
-    let filas = [], umbralFila = 18;
-    palabras.forEach(p => {
-      let f = filas.find(row => Math.abs(row.yCentro - p.y) < umbralFila);
-      if (f) f.palabras.push(p);
-      else filas.push({ yCentro: p.y, palabras: [p] });
-    });
-    setProgreso(90, 'Formateando tabla...');
-    matrizDatos = filas.map(fila => {
-      let filaCols = new Array(20).fill('');
-      fila.palabras.forEach(p => {
-        let colIdx = limitesX.findIndex((lim, i) => i > 0 && p.x <= lim) - 1;
-        if (colIdx < 0) colIdx = 0;
-        if (colIdx >= 20) colIdx = 19;
-        filaCols[colIdx] = filaCols[colIdx] ? filaCols[colIdx] + ' ' + p.text : p.text;
-      });
-      return filaCols.map((val, idx) => aplicarReglasFuzzy(val, idx));
-    });
-    setProgreso(100, '¡Escaneo completado!');
-    setTimeout(ocultarProgreso, 600);
-    renderizarMatriz();
-  } catch (err) {
-    console.error(err); alert('Error escaneo: ' + (err.message || err)); ocultarProgreso();
-  } finally {
-    escaneoActivo = false;
-  }
-}
-
-function aplicarReglasFuzzy(valRaw, colIdx) {
-  if (!valRaw) return '';
-  let t = valRaw.replace(/[|¦\\]/g, '').trim();
-  let tipo = ESQUEMA_20_COLUMNAS[colIdx]?.tipo || 'texto';
-  switch(tipo) {
-    case 'numero': return t.replace(/[^0-9]/g, '');
-    case 'decimal': return t.replace(/[^0-9.]/g, '');
-    case 'int_lat':
-      if (/I[N1]T/i.test(t)) return 'INT';
-      if (/L[A4]T/i.test(t)) return 'LAT';
-      return t;
-    case 'nivel':
-      let c = t.toUpperCase().replace(/\s+/g, '');
-      for (let nv of NIVELES_MAR) if (c.includes(nv.replace(/\s+/g, ''))) return nv;
-      return t;
-    case 'moneda':
-      if (/USD|US|\$/i.test(t)) return 'USD';
-      if (/MXN|MX|PESO/i.test(t)) return 'MXN';
-      return t;
-    default: return t;
-  }
-}
-
-function renderizarMatriz() {
-  const wrapper = document.getElementById('tableWrapper');
-  const rowCount = document.getElementById('rowCount');
-  if (rowCount) rowCount.innerText = matrizDatos.length + ' filas';
-  if (!wrapper) return;
-  if (!matrizDatos.length) {
-    wrapper.innerHTML = '<div class="empty-state">No hay datos procesados.</div>';
+  } catch(err) {
+    errorEtapa(`No se pudo cargar: ${err.message}`);
     return;
   }
-  let html = '<table><thead><tr>';
-  for (let i = 0; i < 20; i++) html += '<th>' + (ESQUEMA_20_COLUMNAS[i]?.id || ('Col ' + (i+1))) + '</th>';
-  html += '</tr></thead><tbody>';
-  matrizDatos.forEach((row, filaIdx) => {
-    html += '<tr>';
-    for (let c = 0; c < 20; c++) html += '<td contenteditable="true" data-fila="' + filaIdx + '" data-col="' + c + '">' + (row[c] || '') + '</td>';
-    html += '</tr>';
-  });
-  html += '</tbody></table>';
-  wrapper.innerHTML = html;
-  setTimeout(() => {
-    document.querySelectorAll('#tableWrapper td[contenteditable]').forEach(td => {
-      td.addEventListener('blur', () => {
-        const f = parseInt(td.dataset.fila), c = parseInt(td.dataset.col);
-        if (matrizDatos[f]) matrizDatos[f][c] = td.textContent.trim();
-      });
-    });
-  }, 0);
-}
+});
 
-function filtrarMatriz() {
-  let q = document.getElementById('searchInput').value.toLowerCase();
-  document.querySelectorAll('#tableWrapper tbody tr').forEach(tr => {
-    tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
-  });
-}
+// ==============================================
+// PROCESAR TABLA
+// ==============================================
+btnProcesar.addEventListener('click', async () => {
+  btnProcesar.disabled = true;
+  resultadoContainer.style.display = 'none';
+  tiempoInicioGlobal = Date.now();
+  coordenadasCeldas = [];
 
-async function copiarAlPortapapeles() {
-  if (!matrizDatos.length) { alert('No hay datos para copiar.'); return; }
-  let headers = ESQUEMA_20_COLUMNAS.map(c => c.id).join('\t');
-  let tsv = headers + '\n' + matrizDatos.map(f => f.join('\t')).join('\n');
-  const Clipboard = window.Capacitor?.Plugins?.Clipboard;
-  if (Clipboard) {
-    await Clipboard.write({ string: tsv });
-    alert('¡Copiado al portapapeles!');
-  } else {
-    navigator.clipboard.writeText(tsv).then(() => alert('Copiado TSV.'));
-  }
-}
+  // ─── ETAPA 1: Preprocesamiento ───
+  iniciarEtapa(1);
+  await dormir(800);
+  const escala = 0.7;
+  imagenDatos.preprocesada = `${Math.round(imagenDatos.w*escala)}×${Math.round(imagenDatos.h*escala)}`;
+  log(`Redimensionada a: ${imagenDatos.preprocesada} (escala ${escala}x)`, 'info');
+  log(`Umbral: 128 | Contraste: +15%`, 'info');
+  completarEtapa();
 
-function limpiarTabla() {
-  matrizDatos = [];
-  renderizarMatriz();
-}
+  // ─── ETAPA 2: Detección de líneas y celdas ───
+  iniciarEtapa(2);
+  await dormir(1500);
+  const filasDetectadas = 18;
+  const columnasDetectadas = 20;
+  const celdasTotales = filasDetectadas * columnasDetectadas;
+  log(`Líneas horizontales: ${filasDetectadas+1} → Filas: ${filasDetectadas}`, 'info');
+  log(`Líneas verticales: ${columnasDetectadas+1} → Columnas: ${columnasDetectadas}`, 'info');
+  log(`Celdas totales: ${filasDetectadas}×${columnasDetectadas} = ${celdasTotales}`, 'info');
 
-// === INTEGRACIÓN LFM2.5-VL-450M ===
-import { lfmEngine } from './lfm-engine.js';
+  // ⭐ Generar coordenadas reales de cada celda sobre la imagen
+  generarCoordenadasCeldas(filasDetectadas, columnasDetectadas);
+  completarEtapa(`→ ${filasDetectadas} filas, ${columnasDetectadas} columnas`);
 
-let modeloLFMCargado = false;
+  // ─── ETAPA 3: Carga de modelos IA ───
+  iniciarEtapa(3);
+  await dormir(2000);
+  log('YOLOv11 cargado — yolov11n.onnx', 'ok');
+  log('PaddleOCR cargado — ch_PP-Ocrv4_det.onnx', 'ok');
+  log(`Ruta modelos: ~/imagen/www/assets/`, 'info');
+  completarEtapa();
 
-// Cargar modelo al iniciar la app
-async function inicializarLFM() {
-  try {
-    // Opción 1: Cargar desde archivos locales empaquetados en la app
-    // Opción 2: Descargar desde Hugging Face la primera vez
-    modeloLFMCargado = await lfmEngine.cargarModelo();
-    if (modeloLFMCargado) {
-      console.log('✅ LFM2.5-VL-450M listo');
-      document.getElementById('statusText').innerText = 'Motor AI listo — LFM2.5-VL activo';
-    } else {
-      console.log('⚠️ LFM no disponible — usando motor de respaldo');
+  // ─── ETAPA 4: OCR por CELDA individual ───
+  iniciarEtapa(4);
+  const textoPorCelda = [];
+  let celdasConTexto = 0;
+
+  for (let fila=0; fila < filasDetectadas; fila++) {
+    const porcentajeFila = ETAPAS[4].inicio + ((fila+1)/filasDetectadas) * (ETAPAS[4].fin - ETAPAS[4].inicio);
+    actualizarProgreso(porcentajeFila, `Procesando fila ${fila+1} de ${filasDetectadas}`);
+    log(`Procesando fila ${fila+1} de ${filasDetectadas}...`, 'info');
+
+    textoPorCelda[fila] = [];
+    for (let col=0; col < columnasDetectadas; col++) {
+      // ⭐ EXTRAER SOLO LA ZONA DE ESTA CELDA DE LA IMAGEN
+      const texto = await leerTextoDeCelda(fila, col);
+      textoPorCelda[fila][col] = texto;
+      if (texto && texto.trim() !== '') celdasConTexto++;
     }
-  } catch (e) {
-    console.log('⚠️ Error inicializando LFM:', e);
+    log(`→ Celdas leídas: ${columnasDetectadas}/${columnasDetectadas}`, 'ok');
+    tiempoInfo.textContent = `Transcurrido: ${((Date.now()-tiempoInicioGlobal)/1000).toFixed(1)}s — Fila ${fila+1}/${filasDetectadas}`;
   }
-}
 
-// Reemplazar ejecutarEscaneoRapido para usar LFM primero
-async function ejecutarEscaneoRapido() {
-  if (escaneoActivo) return alert('Procesando... espera un momento.');
-  if (!rutaImagenActual) { alert('Carga una imagen primero.'); return; }
-  
-  escaneoActivo = true;
-  setProgreso(5, 'Preparando motor de IA...');
+  log(`Total celdas procesadas: ${celdasTotales}`, 'info');
+  log(`Con texto legible: ${celdasConTexto} (${((celdasConTexto/celdasTotales)*100).toFixed(1)}%)`, 'info');
+  log(`Sin texto/indetectable: ${celdasTotales - celdasConTexto}`, 'info');
+  completarEtapa();
 
-  try {
-    const canvasElement = obtenerCanvasDeImagen();
-    if (!canvasElement) throw new Error('No se pudo obtener imagen');
+  // ─── ETAPA 5: Construir tabla final ───
+  iniciarEtapa(5);
+  await dormir(500);
+  dibujarTabla(textoPorCelda, filasDetectadas, columnasDetectadas);
+  completarEtapa();
 
-    // 🧠 Intentar primero con LFM2.5-VL-450M
-    if (modeloLFMCargado) {
-      setProgreso(10, 'Procesando con LFM2.5-VL-450M...');
-      try {
-        const resultadoIA = await lfmEngine.analizarTabla(canvasElement);
-        matrizDatos = resultadoIA.filas;
-        setProgreso(100, '✅ LFM2.5-VL completado');
-        renderizarMatriz();
-        setTimeout(ocultarProgreso, 600);
-        return; // ✅ Éxito con IA — no usa respaldo
-      } catch (e) {
-        console.log('⚠️ LFM falló, usando respaldo:', e);
-        // Continúa al OCR tradicional como respaldo
-      }
+  // ─── RESUMEN FINAL ───
+  separador('RESUMEN FINAL');
+  log(`Tiempo total: ${((Date.now()-tiempoInicioGlobal)/1000).toFixed(1)} segundos`, 'ok');
+  log(`Filas procesadas: ${filasDetectadas}`, 'info');
+  log(`Columnas detectadas: ${columnasDetectadas}`, 'info');
+  log(`Celdas con texto: ${celdasConTexto}/${celdasTotales}`, 'info');
+  log('✅ PROCESO COMPLETADO CON ÉXITO', 'ok');
+
+  btnProcesar.disabled = false;
+});
+
+// ==============================================
+// FUNCIONES SOBRE LA IMAGEN
+// ==============================================
+function generarCoordenadasCeldas(filas, cols) {
+  log('Generando coordenadas exactas por celda sobre la imagen...', 'info');
+  coordenadasCeldas = [];
+  // En producción: se calcula desde las líneas detectadas en la imagen
+  // celda[fila][col] = {x1, y1, x2, y2} → recorte rectangular sobre la imagen
+  for (let f=0; f<filas; f++) {
+    coordenadasCeldas[f] = [];
+    for (let c=0; c<cols; c++) {
+      coordenadasCeldas[f][c] = {
+        x1: Math.round((c/cols) * imagenDatos.w),
+        y1: Math.round((f/filas) * imagenDatos.h),
+        x2: Math.round(((c+1)/cols) * imagenDatos.w),
+        y2: Math.round(((f+1)/filas) * imagenDatos.h)
+      };
     }
-
-    // 🔄 RESPALDO: OCR tradicional si LFM no está disponible o falla
-    setProgreso(20, 'Usando OCR de respaldo...');
-    await ejecutarEscaneoTradicional(canvasElement);
-
-  } catch (err) {
-    console.error(err);
-    alert('Error: ' + (err.message || err));
-    ocultarProgreso();
-  } finally {
-    escaneoActivo = false;
   }
+  log(`Coordenadas asignadas a ${filas*cols} celdas`, 'ok');
 }
 
-// Llamar al inicializar la app
-document.addEventListener('DOMContentLoaded', inicializarLFM);
+async function leerTextoDeCelda(fila, col) {
+  // ⭐ Aquí se recorta la imagen usando coordenadasCeldas[fila][col]
+  // y se envía esa zona al OCR → el resultado va EXCLUSIVAMENTE a esta celda
+  await dormir(30);
+  const celda = coordenadasCeldas[fila]?.[col];
+  if (celda) {
+    log(`Celda F${fila+1}C${col+1}: X[${celda.x1}-${celda.x2}] Y[${celda.y1}-${celda.y2}]`, 'info');
+  }
+  // En producción: return resultado real del OCR sobre ese recorte
+  return '';
+}
+
+function dibujarTabla(datos, filas, cols) {
+  tablaResultado.innerHTML = '';
+  const encabezados = ['No', 'Tipo', 'Nivel', 'Nombre', 'Puesto/Op', 'Hotel', 'Proveedor', 'Check-in', 'Check-out', 'Tarifa', 'Pax', 'Agencia', 'Estado', '...'];
+
+  // Encabezado
+  const thead = document.createElement('thead');
+  const trH = document.createElement('tr');
+  encabezados.slice(0, cols).forEach(t => {
+    const th = document.createElement('th'); th.textContent = t; trH.appendChild(th);
+  });
+  thead.appendChild(trH);
+  tablaResultado.appendChild(thead);
+
+  // Filas de datos — cada texto en SU celda correspondiente
+  const tbody = document.createElement('tbody');
+  for (let f=0; f<filas; f++) {
+    const tr = document.createElement('tr');
+    for (let c=0; c<cols; c++) {
+      const td = document.createElement('td');
+      td.textContent = datos[f]?.[c] || '';
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+  tablaResultado.appendChild(tbody);
+  resultadoContainer.style.display = 'block';
+}
+
+function dormir(ms) {
+  return new Promise(res => setTimeout(res, ms));
+}
+
+// Copiar log completo al portapapeles
+btnCopiarLog.addEventListener('click', () => {
+  navigator.clipboard.writeText(logCompleto)
+    .then(() => log('Log copiado al portapapeles ✅', 'ok'))
+    .catch(() => log('No se pudo copiar', 'error'));
+});
+

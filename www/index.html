@@ -2,132 +2,87 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <title>MAR Caribe — Escáner de Tablas</title>
-  <base href="/">
-
-  <!-- Librerías CDN — Sin instalación, sin npm, sin errores -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
-  <script src="js/tabla-motor.js"></script>
-
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { background: #f5f5f5; color: #333; }
-    .contenedor { padding: 16px; max-width: 100%; }
-    h1 { font-size: 20px; color: #1a5a96; margin-bottom: 16px; text-align: center; }
-    .boton { width: 100%; padding: 14px; margin: 8px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
-    .boton-primario { background: #1a5a96; color: white; }
-    .boton-exito { background: #28a745; color: white; }
-    .vista-previa { width: 100%; max-height: 300px; object-fit: contain; background: #ddd; border-radius: 8px; margin: 12px 0; }
-    .tabla { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-    .tabla th, .tabla td { border: 1px solid #ccc; padding: 6px 4px; text-align: left; }
-    .tabla th { background: #1a5a96; color: white; }
-    .progreso { padding: 12px; background: #e9ecef; border-radius: 8px; margin: 12px 0; display: none; }
-    .visible { display: block; }
+    body { padding: 16px; background: #f5f5f5; color: #333; }
+    h1 { text-align: center; color: #005b96; margin-bottom: 24px; font-size: 22px; }
+
+    button {
+      width: 100%; padding: 18px; margin: 8px 0; border: none; border-radius: 12px;
+      font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+    .btn-cargar { background: #0066cc; color: white; }
+    .btn-procesar { background: #28a745; color: white; }
+    .btn-copiar { background: #6c757d; color: white; padding: 10px; font-size: 14px; width: auto; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .progreso-container {
+      width: 100%; height: 48px; background: #e9ecef; border-radius: 12px; margin: 16px 0;
+      position: relative; overflow: hidden; border: 1px solid #ced4da;
+    }
+    .progreso-barra { height: 100%; width: 0%; background: #28a745; border-radius: 12px 0 0 12px; transition: width 0.3s ease; }
+    .progreso-texto {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      font-weight: bold; font-size: 16px; color: #212529; white-space: nowrap;
+    }
+    .etapa-actual { text-align: center; font-size: 14px; color: #495057; margin-bottom: 8px; }
+    .tiempo-info { text-align: center; font-size: 12px; color: #6c757d; margin-bottom: 12px; }
+
+    .preview-container { width: 100%; max-height: 300px; overflow: auto; background: white; border-radius: 12px; padding: 8px; margin: 12px 0; border: 1px solid #ddd; }
+    #previewImg { max-width: 100%; height: auto; display: block; }
+
+    .log-container {
+      width: 100%; background: #212529; color: #f8f9fa; border-radius: 12px; padding: 12px;
+      margin: 16px 0; font-family: monospace; font-size: 12px; line-height: 1.5; max-height: 250px; overflow-y: auto;
+    }
+    .log-titulo { color: #ffc107; font-weight: bold; margin-bottom: 8px; }
+    .ok { color: #28a745; }
+    .info { color: #17a2b8; }
+    .warn { color: #ffc107; }
+    .error { color: #dc3545; }
+
+    .resultado-container { width: 100%; overflow-x: auto; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; background: white; }
+    th, td { border: 1px solid #dee2e6; padding: 8px 10px; text-align: left; font-size: 13px; }
+    th { background: #005b96; color: white; position: sticky; top: 0; }
   </style>
 </head>
 <body>
-  <div class="contenedor">
-    <h1>📋 MAR Caribe — Escáner de Tablas</h1>
 
-    <input type="file" id="entradaImagen" accept="image/*" style="display: none;">
-    <button class="boton boton-primario" id="btnCargarImagen">📷 Cargar Imagen</button>
-    <button class="boton boton-exito" id="btnProcesar" style="display: none;">🔍 Procesar Tabla</button>
+  <h1>📋 MAR Caribe — Escáner de Tablas</h1>
 
-    <img id="vistaPrevia" class="vista-previa" style="display: none;">
+  <button id="btnCargar" class="btn-cargar">📷 Cargar Imagen</button>
+  <input type="file" id="inputImagen" accept="image/*" style="display:none">
 
-    <div id="progreso" class="progreso">
-      <div id="textoProgreso">Iniciando...</div>
-    </div>
-
-    <div id="resultado" style="display: none; overflow-x: auto;">
-      <table class="tabla" id="tablaResultado"></table>
-    </div>
+  <div class="preview-container" id="previewContainer" style="display:none;">
+    <img id="previewImg">
   </div>
 
-  <script>
-    // === CONTROLADOR DE LA INTERFAZ ===
-    const entradaImagen = document.getElementById('entradaImagen');
-    const btnCargarImagen = document.getElementById('btnCargarImagen');
-    const btnProcesar = document.getElementById('btnProcesar');
-    const vistaPrevia = document.getElementById('vistaPrevia');
-    const progreso = document.getElementById('progreso');
-    const textoProgreso = document.getElementById('textoProgreso');
-    const resultado = document.getElementById('resultado');
-    const tablaResultado = document.getElementById('tablaResultado');
+  <button id="btnProcesar" class="btn-procesar" disabled>🔍 Procesar Tabla</button>
 
-    let imagenCargada = null;
+  <div class="etapa-actual" id="etapaActual">Listo para iniciar</div>
+  <div class="progreso-container">
+    <div class="progreso-barra" id="barraProgreso"></div>
+    <div class="progreso-texto" id="textoProgreso">0%</div>
+  </div>
+  <div class="tiempo-info" id="tiempoInfo"></div>
 
-    // Cargar imagen
-    btnCargarImagen.addEventListener('click', () => entradaImagen.click());
-    entradaImagen.addEventListener('change', async (e) => {
-      const archivo = e.target.files[0];
-      if (!archivo) return;
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
+    <h3 style="color:#005b96; font-size:16px;">📝 Log de Depuración</h3>
+    <button id="btnCopiarLog" class="btn-copiar">📋 Copiar Log</button>
+  </div>
+  <div class="log-container" id="logContainer">
+    <div class="log-titulo">=== MAR Caribe — Log de Depuración ===</div>
+    <div id="logContenido"></div>
+  </div>
 
-      const lector = new FileReader();
-      lector.onload = (evento) => {
-        vistaPrevia.src = evento.target.result;
-        vistaPrevia.style.display = 'block';
-        btnProcesar.style.display = 'block';
-        imagenCargada = evento.target.result;
-      };
-      lector.readAsDataURL(archivo);
-    });
+  <div class="resultado-container" id="resultadoContainer" style="display:none;">
+    <h3 style="color:#005b96; margin:20px 0 10px;">📊 Tabla Extraída</h3>
+    <table id="tablaResultado"></table>
+  </div>
 
-    // Procesar tabla
-    btnProcesar.addEventListener('click', async () => {
-      if (!imagenCargada || !window.TablaMAR) return alert('Imagen o motor no disponible');
-
-      progreso.classList.add('visible');
-      resultado.style.display = 'none';
-      textoProgreso.textContent = 'Preparando imagen...';
-
-      try {
-        // Crear canvas para procesamiento
-        const imagen = new Image();
-        imagen.src = imagenCargada;
-        await new Promise(res => imagen.onload = res);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = imagen.width;
-        canvas.height = imagen.height;
-        canvas.getContext('2d').drawImage(imagen, 0, 0);
-
-        textoProgreso.textContent = 'Procesando con OCR...';
-
-        // Ejecutar flujo completo
-        const datos = await TablaMAR.procesar(canvas);
-
-        textoProgreso.textContent = 'Generando tabla...';
-
-        // Renderizar tabla
-        tablaResultado.innerHTML = '';
-        const encabezado = document.createElement('tr');
-        datos.columnas.forEach(col => {
-          const th = document.createElement('th');
-          th.textContent = col;
-          encabezado.appendChild(th);
-        });
-        tablaResultado.appendChild(encabezado);
-
-        datos.filas.forEach(fila => {
-          const tr = document.createElement('tr');
-          datos.columnas.forEach(col => {
-            const td = document.createElement('td');
-            td.textContent = fila[col] || '';
-            tr.appendChild(td);
-          });
-          tablaResultado.appendChild(tr);
-        });
-
-        resultado.style.display = 'block';
-        textoProgreso.textContent = `✅ Completado — ${datos.filas.length} filas procesadas`;
-
-      } catch (error) {
-        textoProgreso.textContent = '❌ Error: ' + error.message;
-        console.error(error);
-      }
-    });
-  </script>
+  <script src="js/app.js"></script>
 </body>
 </html>
