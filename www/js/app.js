@@ -179,12 +179,7 @@ async function autoAlinearHibrida() {
 
   try {
     const canvasElement = obtenerCanvasProcesado();
-    const worker = await Tesseract.createWorker({
-      langPath: './lang-data',
-      gzip: false
-    });
-    await worker.loadLanguage('spa');
-    await worker.initialize('spa');
+    const worker = await Tesseract.createWorker('spa');
 
     setProgreso(40, "Mapeando coordenadas X de palabras...");
     const { data } = await worker.recognize(canvasElement);
@@ -276,12 +271,7 @@ async function ejecutarEscaneoConFiltros() {
     setProgreso(10, `Cargando motor OCR (${engine.toUpperCase()})...`);
     const canvasElement = obtenerCanvasProcesado();
     
-    const worker = await Tesseract.createWorker({
-      langPath: './lang-data',
-      gzip: false
-    });
-    await worker.loadLanguage('spa');
-    await worker.initialize('spa');
+    const worker = await Tesseract.createWorker('spa');
 
     if (engine === 'lfm') {
       await worker.setParameters({ tessedit_pageseg_mode: 6 });
