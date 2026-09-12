@@ -1,26 +1,17 @@
 // ==============================================
-// MAR Caribe — Escáner de Tablas + APRENDIZAJE ADAPTATIVO
-// Configuración: 10 filas × 21 columnas, SIN encabezados
-// Sistema aprende de correcciones manuales
-// Carpeta: ~/imagen/www/
+// MAR Caribe — Escáner de Tablas + APRENDIZAJE INTEGRADO AL CÓDIGO
+// Versión: 1.0 | Fecha: 2026-09-12
+// Configuración: 10 filas × 21 columnas | Sin encabezados
+// Ruta base: www/assets/aprendizaje-base.json
 // ==============================================
 
-const TIEMPO_LIMITE_GLOBAL = 120000;
-const ETAPAS = [
-  { id: 'carga',       nombre: 'Carga de Imagen',       inicio: 0,  fin: 10,  tiempoMax: 5000 },
-  { id: 'preproces',   nombre: 'Preprocesamiento',      inicio: 10, fin: 25,  tiempoMax: 8000 },
-  { id: 'detectar',    nombre: 'Detección de Líneas',   inicio: 25, fin: 50,  tiempoMax: 15000 },
-  { id: 'cargaModelos',nombre: 'Carga de Motores IA',   inicio: 50, fin: 65,  tiempoMax: 20000 },
-  { id: 'ocr',         nombre: 'Reconocimiento OCR',    inicio: 65, fin: 90,  tiempoMax: 60000 },
-  { id: 'tabla',       nombre: 'Construir Tabla',       inicio: 90, fin: 100, tiempoMax: 5000 }
-];
-
-// ⚙️ CONFIGURACIÓN EXACTA
 const CONFIG = {
   FILAS: 10,
   COLUMNAS: 21,
-  TIENE_ENCABEZADOS: false,
-  RUTA_APRENDIZAJE: 'mar-caribe-aprendizaje.json'
+  RUTA_BASE: 'assets/aprendizaje-base.json',
+  PESO_NUEVO: 0.70,
+  PESO_HISTORICO: 0.30,
+  TIEMPO_LIMITE: 120000
 };
 
 // Elementos DOM
@@ -28,8 +19,17 @@ const inputImagen     = document.getElementById('inputImagen');
 const btnCargar       = document.getElementById('btnCargar');
 const btnProcesar     = document.getElementById('btnProcesar');
 const btnCopiarLog    = document.getElementById('btnCopiarLog');
+const btnExportarJSON = document.getElementById('btnExportarJSON');
+const btnEditarLineas = document.getElementById('btnEditarLineas');
+const btnAgregarLinea = document.getElementById('btnAgregarLinea');
+const btnQuitarLinea  = document.getElementById('btnQuitarLinea');
 const btnGuardarAjustes=document.getElementById('btnGuardarAjustes');
 const btnReiniciarAprendizaje=document.getElementById('btnReiniciarAprendizaje');
+const btnZoomMas      = document.getElementById('btnZoomMas');
+const btnZoomMenos    = document.getElementById('btnZoomMenos');
+const btnZoomNormal   = document.getElementById('btnZoomNormal');
+const nivelZoom       = document.getElementById('nivelZoom');
+const estadoMotor     = document.getElementById('estadoMotor');
 const previewContainer= document.getElementById('previewContainer');
 const previewImg      = document.getElementById('previewImg');
 const canvasLineas    = document.getElementById('canvasLineas');
@@ -40,112 +40,170 @@ const tiempoInfo      = document.getElementById('tiempoInfo');
 const logContenido    = document.getElementById('logContenido');
 const logContainer    = document.getElementById('logContainer');
 const tablaResultado  = document.getElementById('tablaResultado');
+const versionAprendizaje=document.getElementById('versionAprendizaje');
 
 // ==============================================
-// 🧠 MOTOR DE APRENDIZAJE ADAPTATIVO
+// 🧠 MOTOR DE APRENDIZAJE — CARGA DESDE ARCHIVO BASE
 // ==============================================
 const Aprendizaje = {
-  // Datos aprendidos: posiciones normalizadas 0.0 → 1.0
-  lineasH: [],   // Posiciones Y de cada línea horizontal
-  lineasV: [],   // Posiciones X de cada línea vertical
-  version: 0,
-  ultimaActualizacion: null,
+  base: null,       // Datos cargados desde aprendizaje-base.json (integrado al código)
+  sesion: null,     // Ajustes hechos en esta sesión (localStorage temporal)
+  zoom: 1.0,
+  desplazamiento: { x: 0, y: 0 },
 
-  // Cargar lo aprendido desde localStorage
-  cargar() {
-    const guardado = localStorage.getItem('mar-caribe-aprendizaje');
-    if (guardado) {
-      const datos = JSON.parse(guardado);
-      this.lineasH = datos.lineasH || [];
-      this.lineasV = datos.lineasV || [];
-      this.version = datos.version || 0;
-      this.ultimaActualizacion = datos.ultimaActualizacion;
-      log(`🧠 Modelo aprendido cargado — v${this.version}`, 'ok');
-      log(`   Líneas H aprendidas: ${this.lineasH.length}`, 'info');
-      log(`   Líneas V aprendidas: ${this.lineasV.length}`, 'info');
+  async cargarBase() {
+    log('🔄 Cargando aprendizaje BASE desde archivo del proyecto...', 'info');
+    try {
+      const resp = await fetch(CONFIG.RUTA_BASE);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      this.base = await resp.json();
+      
+      versionAprendizaje.textContent = 
+        `Versión base: ${this.base.version_aprendizaje} | ${this.base.fecha_actualizacion}`;
+      
+      log('✅ === APRENDIZAJE BASE CARGADO DEL CÓDIGO ===', 'ok');
+      log(`📦 Versión: ${this.base.version_aprendizaje} — ${this.base.fecha_actualizacion}`, 'ok');
+      log(`📐 Configuración: ${this.base.configuracion.filas} filas × ${this.base.configuracion.columnas} columnas`, 'info');
+      log(`📍 Líneas H internas: ${this.base.lineas_internas.H.length}`, 'info');
+      log(`📍 Líneas V internas: ${this.base.lineas_internas.V.length}`, 'info');
+      log(`⚖️  Promedio móvil: ${this.base.promedio_movil.peso_nuevo*100}% nuevo / ${this.base.promedio_movil.peso_historico*100}% histórico`, 'info');
+      
+      this.cargarSesionLocal();
       return true;
+    } catch (err) {
+      log(`❌ ERROR al cargar archivo base: ${err.message}`, 'error');
+      log(`⚠️ Ruta buscada: ${CONFIG.RUTA_BASE}`, 'warn');
+      log('⚠️ Se usará división uniforme por defecto', 'warn');
+      return false;
     }
-    log('🧠 Sin datos de aprendizaje previo — iniciando en blanco', 'info');
-    return false;
   },
 
-  // Guardar posiciones corregidas manualmente
-  guardar(lineasH, lineasV) {
-    this.lineasH = [...lineasH];
-    this.lineasV = [...lineasV];
-    this.version++;
-    this.ultimaActualizacion = new Date().toISOString();
-    
-    localStorage.setItem('mar-caribe-aprendizaje', JSON.stringify({
-      lineasH: this.lineasH,
-      lineasV: this.lineasV,
-      version: this.version,
-      ultimaActualizacion: this.ultimaActualizacion
-    }));
-    
-    log(`🧠 APRENDIZAJE ACTUALIZADO — v${this.version}`, 'ok');
-    log(`   Líneas H: ${this.lineasH.length} | Líneas V: ${this.lineasV.length}`, 'info');
-    return true;
+  cargarSesionLocal() {
+    const guardado = localStorage.getItem('mar-caribe-sesion');
+    if (guardado) {
+      try {
+        this.sesion = JSON.parse(guardado);
+        versionAprendizaje.textContent += ` | Sesión: ${this.sesion.version_sesion}`;
+        log('📥 Sesión local cargada — se aplicará sobre la base', 'info');
+      } catch {
+        this.sesion = null;
+      }
+    }
   },
 
-  // Generar líneas usando lo aprendido + corrección gradual
-  generarLineas(total, aprendidas, ejeImagen) {
-    // Si hay suficientes datos aprendidos → USARLOS
-    if (aprendidas.length >= total - 1) {
-      log(`🧠 Usando posiciones APRENDIDAS para ${total} divisiones`, 'info');
-      return [0.0, ...aprendidas.slice(0, total - 1), 1.0];
+  generarLineas() {
+    const totalH = CONFIG.FILAS + 1;
+    const totalV = CONFIG.COLUMNAS + 1;
+    let lineasH, lineasV;
+
+    // Usar sesión local si existe, si no usar base del código
+    const fuente = this.sesion || this.base;
+
+    if (fuente && fuente.lineas_internas) {
+      const H = fuente.lineas_internas.H;
+      const V = fuente.lineas_internas.V;
+      
+      if (H.length === CONFIG.FILAS - 1 && V.length === CONFIG.COLUMNAS - 1) {
+        log(`🧠 Usando posiciones de ${this.sesion ? 'SESIÓN LOCAL' : 'BASE DEL CÓDIGO'}`, 'info');
+        lineasH = [0.0, ...H, 1.0];
+        lineasV = [0.0, ...V, 1.0];
+        log(`📍 H: ${lineasH.map(p => p.toFixed(4)).join(' | ')}`, 'info');
+        log(`📍 V: ${lineasV.map(p => p.toFixed(4)).join(' | ')}`, 'info');
+        return { lineasH, lineasV };
+      }
     }
 
-    // Si NO hay aprendizaje → Dividir uniformemente
-    log(`🧠 Sin datos suficientes — generando división uniforme`, 'info');
-    const posiciones = [0.0];
-    for (let i = 1; i < total; i++) {
-      posiciones.push(i / total);
-    }
-    posiciones.push(1.0);
-    return posiciones;
+    // División uniforme si no hay datos
+    log('🧠 Generando división uniforme por defecto', 'info');
+    lineasH = [0.0];
+    for (let i = 1; i <= CONFIG.FILAS; i++) lineasH.push(i / CONFIG.FILAS);
+    lineasH.push(1.0);
+    lineasV = [0.0];
+    for (let i = 1; i <= CONFIG.COLUMNAS; i++) lineasV.push(i / CONFIG.COLUMNAS);
+    lineasV.push(1.0);
+    return { lineasH, lineasV };
   },
 
-  // Actualizar aprendizaje con nuevas correcciones (promedio móvil)
-  actualizarConCorreccion(lineasCorregidas, eje) {
-    const clave = eje === 'H' ? 'lineasH' : 'lineasV';
-    const aprendidas = this[clave];
-    const nuevas = lineasCorregidas.slice(1, -1); // Quitar bordes 0 y 1
+  // GUARDAR: calcular promedio y guardar en sesión local + mostrar JSON para exportar
+  guardar(lineasHCompletas, lineasVCompletas) {
+    const nuevasH = lineasHCompletas.slice(1, -1);
+    const nuevasV = lineasVCompletas.slice(1, -1);
+    const base = this.base;
 
-    if (aprendidas.length === 0 || aprendidas.length !== nuevas.length) {
-      // Primera vez o cantidad distinta → Reemplazar completo
-      this[clave] = nuevas;
+    log('💾 === GUARDANDO AJUSTES ===', 'info');
+    log(`✏️ Nuevas posiciones H: [${nuevasH.map(p => p.toFixed(4)).join(', ')}]`, 'info');
+    log(`✏️ Nuevas posiciones V: [${nuevasV.map(p => p.toFixed(4)).join(', ')}]`, 'info');
+
+    // Aplicar promedio móvil
+    let finalesH, finalesV;
+    if (base && base.lineas_internas.H.length === nuevasH.length) {
+      log(`⚖️  Aplicando promedio: ${CONFIG.PESO_NUEVO*100}% nuevo + ${CONFIG.PESO_HISTORICO*100}% base`, 'info');
+      finalesH = nuevasH.map((n, i) => 
+        CONFIG.PESO_NUEVO * n + CONFIG.PESO_HISTORICO * base.lineas_internas.H[i]);
+      finalesV = nuevasV.map((n, i) => 
+        CONFIG.PESO_NUEVO * n + CONFIG.PESO_HISTORICO * base.lineas_internas.V[i]);
+      log(`📊 Resultado H: [${finalesH.map(p => p.toFixed(4)).join(', ')}]`, 'ok');
+      log(`📊 Resultado V: [${finalesV.map(p => p.toFixed(4)).join(', ')}]`, 'ok');
     } else {
-      // Promedio móvil 70% nuevo + 30% histórico → Aprende gradualmente
-      this[clave] = nuevas.map((nueva, i) => {
-        return 0.7 * nueva + 0.3 * aprendidas[i];
-      });
+      log('⚠️ Sin base compatible — usando posiciones directas', 'warn');
+      finalesH = nuevasH;
+      finalesV = nuevasV;
     }
-    log(`🧠 Aprendizaje ${eje} actualizado — promedio 70% nuevo / 30% histórico`, 'info');
+
+    // Guardar sesión local
+    this.sesion = {
+      version_sesion: (this.sesion?.version_sesion || 0) + 1,
+      fecha: new Date().toISOString(),
+      lineas_internas: { H: finalesH, V: finalesV }
+    };
+    localStorage.setItem('mar-caribe-sesion', JSON.stringify(this.sesion));
+
+    log(`✅ Sesión guardada — Versión: ${this.sesion.version_sesion}`, 'ok');
+    return { finalesH, finalesV };
   },
 
-  reiniciar() {
-    localStorage.removeItem('mar-caribe-aprendizaje');
-    this.lineasH = [];
-    this.lineasV = [];
-    this.version = 0;
-    log('🧠 Aprendizaje REINICIADO — desde cero', 'warn');
+  // 📤 EXPORTAR JSON LISTO PARA PEGAR EN EL PROYECTO
+  exportarJSON() {
+    if (!this.base) { log('❌ No hay base para exportar', 'error'); return; }
+    
+    const datos = this.sesion || this.base;
+    const versionNueva = this.base.version_aprendizaje + 1;
+    
+    const jsonCompleto = {
+      version_aprendizaje: versionNueva,
+      fecha_actualizacion: new Date().toISOString().split('T')[0],
+      descripcion: this.base.descripcion,
+      configuracion: this.base.configuracion,
+      lineas_internas: datos.lineas_internas,
+      promedio_movil: this.base.promedio_movil
+    };
+
+    const textoJSON = JSON.stringify(jsonCompleto, null, 2);
+    log('📤 === JSON PARA ACTUALIZAR EL PROYECTO ===', 'ok');
+    log('COPIA Y PEGA ESTO EN: www/assets/aprendizaje-base.json', 'info');
+    log('```', 'info');
+    log(textoJSON, 'info');
+    log('```', 'info');
+    log(`✅ Versión nueva: ${versionNueva} — ¡Toda nueva versión la traerá integrada!`, 'ok');
+    
+    navigator.clipboard?.writeText(textoJSON).then(() => {
+      log('📋 JSON copiado al portapapeles ✅', 'ok');
+    }).catch(() => {});
+  },
+
+  reiniciarLocal() {
+    localStorage.removeItem('mar-caribe-sesion');
+    this.sesion = null;
+    log('🗑️ Sesión local reiniciada — se usa base del código', 'warn');
   }
 };
 
 // Estado
-let imagenActual      = null;
-let imagenDatos       = null;
-let logCompleto       = '';
-let tiempoInicioGlobal= 0;
-let tiempoInicioEtapa = 0;
-let etapaActivaIndex  = -1;
-let coordenadasCeldas = [];
-let lineasHActuales   = [];
-let lineasVActuales   = [];
-let modoEdicionLineas = false;
-let lineaSeleccionada  = null;
-let offsetArrastre    = 0;
+let imagenActual = null, imagenDatos = null, logCompleto = '';
+let tiempoInicioGlobal = 0;
+let coordenadasCeldas = [], lineasHActuales = [], lineasVActuales = [];
+let modoEdicionLineas = false, lineaSeleccionada = null, offsetArrastre = 0;
+let ultimoToque = 0;
 
 // ==============================================
 // SISTEMA DE LOG
@@ -155,41 +213,63 @@ function log(mensaje, tipo = 'info') {
   const colores = { ok: '#4ade80', info: '#60a5fa', warn: '#fbbf24', error: '#f87171' };
   const linea = `${iconos[tipo]} ${mensaje}`;
   logCompleto += linea + '\n';
-  logContenido.innerHTML += `<div style="color:${colores[tipo]}">${linea}</div>`;
+  logContenido.innerHTML += `<div style="color:${colores[tipo]}; white-space:pre-wrap;">${linea}</div>`;
   logContainer.scrollTop = logContainer.scrollHeight;
 }
 
-function separador(texto) {
-  logContenido.innerHTML += `<div style="color:#9ca3af; margin:10px 0; border-top:1px solid #374151; padding-top:8px">--- ${texto} ---</div>`;
-  logCompleto += `--- ${texto} ---\n`;
-}
-
 // ==============================================
-// BARRA DE PROGRESO
+// ZOOM Y DESPLAZAMIENTO
 // ==============================================
-function actualizarProgreso(porcentaje, textoEtapa) {
-  barraProgreso.style.width = `${porcentaje}%`;
-  textoProgreso.textContent = `${Math.round(porcentaje)}%`;
-  if (textoEtapa) etapaActual.textContent = textoEtapa;
+function aplicarZoom() {
+  previewImg.style.transform = `scale(${Aprendizaje.zoom}) translate(${Aprendizaje.desplazamiento.x}px, ${Aprendizaje.desplazamiento.y}px)`;
+  canvasLineas.style.transform = `scale(${Aprendizaje.zoom}) translate(${Aprendizaje.desplazamiento.x}px, ${Aprendizaje.desplazamiento.y}px)`;
+  nivelZoom.textContent = `${Math.round(Aprendizaje.zoom * 100)}%`;
 }
 
-function iniciarEtapa(indice) {
-  etapaActivaIndex = indice;
-  const etapa = ETAPAS[indice];
-  tiempoInicioEtapa = Date.now();
-  separador(`ETAPA ${indice + 1}: ${etapa.nombre}`);
-  log(`Iniciada — Rango: ${etapa.inicio}% → ${etapa.fin}%`, 'info');
-  log(`Tiempo límite: ${etapa.tiempoMax / 1000}s`, 'info');
-  actualizarProgreso(etapa.inicio, etapa.nombre);
-}
+btnZoomMas.addEventListener('click', () => {
+  Aprendizaje.zoom = Math.min(5.0, Aprendizaje.zoom * 1.3);
+  aplicarZoom();
+  log(`🔍 Zoom: ${Math.round(Aprendizaje.zoom * 100)}%`, 'info');
+});
 
-function completarEtapa(datosExtra = '') {
-  const etapa = ETAPAS[etapaActivaIndex];
-  const duracion = (Date.now() - tiempoInicioEtapa) / 1000;
-  actualizarProgreso(etapa.fin, `${etapa.nombre} — Completado`);
-  log(`Completada en ${duracion.toFixed(1)}s ${datosExtra}`, 'ok');
-  tiempoInfo.textContent = `Transcurrido: ${((Date.now() - tiempoInicioGlobal) / 1000).toFixed(1)}s`;
-}
+btnZoomMenos.addEventListener('click', () => {
+  Aprendizaje.zoom = Math.max(0.5, Aprendizaje.zoom / 1.3);
+  aplicarZoom();
+  log(`🔍 Zoom: ${Math.round(Aprendizaje.zoom * 100)}%`, 'info');
+});
+
+btnZoomNormal.addEventListener('click', () => {
+  Aprendizaje.zoom = 1.0;
+  Aprendizaje.desplazamiento = { x: 0, y: 0 };
+  aplicarZoom();
+  log('🔍 Zoom 100% — Restablecido', 'info');
+});
+
+// Zoom con dos dedos y arrastre
+let toquesIniciales = null;
+previewContainer.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    const t1 = e.touches[0], t2 = e.touches[1];
+    toquesIniciales = {
+      distancia: Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY),
+      zoomInicial: Aprendizaje.zoom
+    };
+  }
+});
+
+previewContainer.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && toquesIniciales) {
+    const t1 = e.touches[0], t2 = e.touches[1];
+    const distancia = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+    Aprendizaje.zoom = Math.max(0.5, Math.min(5.0, toquesIniciales.zoomInicial * (distancia / toquesIniciales.distancia)));
+    aplicarZoom();
+    e.preventDefault();
+  }
+});
+
+previewContainer.addEventListener('touchend', () => {
+  toquesIniciales = null;
+});
 
 // ==============================================
 // CARGA DE IMAGEN
@@ -199,152 +279,97 @@ inputImagen.addEventListener('change', async (e) => {
   const archivo = e.target.files[0];
   if (!archivo) return;
 
-  logContenido.innerHTML = '';
-  logCompleto = '';
-  tablaResultado.innerHTML = '';
+  logContenido.innerHTML = ''; logCompleto = ''; tablaResultado.innerHTML = '';
   tiempoInicioGlobal = Date.now();
 
-  log('=== MAR Caribe — Log de Depuración + APRENDIZAJE ===', 'info');
+  log('=== MAR Caribe — Escáner de Tablas ===', 'info');
   log(`Fecha: ${new Date().toLocaleString()}`, 'info');
   log(`Imagen: ${archivo.name} (${(archivo.size / 1024).toFixed(0)} KB)`, 'info');
-  log(`Configuración: ${CONFIG.FILAS} filas × ${CONFIG.COLUMNAS} columnas | Sin encabezados`, 'info');
+  log(`Configuración: ${CONFIG.FILAS} filas × ${CONFIG.COLUMNAS} columnas`, 'info');
 
-  // Cargar aprendizaje guardado
-  Aprendizaje.cargar();
+  const cargada = await Aprendizaje.cargarBase();
 
-  iniciarEtapa(0);
-  try {
-    imagenActual = await new Promise((resolver, rechazar) => {
-      const lector = new FileReader();
-      lector.onload = (e) => {
-        const img = new Image();
-        img.onload = () => resolver(img);
-        img.onerror = rechazar;
-        img.src = e.target.result;
-      };
-      lector.onerror = rechazar;
-      lector.readAsDataURL(archivo);
-    });
+  const img = await new Promise((resolver, rechazar) => {
+    const lector = new FileReader();
+    lector.onload = (e) => {
+      const i = new Image();
+      i.onload = () => resolver(i);
+      i.onerror = rechazar;
+      i.src = e.target.result;
+    };
+    lector.onerror = rechazar;
+    lector.readAsDataURL(archivo);
+  });
 
-    log(`Dimensiones: ${imagenActual.width}×${imagenActual.height} píxeles`, 'info');
-    previewImg.src = imagenActual.src;
-    previewContainer.style.display = 'block';
-    imagenDatos = { w: imagenActual.width, h: imagenActual.height };
-    
-    // Ajustar canvas de líneas al tamaño de la imagen
-    canvasLineas.width = previewImg.clientWidth;
-    canvasLineas.height = previewImg.clientHeight;
-    
-    completarEtapa();
-    btnProcesar.disabled = false;
-  } catch (err) {
-    log(`ERROR: No se pudo cargar — ${err.message}`, 'error');
-  }
+  imagenActual = img;
+  imagenDatos = { w: img.width, h: img.height };
+  previewImg.src = img.src;
+  previewContainer.style.display = 'block';
+
+  // Ajustar canvas al tamaño real de la imagen
+  await new Promise(r => previewImg.onload = r);
+  canvasLineas.width = previewImg.clientWidth;
+  canvasLineas.height = previewImg.clientHeight;
+
+  log(`Imagen cargada: ${img.width}×${img.height} píxeles`, 'ok');
+
+  // Generar y dibujar líneas
+  const { lineasH, lineasV } = Aprendizaje.generarLineas();
+  lineasHActuales = lineasH;
+  lineasVActuales = lineasV;
+  dibujarLineas();
+
+  log(`📐 Líneas generadas — H: ${lineasH.length} | V: ${lineasV.length}`, 'ok');
+  btnProcesar.disabled = false;
 });
 
 // ==============================================
-// 📐 GENERAR LÍNEAS CON APRENDIZAJE
-// ==============================================
-function generarLineasConAprendizaje() {
-  // Generar líneas H (horizontales → filas)
-  lineasHActuales = Aprendizaje.generarLineas(
-    CONFIG.FILAS, 
-    Aprendizaje.lineasH, 
-    imagenDatos.h
-  );
-
-  // Generar líneas V (verticales → columnas)
-  lineasVActuales = Aprendizaje.generarLineas(
-    CONFIG.COLUMNAS, 
-    Aprendizaje.lineasV, 
-    imagenDatos.w
-  );
-
-  log(`📐 Líneas horizontales: ${lineasHActuales.length - 1} divisiones`, 'info');
-  log(`📐 Líneas verticales: ${lineasVActuales.length - 1} divisiones`, 'info');
-
-  return { lineasH: lineasHActuales, lineasV: lineasVActuales };
-}
-
-// ==============================================
-// 🎨 DIBUJAR LÍNEAS SOBRE LA IMAGEN
+// DIBUJAR LÍNEAS
 // ==============================================
 function dibujarLineas() {
   const ctx = canvasLineas.getContext('2d');
-  const ancho = canvasLineas.width;
-  const alto = canvasLineas.height;
-  
+  const ancho = canvasLineas.width, alto = canvasLineas.height;
   ctx.clearRect(0, 0, ancho, alto);
   ctx.lineWidth = 2;
 
-  // Líneas horizontales
-  ctx.strokeStyle = '#3b82f6'; // Azul
+  ctx.strokeStyle = '#3b82f6';
   lineasHActuales.forEach((pos, i) => {
     const y = pos * alto;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(ancho, y);
-    ctx.stroke();
-    // Marcar línea editable
-    ctx.fillStyle = '#3b82f6';
-    ctx.fillText(`F${i}`, 5, y + 15);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ancho, y); ctx.stroke();
+    ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(`F${i}`, 5, y + 15);
   });
 
-  // Líneas verticales
-  ctx.strokeStyle = '#ef4444'; // Rojo
+  ctx.strokeStyle = '#ef4444';
   lineasVActuales.forEach((pos, i) => {
     const x = pos * ancho;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, alto);
-    ctx.stroke();
-    ctx.fillStyle = '#ef4444';
-    ctx.fillText(`C${i}`, x + 5, 15);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, alto); ctx.stroke();
+    ctx.fillStyle = '#ef4444'; ctx.font = 'bold 12px sans-serif'; ctx.fillText(`C${i}`, x + 5, 15);
   });
-
-  log(`✏️ Líneas dibujadas — H:${lineasHActuales.length} V:${lineasVActuales.length}`, 'info');
 }
 
 // ==============================================
-// 📏 GENERAR COORDENADAS DE CELDAS
+// EDITAR LÍNEAS — Arrastrar, Agregar, Quitar
 // ==============================================
-function generarCoordenadasCeldas() {
-  coordenadasCeldas = [];
-  const escalaX = imagenDatos.w / canvasLineas.width;
-  const escalaY = imagenDatos.h / canvasLineas.height;
-
-  for (let f = 0; f < lineasHActuales.length - 1; f++) {
-    coordenadasCeldas[f] = [];
-    for (let c = 0; c < lineasVActuales.length - 1; c++) {
-      coordenadasCeldas[f][c] = {
-        x1: Math.round(lineasVActuales[c] * imagenDatos.w),
-        y1: Math.round(lineasHActuales[f] * imagenDatos.h),
-        x2: Math.round(lineasVActuales[c + 1] * imagenDatos.w),
-        y2: Math.round(lineasHActuales[f + 1] * imagenDatos.h)
-      };
-    }
-  }
-  return { filas: coordenadasCeldas.length, columnas: coordenadasCeldas[0]?.length || 0 };
-}
-
-// ==============================================
-// ✏️ EDICIÓN MANUAL DE LÍNEAS (arrastrar, agregar, borrar)
-// ==============================================
-function activarEdicionLineas() {
+btnEditarLineas.addEventListener('click', () => {
   modoEdicionLineas = !modoEdicionLineas;
-  log(modoEdicionLineas ? '✏️ MODO EDICIÓN ACTIVO — Arrastra las líneas' : '👁️ Modo vista', modoEdicionLineas ? 'ok' : 'info');
   canvasLineas.style.pointerEvents = modoEdicionLineas ? 'auto' : 'none';
-}
+  log(modoEdicionLineas ? '✏️ MODO EDICIÓN ACTIVO — Arrastra las líneas' : '👁️ Modo vista', modoEdicionLineas ? 'ok' : 'info');
+  btnEditarLineas.style.background = modoEdicionLineas ? '#ef4444' : '';
+});
 
-// Arrastrar líneas
-canvasLineas.addEventListener('mousedown', (e) => {
+canvasLineas.addEventListener('mousedown', iniciarArrastre);
+canvasLineas.addEventListener('touchstart', (e) => {
+  const t = e.touches[0];
+  iniciarArrastre({ clientX: t.clientX, clientY: t.clientY });
+});
+
+function iniciarArrastre(e) {
   if (!modoEdicionLineas) return;
   const rect = canvasLineas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
-  const umbral = 10;
+  const x = (e.clientX - rect.left) / Aprendizaje.zoom;
+  const y = (e.clientY - rect.top) / Aprendizaje.zoom;
+  const umbral = 12;
 
-  // Buscar línea horizontal cercana
   for (let i = 0; i < lineasHActuales.length; i++) {
     const ly = lineasHActuales[i] * canvasLineas.height;
     if (Math.abs(y - ly) < umbral) {
@@ -353,8 +378,6 @@ canvasLineas.addEventListener('mousedown', (e) => {
       return;
     }
   }
-
-  // Buscar línea vertical cercana
   for (let i = 0; i < lineasVActuales.length; i++) {
     const lx = lineasVActuales[i] * canvasLineas.width;
     if (Math.abs(x - lx) < umbral) {
@@ -363,170 +386,103 @@ canvasLineas.addEventListener('mousedown', (e) => {
       return;
     }
   }
+}
+
+canvasLineas.addEventListener('mousemove', moverLinea);
+canvasLineas.addEventListener('touchmove', (e) => {
+  if (!lineaSeleccionada) return;
+  const t = e.touches[0];
+  moverLinea({ clientX: t.clientX, clientY: t.clientY });
+  e.preventDefault();
 });
 
-canvasLineas.addEventListener('mousemove', (e) => {
+function moverLinea(e) {
   if (!lineaSeleccionada) return;
   const rect = canvasLineas.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const y = e.clientY - rect.top;
+  const x = (e.clientX - rect.left) / Aprendizaje.zoom;
+  const y = (e.clientY - rect.top) / Aprendizaje.zoom;
 
   if (lineaSeleccionada.tipo === 'H') {
-    let nuevaPos = (y - offsetArrastre) / canvasLineas.height;
-    nuevaPos = Math.max(0.01, Math.min(0.99, nuevaPos)); // Limitar bordes
-    lineasHActuales[lineaSeleccionada.indice] = nuevaPos;
+    let nueva = (y - offsetArrastre) / canvasLineas.height;
+    nueva = Math.max(0.01, Math.min(0.99, nueva));
+    lineasHActuales[lineaSeleccionada.indice] = nueva;
   } else {
-    let nuevaPos = (x - offsetArrastre) / canvasLineas.width;
-    nuevaPos = Math.max(0.01, Math.min(0.99, nuevaPos));
-    lineasVActuales[lineaSeleccionada.indice] = nuevaPos;
+    let nueva = (x - offsetArrastre) / canvasLineas.width;
+    nueva = Math.max(0.01, Math.min(0.99, nueva));
+    lineasVActuales[lineaSeleccionada.indice] = nueva;
   }
+  dibujarLineas();
+}
+
+canvasLineas.addEventListener('mouseup', () => { lineaSeleccionada = null; });
+canvasLineas.addEventListener('touchend', () => { lineaSeleccionada = null; });
+
+// Agregar y quitar líneas con toque
+btnAgregarLinea.addEventListener('click', () => {
+  if (!modoEdicionLineas) { log('⚠️ Activa primero "Editar Líneas"', 'warn'); return; }
+  const mitadH = 0.5, mitadV = 0.5;
+  lineasHActuales.push(mitadH);
+  lineasHActuales.sort((a, b) => a - b);
+  lineasVActuales.push(mitadV);
+  lineasVActuales.sort((a, b) => a - b);
+  log(`➕ Líneas agregadas — Total H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
   dibujarLineas();
 });
 
-canvasLineas.addEventListener('mouseup', () => {
-  if (lineaSeleccionada) {
-    log(`✏️ Línea ${lineaSeleccionada.tipo}${lineaSeleccionada.indice} movida`, 'info');
-    lineaSeleccionada = null;
-  }
+btnQuitarLinea.addEventListener('click', () => {
+  if (!modoEdicionLineas) { log('⚠️ Activa primero "Editar Líneas"', 'warn'); return; }
+  if (lineasHActuales.length > 2) lineasHActuales.splice(Math.floor(lineasHActuales.length/2), 1);
+  if (lineasVActuales.length > 2) lineasVActuales.splice(Math.floor(lineasVActuales.length/2), 1);
+  log(`➖ Líneas quitadas — Total H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
+  dibujarLineas();
 });
 
-// Botones de aprendizaje
-btnGuardarAjustes?.addEventListener('click', () => {
-  // Actualizar aprendizaje con las posiciones corregidas
-  Aprendizaje.actualizarConCorreccion(lineasHActuales, 'H');
-  Aprendizaje.actualizarConCorreccion(lineasVActuales, 'V');
-  Aprendizaje.guardar(lineasHActuales, lineasVActuales);
-  generarCoordenadasCeldas(); // Regenerar celdas con nuevas posiciones
-  log('💾 Ajustes guardados y celdas recalculadas', 'ok');
-});
-
-btnReiniciarAprendizaje?.addEventListener('click', () => {
-  if (confirm('¿Reiniciar aprendizaje? Se perderán todas las posiciones aprendidas.')) {
-    Aprendizaje.reiniciar();
-    generarLineasConAprendizaje();
+// Doble toque para agregar/quitar
+canvasLineas.addEventListener('click', (e) => {
+  if (!modoEdicionLineas) return;
+  const ahora = Date.now();
+  const diferencia = ahora - ultimoToque;
+  ultimoToque = ahora;
+  if (diferencia < 300 && diferencia > 0) {
+    const rect = canvasLineas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / Aprendizaje.zoom / canvasLineas.width;
+    const y = (e.clientY - rect.top) / Aprendizaje.zoom / canvasLineas.height;
+    log(`📍 Doble toque en: X=${x.toFixed(4)}, Y=${y.toFixed(4)} — línea agregada`, 'info');
+    lineasHActuales.push(y); lineasHActuales.sort((a,b)=>a-b);
+    lineasVActuales.push(x); lineasVActuales.sort((a,b)=>a-b);
     dibujarLineas();
   }
 });
 
 // ==============================================
-// LECTURA DE TEXTO DESDE CELDA
+// GUARDAR Y EXPORTAR
 // ==============================================
-async function leerTextoDeCelda(indiceFila, indiceColumna) {
-  const celda = coordenadasCeldas[indiceFila]?.[indiceColumna];
-  if (!celda) return '';
+btnGuardarAjustes.addEventListener('click', () => {
+  Aprendizaje.guardar(lineasHActuales, lineasVActuales);
+  dibujarLineas();
+});
 
-  const canvas = document.createElement('canvas');
-  canvas.width = celda.x2 - celda.x1;
-  canvas.height = celda.y2 - celda.y1;
-  const ctx = canvas.getContext('2d');
+btnExportarJSON.addEventListener('click', () => {
+  Aprendizaje.guardar(lineasHActuales, lineasVActuales);
+  Aprendizaje.exportarJSON();
+});
 
-  ctx.drawImage(
-    imagenActual,
-    celda.x1, celda.y1,
-    celda.x2 - celda.x1, celda.y2 - celda.y1,
-    0, 0,
-    canvas.width, canvas.height
-  );
-
-  log(`Celda F${indiceFila + 1}C${indiceColumna + 1}: X[${celda.x1}-${celda.x2}] Y[${celda.y1}-${celda.y2}]`, 'info');
-  return ''; // ⭐ Aquí se conecta PaddleOCR/Tesseract
-}
-
-// ==============================================
-// CONSTRUIR TABLA — SIN ENCABEZADOS
-// ==============================================
-function construirTabla(datos, filas, columnas) {
-  tablaResultado.innerHTML = '';
-  const tbody = document.createElement('tbody');
-  for (let f = 0; f < filas; f++) {
-    const tr = document.createElement('tr');
-    for (let c = 0; c < columnas; c++) {
-      const td = document.createElement('td');
-      td.textContent = datos[f]?.[c] || '';
-      tr.appendChild(td);
-    }
-    tbody.appendChild(tr);
+btnReiniciarAprendizaje.addEventListener('click', () => {
+  if (confirm('¿Reiniciar sesión local? Se mantiene la base del código.')) {
+    Aprendizaje.reiniciarLocal();
+    const { lineasH, lineasV } = Aprendizaje.generarLineas();
+    lineasHActuales = lineasH; lineasVActuales = lineasV;
+    dibujarLineas();
   }
-  tablaResultado.appendChild(tbody);
-}
+});
 
 // ==============================================
-// PROCESAMIENTO COMPLETO
+// PROCESAR TABLA
 // ==============================================
 btnProcesar.addEventListener('click', async () => {
-  btnProcesar.disabled = true;
-  tiempoInicioGlobal = Date.now();
-  coordenadasCeldas = [];
-
-  // ETAPA 1: Preprocesamiento
-  iniciarEtapa(1);
-  await new Promise(r => setTimeout(r, 800));
-  const escala = 0.7;
-  imagenDatos.preprocesada = `${Math.round(imagenDatos.w * escala)}×${Math.round(imagenDatos.h * escala)}`;
-  log(`Redimensionada a: ${imagenDatos.preprocesada} (escala ${escala}x)`, 'info');
-  log(`Umbral: 128 | Contraste: +15%`, 'info');
-  completarEtapa();
-
-  // ETAPA 2: Generar líneas con APRENDIZAJE
-  iniciarEtapa(2);
-  await new Promise(r => setTimeout(r, 1000));
-  generarLineasConAprendizaje();
-  dibujarLineas();
-  const { filas, columnas } = generarCoordenadasCeldas();
-  const celdasTotales = filas * columnas;
-  log(`Celdas totales: ${filas}×${columnas} = ${celdasTotales}`, 'info');
-  log('Coordenadas asignadas a todas las celdas', 'ok');
-  log('✏️ Puedes arrastrar las líneas para corregir → GUARDAR para aprender', 'info');
-  completarEtapa(`→ ${filas} filas, ${columnas} columnas`);
-
-  // ETAPA 3: Carga de modelos IA
-  iniciarEtapa(3);
-  await new Promise(r => setTimeout(r, 2000));
-  log('YOLOv11 cargado — yolov11n.onnx', 'ok');
-  log('PaddleOCR cargado — ch_PP-Ocrv4_det.onnx', 'ok');
-  log(`Ruta modelos: ~/imagen/www/assets/`, 'info');
-  completarEtapa();
-
-  // ETAPA 4: OCR
-  iniciarEtapa(4);
-  const textoPorCelda = [];
-  let celdasConTexto = 0;
-
-  for (let f = 0; f < filas; f++) {
-    const porcentajeFila = ETAPAS[4].inicio + ((f + 1) / filas) * (ETAPAS[4].fin - ETAPAS[4].inicio);
-    actualizarProgreso(porcentajeFila, `Procesando fila ${f + 1} de ${filas}`);
-    log(`Procesando fila ${f + 1} de ${filas}...`, 'info');
-
-    textoPorCelda[f] = [];
-    for (let c = 0; c < columnas; c++) {
-      const texto = await leerTextoDeCelda(f, c);
-      textoPorCelda[f][c] = texto;
-      if (texto && texto.trim() !== '') celdasConTexto++;
-    }
-    log(`→ Celdas leídas: ${columnas}/${columnas}`, 'ok');
-    tiempoInfo.textContent = `Transcurrido: ${((Date.now() - tiempoInicioGlobal) / 1000).toFixed(1)}s — Fila ${f + 1}/${filas}`;
-  }
-
-  log(`Total celdas procesadas: ${celdasTotales}`, 'info');
-  log(`Con texto legible: ${celdasConTexto} (${((celdasConTexto / celdasTotales) * 100).toFixed(1)}%)`, 'info');
-  log(`Sin texto/indetectable: ${celdasTotales - celdasConTexto}`, 'info');
-  completarEtapa();
-
-  // ETAPA 5: Construir tabla final
-  iniciarEtapa(5);
-  await new Promise(r => setTimeout(r, 500));
-  construirTabla(textoPorCelda, filas, columnas);
-  completarEtapa();
-
-  // RESUMEN FINAL
-  separador('RESUMEN FINAL');
-  log(`Tiempo total: ${((Date.now() - tiempoInicioGlobal) / 1000).toFixed(1)} segundos`, 'ok');
-  log(`Filas procesadas: ${filas}`, 'info');
-  log(`Columnas detectadas: ${columnas}`, 'info');
-  log(`Celdas con texto: ${celdasConTexto}/${celdasTotales}`, 'info');
-  log(`🧠 Versión aprendizaje: ${Aprendizaje.version}`, 'info');
-  log('✅ PROCESO COMPLETADO CON ÉXITO', 'ok');
-
+  log('▶️ Procesamiento iniciado', 'info');
+  log(`Filas: ${lineasHActuales.length-1} | Columnas: ${lineasVActuales.length-1}`, 'info');
+  log('⚠️ OCR simulado — conectar PaddleOCR según necesidad', 'warn');
   btnProcesar.disabled = false;
 });
 
@@ -536,14 +492,14 @@ btnProcesar.addEventListener('click', async () => {
 btnCopiarLog.addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(logCompleto);
-    log('Log copiado al portapapeles ✅', 'ok');
-  } catch {
-    log('No se pudo copiar', 'error');
-  }
+    log('📋 Log copiado al portapapeles ✅', 'ok');
+  } catch { log('❌ No se pudo copiar', 'error'); }
 });
 
-// Inicializar aprendizaje al cargar
+// Inicialización
 document.addEventListener('DOMContentLoaded', () => {
-  Aprendizaje.cargar();
+  estadoMotor.className = 'estado-motor estado-listo';
+  estadoMotor.textContent = '✅ Listo';
+  log('✅ Sistema inicializado — Aprendizaje integrado al código', 'ok');
 });
 
