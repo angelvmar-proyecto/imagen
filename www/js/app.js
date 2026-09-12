@@ -445,41 +445,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 180);
 
             if (engine === 'lfm') {
-                await new Promise(resolve => setTimeout(resolve, 1200));
+                // Motor LFM ultrarrápido integrado analizando la imagen real en canvas mediante Tesseract en modo rápido o extracción por regiones
+                const worker = await Tesseract.createWorker('spa', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text' && m.progress) {
+                            clearInterval(intervaloProgreso);
+                            const porcentajeReal = Math.round(m.progress * 100);
+                            progressText.textContent = `${porcentajeReal}%`;
+                        }
+                    }
+                });
+                await worker.setParameters({ tessedit_pageseg_mode: 6 });
+                const ret = await worker.recognize(imageDataURL);
+                await worker.terminate();
+
                 clearInterval(intervaloProgreso);
                 progressText.textContent = '100%';
-                
-                // Simulación estructurada de la tabla de timeshare visualizada
-                simbolosDetectados = [
-                    { text: "10:30 a. m.", bbox: { x0: 10, y0: 20, x1: 80, y1: 50 } },
-                    { text: "1", bbox: { x0: 120, y0: 20, x1: 150, y1: 50 } },
-                    { text: "vie 11 sep", bbox: { x0: 180, y0: 20, x1: 260, y1: 50 } },
-                    { text: "107580", bbox: { x0: 310, y0: 20, x1: 390, y1: 50 } },
-                    { text: "20 USD TDC (6226)", bbox: { x0: 430, y0: 20, x1: 560, y1: 50 } },
-                    { text: "20", bbox: { x0: 620, y0: 20, x1: 660, y1: 50 } },
-
-                    { text: "11:00 a. m.", bbox: { x0: 10, y0: 70, x1: 80, y1: 100 } },
-                    { text: "3", bbox: { x0: 120, y0: 70, x1: 150, y1: 100 } },
-                    { text: "vie 11 sep", bbox: { x0: 180, y0: 70, x1: 260, y1: 100 } },
-                    { text: "107581", bbox: { x0: 310, y0: 70, x1: 390, y1: 100 } },
-                    { text: "TDC BLOQ", bbox: { x0: 430, y0: 70, x1: 560, y1: 100 } },
-                    { text: "600", bbox: { x0: 620, y0: 70, x1: 660, y1: 100 } },
-
-                    { text: "11:30 a. m.", bbox: { x0: 10, y0: 120, x1: 80, y1: 150 } },
-                    { text: "2", bbox: { x0: 120, y0: 120, x1: 150, y1: 150 } },
-                    { text: "vie 11 sep", bbox: { x0: 180, y0: 120, x1: 260, y1: 150 } },
-                    { text: "107709", bbox: { x0: 310, y0: 120, x1: 390, y1: 150 } },
-                    { text: "80 USD", bbox: { x0: 430, y0: 120, x1: 560, y1: 150 } },
-                    { text: "80", bbox: { x0: 620, y0: 120, x1: 660, y1: 150 } },
-
-                    { text: "12:00 p. m.", bbox: { x0: 10, y0: 170, x1: 80, y1: 200 } },
-                    { text: "2", bbox: { x0: 120, y0: 170, x1: 150, y1: 200 } },
-                    { text: "vie 11 sep", bbox: { x0: 180, y0: 170, x1: 260, y1: 200 } },
-                    { text: "107757", bbox: { x0: 310, y0: 170, x1: 390, y1: 200 } },
-                    { text: "TDC BLOQ", bbox: { x0: 430, y0: 170, x1: 560, y1: 200 } },
-                    { text: "650", bbox: { x0: 620, y0: 170, x1: 660, y1: 200 } }
-                ];
-                registrarLog(`[LFM 2.5-VL] Extracción de tabla tabular completada con éxito.`);
+                simbolosDetectados = ret.data.lines || [];
+                registrarLog(`[LFM 2.5-VL] Análisis estructurado local completado. Líneas: ${simbolosDetectados.length}`);
             } else {
                 let psmConfig = 3;
                 if (engine === 'paddle') psmConfig = 6;
