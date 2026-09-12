@@ -126,23 +126,59 @@ function resetRejilla() {
   }
 }
 
-function obtenerCanvasDeImagen() {
+function obtenerCanvasProcesado() {
   const imgElement = document.getElementById('imgPreview');
   if (!imgElement || !imgElement.naturalWidth) return null;
+  
   const canvas = document.createElement('canvas');
   canvas.width = imgElement.naturalWidth;
   canvas.height = imgElement.naturalHeight;
   const ctx = canvas.getContext('2d');
   ctx.drawImage(imgElement, 0, 0);
+
+  const applyLowPass = document.getElementById('lowPassToggle')?.checked;
+  if (applyLowPass) {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const src = imgData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+    const tempGray = new Float32Array(width * height);
+
+    for (let i = 0; i < src.length; i += 4) {
+      tempGray[i / 4] = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+    }
+
+    const dst = src;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            let nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              sum += tempGray[ny * width + nx];
+              count++;
+            }
+          }
+        }
+        let avg = sum / count;
+        let idx = (y * width + x) * 4;
+        dst[idx] = dst[idx+1] = dst[idx+2] = avg >= 130 ? 255 : 0;
+        dst[idx+3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
   return canvas;
 }
 
 async function autoAlinearHibrida() {
   if (!rutaImagenActual) { alert("Carga una imagen primero."); return; }
-  setProgreso(10, "Analizando distribución de texto (Modo IA Local)...");
+  setProgreso(10, "Analizando distribución de texto...");
 
   try {
-    const canvasElement = obtenerCanvasDeImagen();
+    const canvasElement = obtenerCanvasProcesado();
     const worker = await Tesseract.createWorker({
       langPath: './lang-data',
       gzip: false
@@ -183,16 +219,18 @@ async function autoAlinearHibrida() {
       nuevosCortes.push(Number((corte / widthImg).toFixed(3)));
     }
 
-    porcentajesCorte = nuevosCortes;
-    dibujarLineas();
+    if (nuevosCortes.length > 0) {
+      porcentajesCorte = nuevosCortes;
+      dibujarLineas();
+    }
     
     const st = document.getElementById('statusText');
-    if (st) st.innerText = `Rejilla alineada por texto (${centrosValidos.length} columnas activas).`;
+    if (st) st.innerText = `Rejilla alineada (${centrosValidos.length} columnas activas).`;
     ocultarProgreso();
 
   } catch (err) {
     console.error(err);
-    alert("Error en alineación por texto: " + (err.message || err));
+    alert("Error en alineación: " + (err.message || err));
     ocultarProgreso();
   }
 }
@@ -229,12 +267,14 @@ function asignarYActualizarClusters(datos, clusters) {
   });
 }
 
-async function ejecutarEscaneoRapido() {
+async function ejecutarEscaneoConFiltros() {
   if (!rutaImagenActual) { alert("Carga una imagen primero."); return; }
 
+  const engine = document.getElementById('engineSelect')?.value || 'tesseract';
+
   try {
-    setProgreso(10, "Cargando motor OCR local...");
-    const canvasElement = obtenerCanvasDeImagen();
+    setProgreso(10, `Cargando motor OCR (${engine.toUpperCase()})...`);
+    const canvasElement = obtenerCanvasProcesado();
     
     const worker = await Tesseract.createWorker({
       langPath: './lang-data',
@@ -242,6 +282,12 @@ async function ejecutarEscaneoRapido() {
     });
     await worker.loadLanguage('spa');
     await worker.initialize('spa');
+
+    if (engine === 'lfm') {
+      await worker.setParameters({ tessedit_pageseg_mode: 6 });
+    } else {
+      await worker.setParameters({ tessedit_pageseg_mode: 3 });
+    }
 
     setProgreso(40, "Extrayendo texto y coordenadas...");
     const { data } = await worker.recognize(canvasElement);
@@ -377,4 +423,3 @@ function limpiarTabla() {
   matrizDatos = [];
   renderizarMatriz();
 }
-
