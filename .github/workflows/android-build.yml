@@ -1,4 +1,4 @@
-name: Compilar APK Android
+name: Compilar APK Android (PRUEBAS)
 
 on:
   push:
@@ -33,37 +33,19 @@ jobs:
     - name: 🔧 Sincronizar código con Android
       run: npx cap sync android
 
-    - name: ⚙️ Configurar Android 32-bit + NDK
+    - name: ⚙️ Configurar Android 32-bit
       run: |
-        # Agregar NDK y abiFilters
         sed -i '/defaultConfig {/a\        ndk {\n            abiFilters "armeabi-v7a"\n        }' android/app/build.gradle
-        # Verificar
-        cat android/app/build.gradle | grep -A 5 "ndk {"
 
-    - name: 🔨 Compilar APK Release
+    - name: 🔨 Compilar APK — VERSIÓN DE PRUEBA
       run: |
         cd android
         chmod +x gradlew
-        ./gradlew assembleRelease --no-daemon
+        ./gradlew assembleDebug --no-daemon
 
-    - name: 🔑 Generar keystore y firmar APK
-      run: |
-        cd android/app/build/outputs/apk/release
-        
-        # Crear keystore temporal (solo para pruebas internas)
-        keytool -genkey -noprompt -alias marcaribe -keyalg RSA -keysize 2048 -keystore marcaribe.keystore -storepass 123456 -keypass 123456 -dname "CN=MAR Caribe, O=MAR Caribe, C=MX" -validity 10000
-        
-        # Firmar el APK
-        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore marcaribe.keystore -storepass 123456 -keypass 123456 app-release-unsigned.apk marcaribe
-        
-        # Alinear y optimizar
-        zipalign -v 4 app-release-unsigned.apk MAR-Caribe-Escaner-Tablas.apk
-        
-        # Limpiar
-        rm -f marcaribe.keystore app-release-unsigned.apk
-
-    - name: 📤 Subir APK firmado como artefacto
+    - name: 📤 Subir APK de PRUEBA
       uses: actions/upload-artifact@v4
       with:
-        name: MAR-Caribe-Escaner-Tablas-FIRMADO
-        path: android/app/build/outputs/apk/release/MAR-Caribe-Escaner-Tablas.apk
+        name: MAR-Caribe-OCR-PRUEBA
+        path: android/app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 30
