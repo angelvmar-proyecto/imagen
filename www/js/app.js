@@ -39,18 +39,17 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btnResetL) btnResetL = document.getElementById('reset-l');
     if (!btnBloquear) btnBloquear = document.getElementById('btn-bloquear');
 
-    // Corrección crítica de estilos para permitir paneo libre en todas direcciones (incluyendo izquierda)
+    // Configuración robusta del contenedor para permitir scroll libre en cualquier dirección
     if (viewport) {
         viewport.style.overflow = 'auto';
-        viewport.style.display = 'flex';
-        viewport.style.justifyContent = 'flex-start';
-        viewport.style.alignItems = 'flex-start';
+        viewport.style.display = 'block';
         viewport.style.position = 'relative';
     }
     if (canvasScaler) {
-        canvasScaler.style.margin = 'auto';
-        canvasScaler.style.flexShrink = '0';
-        canvasScaler.style.transformOrigin = 'top left';
+        canvasScaler.style.position = 'absolute';
+        canvasScaler.style.top = '0px';
+        canvasScaler.style.left = '0px';
+        canvasScaler.style.transformOrigin = '0 0';
     }
 
     let currentImage = null;
@@ -209,6 +208,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
                 
+                // Ajustar contenedor al tamaño real de la imagen para asegurar scroll correcto en ambos ejes
+                if (canvasScaler) {
+                    canvasScaler.style.width = img.width + 'px';
+                    canvasScaler.style.height = img.height + 'px';
+                }
+
                 currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
                 originalImageBackup = ctx.createImageData(canvas.width, canvas.height);
                 originalImageBackup.data.set(currentImage.data);
@@ -593,12 +598,17 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(logEntry);
     }
 
-    document.getElementById('zoom-in').addEventListener('click', () => { currentZoom = Math.min(currentZoom + 0.25, 4.0); actualizarZoom(); });
-    document.getElementById('zoom-out').addEventListener('click', () => { currentZoom = Math.max(currentZoom - 0.25, 0.5); actualizarZoom(); });
+    // Zoom ampliado hasta 6.0x máximo
+    document.getElementById('zoom-in').addEventListener('click', () => { currentZoom = Math.min(currentZoom + 0.5, 6.0); actualizarZoom(); });
+    document.getElementById('zoom-out').addEventListener('click', () => { currentZoom = Math.max(currentZoom - 0.5, 0.5); actualizarZoom(); });
     document.getElementById('zoom-reset').addEventListener('click', () => { currentZoom = 1.0; actualizarZoom(); });
 
     function actualizarZoom() {
         canvasScaler.style.transform = `scale(${currentZoom})`;
+        if (canvas.width && canvas.height) {
+            canvasScaler.style.width = (canvas.width * currentZoom) + 'px';
+            canvasScaler.style.height = (canvas.height * currentZoom) + 'px';
+        }
         viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
         registrarLog(`Zoom ajustado a: ${currentZoom}x`);
     }
