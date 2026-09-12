@@ -1,7 +1,7 @@
 // ==============================================
 // MAR Caribe — Escáner de Tablas COMPLETO
 // ⚡ Umbral Dinámico + 🧠 Aprendizaje de Espacios + 📝 Celdas Multi-Renglón
-// Versión: 1.0 | Fecha: 2026-09-12
+// Versión: 1.1 | Fecha: 2026-09-12 | SIN etiquetas de líneas — área ampliada
 // Ruta base: www/assets/aprendizaje-base.json
 // ==============================================
 
@@ -36,7 +36,6 @@ const previewImg      = document.getElementById('previewImg');
 const canvasLineas    = document.getElementById('canvasLineas');
 const barraProgreso   = document.getElementById('barraProgreso');
 const textoProgreso   = document.getElementById('textoProgreso');
-const etapaActual     = document.getElementById('etapaActual');
 const tiempoInfo      = document.getElementById('tiempoInfo');
 const logContenido    = document.getElementById('logContenido');
 const logContainer    = document.getElementById('logContainer');
@@ -270,7 +269,7 @@ function log(mensaje, tipo = 'info') {
 }
 
 // ==============================================
-// ZOOM Y DESPLAZAMIENTO
+// ZOOM Y DESPLAZAMIENTO — ÁREA AMPLIADA SIN ETIQUETAS
 // ==============================================
 function aplicarZoom() {
   previewImg.style.transform = `scale(${Aprendizaje.zoom}) translate(${Aprendizaje.desplazamiento.x}px, ${Aprendizaje.desplazamiento.y}px)`;
@@ -376,11 +375,12 @@ inputImagen.addEventListener('change', async (e) => {
 
   log(`📐 Líneas generadas — Filas: ${lineasH.length-1} | Columnas: ${lineasV.length-1}`, 'ok');
   log(`📝 Reglas activas: Celdas multi-renglón → texto agrupado por límites de celda`, 'info');
+  log(`🎯 Etiquetas de líneas: QUITADAS — área de edición ampliada`, 'info');
   btnProcesar.disabled = false;
 });
 
 // ==============================================
-// DIBUJAR LÍNEAS
+// DIBUJAR LÍNEAS — SIN NÚMEROS/ETIQUETAS
 // ==============================================
 function dibujarLineas() {
   const ctx = canvasLineas.getContext('2d');
@@ -388,18 +388,18 @@ function dibujarLineas() {
   ctx.clearRect(0, 0, ancho, alto);
   ctx.lineWidth = CONFIG.ANCHO_LINEA;
 
+  // Líneas horizontales — SOLO LÍNEA, SIN NÚMERO
   ctx.strokeStyle = '#3b82f6';
-  lineasHActuales.forEach((pos, i) => {
+  lineasHActuales.forEach((pos) => {
     const y = pos * alto;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ancho, y); ctx.stroke();
-    ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 11px sans-serif'; ctx.fillText(`F${i}`, 4, y + 14);
   });
 
+  // Líneas verticales — SOLO LÍNEA, SIN NÚMERO
   ctx.strokeStyle = '#ef4444';
-  lineasVActuales.forEach((pos, i) => {
+  lineasVActuales.forEach((pos) => {
     const x = pos * ancho;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, alto); ctx.stroke();
-    ctx.fillStyle = '#ef4444'; ctx.font = 'bold 11px sans-serif'; ctx.fillText(`C${i}`, x + 4, 14);
   });
 }
 
@@ -529,7 +529,7 @@ btnReiniciarAprendizaje.addEventListener('click', () => {
 });
 
 // ==============================================
-// PROCESAR TABLA (OCR simulado — conectar PaddleOCR según necesidad)
+// PROCESAR TABLA
 // ==============================================
 btnProcesar.addEventListener('click', async () => {
   log('▶️ Iniciando procesamiento de tabla...', 'info');
@@ -561,6 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
   log('   🧠 Aprendizaje de posiciones y espacios entre celdas', 'info');
   log('   📝 Celdas con múltiples renglones de texto preservadas', 'info');
   log('   🔍 Zoom libre + desplazamiento + edición visual', 'info');
+  log('   🎯 Etiquetas de líneas QUITADAS — área de visualización ampliada', 'info');
   log('   📤 Exportación JSON para integrar a todas las versiones', 'info');
   log('══════════════════════════════════════════════════════════', 'info');
 });
