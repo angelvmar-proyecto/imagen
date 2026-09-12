@@ -21,7 +21,6 @@
       text-align: center;
     }
 
-    /* 🔹 CONTROLES SUPERIORES MÁS COMPACTOS */
     .barra-superior {
       position: sticky;
       top: 0;
@@ -48,28 +47,21 @@
       min-height: 38px;
     }
 
-    button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    button:active {
-      transform: scale(0.96);
-    }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button:active { transform: scale(0.96); }
 
     .btn-primario { background: #2563eb; color: white; }
-    .btn-exito { background: #16a34a; color: white; }
-    .btn-aviso { background: #f59e0b; color: #1e293b; }
-    .btn-peligro { background: #dc2626; color: white; }
-    .btn-info { background: #8b5cf6; color: white; }
-    .btn-zoom { width: 48px; padding: 6px 2px; font-size: 1rem; }
+    .btn-exito     { background: #16a34a; color: white; }
+    .btn-aviso     { background: #f59e0b; color: #1e293b; }
+    .btn-peligro   { background: #dc2626; color: white; }
+    .btn-info      { background: #8b5cf6; color: white; }
+    .btn-zoom      { width: 48px; padding: 6px 2px; font-size: 1rem; }
 
-    /* 🔹 ÁREA DE IMAGEN — MÍNIMO 33% / 1/3 DE PANTALLA */
     .contenedor-imagen {
       position: relative;
       width: 100%;
       min-height: 33vh;
-      max-height: 48vh;
+      max-height: 50vh;
       overflow: auto;
       border: 2px solid #334155;
       border-radius: 10px;
@@ -122,7 +114,6 @@
       font-weight: bold;
     }
 
-    /* 🔹 CONTROLES DE EDICIÓN — MÁS CHICOS */
     .zona-aprendizaje {
       background: #1e293b;
       border-radius: 8px;
@@ -207,7 +198,7 @@
     }
 
     .estado-cargando { background: #f59e0b; color: #1e293b; }
-    .estado-listo { background: #22c55e; color: white; }
+    .estado-listo    { background: #22c55e; color: white; }
   </style>
 </head>
 <body>
@@ -226,7 +217,6 @@
   <span class="info-lineas">L:H=<span id="numLineasH">0</span> V=<span id="numLineasV">0</span></span>
 </div>
 
-<!-- 🔹 ÁREA DE IMAGEN: MÍNIMO 1/3 DE PANTALLA -->
 <div class="contenedor-imagen" id="contenedorImagen" style="display:none;">
   <img id="previewImg" alt="Vista previa tabla">
   <canvas id="canvasLineas"></canvas>
@@ -245,7 +235,7 @@
   <p>
     ⚡ Umbral dinámico | Tocar y arrastrar CERCA de la línea para moverla<br>
     💡 HAZ ZOOM primero → las líneas se separan y se agarran más fácil<br>
-    📌 Doble toque = agregar línea
+    📌 Doble toque = agregar línea en posición visible
   </p>
   <div class="version-dato" id="versionAprendizaje">Versión: —</div>
 </div>

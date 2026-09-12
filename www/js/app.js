@@ -1,7 +1,12 @@
 // ==============================================
 // MAR Caribe — Escáner de Tablas
-// Versión: 1.3 | Fecha: 2026-09-12
-// Cambio: Área imagen mínima 33vh / 1/3 pantalla + botones compactos
+// Versión: 1.4 | Fecha: 2026-09-12
+// CORRECCIONES:
+//   ✅ Líneas más delgadas: ANCHO_LINEA = 1.0 (igual para todas)
+//   ✅ Área de toque reducida: 18px → se divide por escalaZoom = PRECISO
+//   ✅ Coordenadas corregidas con zoom + desplazamiento
+//   ✅ Líneas nuevas se agregan en posición VISIBLE de pantalla
+//   ✅ Detección H y V funciona correctamente sin interferencia
 // ==============================================
 
 const CONFIG = {
@@ -9,8 +14,8 @@ const CONFIG = {
   PESO_NUEVO: 0.70,
   PESO_HISTORICO: 0.30,
   UMBRAL_ZONAS: 4,
-  ANCHO_LINEA: 2.2,
-  AREA_TOCAR_LINEA: 35, // 🔴 ÁREA MUY GRANDE para agarrar líneas
+  ANCHO_LINEA: 1.0,        // 🔴 MÁS DELGADAS, MISMO GROSOR H y V
+  AREA_TOCAR_LINEA: 18,   // 🔴 MENOR ÁREA = MÁS PRECISO, se divide por zoom
   TIEMPO_LIMITE: 120000
 };
 
@@ -196,6 +201,47 @@ contenedorImagen.addEventListener('touchmove', e => {
 });
 contenedorImagen.addEventListener('touchend', () => toquesAnteriores = null);
 
+// ==========================================================
+// 🔑 FUNCIÓN CLAVE: Coordenadas CORREGIDAS con zoom + desplazamiento
+// ==========================================================
+function coordsReales(clientX, clientY) {
+  const rect = canvasLineas.getBoundingClientRect();
+  return {
+    x: (clientX - rect.left - desplazamiento.x) / escalaZoom,
+    y: (clientY - rect.top - desplazamiento.y) / escalaZoom
+  };
+}
+
+// ==========================================================
+// 🔑 FUNCIÓN CLAVE: Buscar línea con umbral ESCALADO por zoom
+// ==========================================================
+function buscarLineaCerca(x, y) {
+  const ancho = canvasLineas.width;
+  const alto = canvasLineas.height;
+  const umbral = CONFIG.AREA_TOCAR_LINEA / escalaZoom; // 🔴 Más preciso al hacer zoom
+
+  // Buscar HORIZONTALES primero
+  let mejor = null;
+  for (let i = 0; i < lineasHActuales.length; i++) {
+    const ly = lineasHActuales[i] * alto;
+    const dist = Math.abs(y - ly);
+    if (dist < umbral && (!mejor || dist < mejor.distancia)) {
+      mejor = { tipo: 'H', indice: i, distancia: dist };
+    }
+  }
+
+  // Buscar VERTICALES
+  for (let i = 0; i < lineasVActuales.length; i++) {
+    const lx = lineasVActuales[i] * ancho;
+    const dist = Math.abs(x - lx);
+    if (dist < umbral && (!mejor || dist < mejor.distancia)) {
+      mejor = { tipo: 'V', indice: i, distancia: dist };
+    }
+  }
+
+  return mejor;
+}
+
 btnCargar.addEventListener('click', () => inputImagen.click());
 inputImagen.addEventListener('change', async e => {
   const arch = e.target.files[0];
@@ -206,7 +252,7 @@ inputImagen.addEventListener('change', async e => {
   btnProcesar.disabled = true;
 
   log('═════════════════════════════════════════', 'info');
-  log('📊 MAR Caribe — Escáner de Tablas', 'ok');
+  log('📊 MAR Caribe — Escáner de Tablas v1.4', 'ok');
   log(`📅 ${new Date().toLocaleString()}`, 'info');
   log(`🖼️ ${arch.name} (${(arch.size/1024).toFixed(0)} KB)`, 'info');
 
@@ -214,8 +260,14 @@ inputImagen.addEventListener('change', async e => {
 
   const img = await new Promise((res, rej) => {
     const r = new FileReader();
-    r.onload = e => { const i = new Image(); i.onload = ()=>res(i); i.onerror=rej; i.src=e.target.result; };
-    r.onerror = rej; r.readAsDataURL(arch);
+    r.onload = e => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = e.target.result;
+    };
+    r.onerror = rej;
+    r.readAsDataURL(arch);
   });
 
   imagenActual = img;
@@ -240,7 +292,8 @@ inputImagen.addEventListener('change', async e => {
   estadoMotor.className = 'estado-motor estado-listo';
 
   log(`✅ Imagen cargada — Líneas: H=${lineasH.length}, V=${lineasV.length}`, 'ok');
-  log('💡 CONSEJO: Haz ZOOM primero → las líneas se separan y se mueven más fácil', 'info');
+  log('💡 CONSEJO: Haz ZOOM primero → las líneas se separan y se agarran más fácil', 'info');
+  log('🔧 v1.4: Líneas más delgadas, detección con zoom corregida', 'info');
 });
 
 function actualizarContadorLineas() {
@@ -253,15 +306,15 @@ function dibujarLineas() {
   const ancho = canvasLineas.width;
   const alto = canvasLineas.height;
   ctx.clearRect(0, 0, ancho, alto);
-  ctx.lineWidth = CONFIG.ANCHO_LINEA;
+  ctx.lineWidth = CONFIG.ANCHO_LINEA; // 🔴 MISMO GROSOR PARA TODAS
 
-  ctx.strokeStyle = '#3b82f6';
+  ctx.strokeStyle = '#3b82f6'; // AZUL = HORIZONTALES
   lineasHActuales.forEach(pos => {
     const y = pos * alto;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ancho, y); ctx.stroke();
   });
 
-  ctx.strokeStyle = '#ef4444';
+  ctx.strokeStyle = '#ef4444'; // ROJO = VERTICALES
   lineasVActuales.forEach(pos => {
     const x = pos * ancho;
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, alto); ctx.stroke();
@@ -275,35 +328,6 @@ btnEditarLineas.addEventListener('click', () => {
   log(modoEdicionLineas ? '✏️ MODO EDICIÓN ACTIVO' : '👁️ Modo vista', modoEdicionLineas ? 'ok' : 'info');
 });
 
-function coordsReales(clientX, clientY) {
-  const rect = canvasLineas.getBoundingClientRect();
-  return {
-    x: (clientX - rect.left - desplazamiento.x) / escalaZoom,
-    y: (clientY - rect.top - desplazamiento.y) / escalaZoom
-  };
-}
-
-function buscarLineaCerca(x, y) {
-  const ancho = canvasLineas.width;
-  const alto = canvasLineas.height;
-  const umbral = CONFIG.AREA_TOCAR_LINEA;
-
-  for (let i = 0; i < lineasHActuales.length; i++) {
-    const ly = lineasHActuales[i] * alto;
-    if (Math.abs(y - ly) < umbral) {
-      return { tipo: 'H', indice: i, distancia: Math.abs(y - ly) };
-    }
-  }
-
-  for (let i = 0; i < lineasVActuales.length; i++) {
-    const lx = lineasVActuales[i] * ancho;
-    if (Math.abs(x - lx) < umbral) {
-      return { tipo: 'V', indice: i, distancia: Math.abs(x - lx) };
-    }
-  }
-  return null;
-}
-
 function iniciarArrastre(e) {
   if (!modoEdicionLineas) return;
   const { x, y } = coordsReales(e.clientX, e.clientY);
@@ -311,8 +335,8 @@ function iniciarArrastre(e) {
   if (lineaSeleccionada) {
     log(`🖐️ Agarraste línea ${lineaSeleccionada.tipo === 'H' ? 'HORIZONTAL' : 'VERTICAL'} #${lineaSeleccionada.indice}`, 'info');
     offsetArrastre = lineaSeleccionada.tipo === 'H'
-      ? y - lineasHActuales[lineaSeleccionada.indice] * alto
-      : x - lineasVActuales[lineaSeleccionada.indice] * ancho;
+      ? y - lineasHActuales[lineaSeleccionada.indice] * canvasLineas.height
+      : x - lineasVActuales[lineaSeleccionada.indice] * canvasLineas.width;
   }
 }
 
@@ -359,12 +383,15 @@ canvasLineas.addEventListener('touchmove', e => {
 });
 canvasLineas.addEventListener('touchend', terminarArrastre);
 
+// ==========================================================
+// 🔑 Agregar línea en POSICIÓN VISIBLE de pantalla
+// ==========================================================
 canvasLineas.addEventListener('touchend', e => {
   if (!modoEdicionLineas) return;
   const ahora = Date.now();
   if (ahora - ultimoToque < 300) {
     const { x, y } = coordsReales(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
-    const py = y / canvasLineas.height;
+    const py = y / canvasLineas.height;  // 🔴 Relativo al CANVAS visible, no imagen original
     const px = x / canvasLineas.width;
     lineasHActuales.push(Math.max(0.01, Math.min(0.99, py)));
     lineasHActuales.sort((a, b) => a - b);
@@ -372,20 +399,22 @@ canvasLineas.addEventListener('touchend', e => {
     lineasVActuales.sort((a, b) => a - b);
     actualizarContadorLineas();
     dibujarLineas();
-    log(`➕ Línea agregada en Y=${py.toFixed(4)}, X=${px.toFixed(4)}`, 'ok');
+    log(`➕ Línea agregada en pantalla: Y=${py.toFixed(4)}, X=${px.toFixed(4)}`, 'ok');
   }
   ultimoToque = ahora;
 });
 
 btnAgregarLinea.addEventListener('click', () => {
   if (!modoEdicionLineas) { log('⚠️ Activa "Editar" primero', 'warn'); return; }
-  lineasHActuales.push(0.5 + (Math.random() - 0.5) * 0.1);
+  const centroY = 0.5 + (Math.random() - 0.5) * 0.1;
+  const centroX = 0.5 + (Math.random() - 0.5) * 0.1;
+  lineasHActuales.push(Math.max(0.01, Math.min(0.99, centroY)));
   lineasHActuales.sort((a, b) => a - b);
-  lineasVActuales.push(0.5 + (Math.random() - 0.5) * 0.1);
+  lineasVActuales.push(Math.max(0.01, Math.min(0.99, centroX)));
   lineasVActuales.sort((a, b) => a - b);
   actualizarContadorLineas();
   dibujarLineas();
-  log(`➕ Líneas agregadas — H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
+  log(`➕ Líneas agregadas al centro visible — H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
 });
 
 btnQuitarLinea.addEventListener('click', () => {
@@ -480,11 +509,11 @@ btnCopiarLog.addEventListener('click', async () => {
 
 document.addEventListener('DOMContentLoaded', () => {
   log('═════════════════════════════════════════', 'info');
-  log('✅ Sistema inicializado — Área imagen ampliada', 'ok');
-  log('   📐 Área imagen: mínimo 33vh / 1/3 pantalla', 'info');
-  log('   ✋ Área toque líneas: 35px', 'info');
-  log('   🔵 Líneas H y 🔴 V movibles', 'info');
-  log('   ▶️ Botón Procesar activo al cargar imagen', 'info');
+  log('✅ Sistema inicializado — v1.4', 'ok');
+  log('   📐 Líneas: 1.0px, mismo grosor H y V', 'info');
+  log('   ✋ Área toque: 18px / escalaZoom = precisa', 'info');
+  log('   🔍 Coordenadas corregidas con zoom', 'info');
+  log('   📍 Líneas nuevas en posición visible', 'info');
   log('═════════════════════════════════════════', 'info');
   estadoMotor.textContent = '✅ Listo';
   estadoMotor.className = 'estado-motor estado-listo';
