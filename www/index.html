@@ -2,87 +2,77 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>MAR Caribe — Escáner de Tablas</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0">
+  <title>MAR Caribe — Escáner de Tablas + Aprendizaje</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
-    body { padding: 16px; background: #f5f5f5; color: #333; }
-    h1 { text-align: center; color: #005b96; margin-bottom: 24px; font-size: 22px; }
-
-    button {
-      width: 100%; padding: 18px; margin: 8px 0; border: none; border-radius: 12px;
-      font-size: 20px; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
-    }
-    .btn-cargar { background: #0066cc; color: white; }
-    .btn-procesar { background: #28a745; color: white; }
-    .btn-copiar { background: #6c757d; color: white; padding: 10px; font-size: 14px; width: auto; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: #0f172a; color: #f1f5f9; padding: 12px; max-width: 100vw; }
+    h1 { font-size: 1.4rem; margin-bottom: 16px; color: #38bdf8; text-align: center; }
+    .zona-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    button { padding: 12px 16px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-    .progreso-container {
-      width: 100%; height: 48px; background: #e9ecef; border-radius: 12px; margin: 16px 0;
-      position: relative; overflow: hidden; border: 1px solid #ced4da;
-    }
-    .progreso-barra { height: 100%; width: 0%; background: #28a745; border-radius: 12px 0 0 12px; transition: width 0.3s ease; }
-    .progreso-texto {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-weight: bold; font-size: 16px; color: #212529; white-space: nowrap;
-    }
-    .etapa-actual { text-align: center; font-size: 14px; color: #495057; margin-bottom: 8px; }
-    .tiempo-info { text-align: center; font-size: 12px; color: #6c757d; margin-bottom: 12px; }
-
-    .preview-container { width: 100%; max-height: 300px; overflow: auto; background: white; border-radius: 12px; padding: 8px; margin: 12px 0; border: 1px solid #ddd; }
-    #previewImg { max-width: 100%; height: auto; display: block; }
-
-    .log-container {
-      width: 100%; background: #212529; color: #f8f9fa; border-radius: 12px; padding: 12px;
-      margin: 16px 0; font-family: monospace; font-size: 12px; line-height: 1.5; max-height: 250px; overflow-y: auto;
-    }
-    .log-titulo { color: #ffc107; font-weight: bold; margin-bottom: 8px; }
-    .ok { color: #28a745; }
-    .info { color: #17a2b8; }
-    .warn { color: #ffc107; }
-    .error { color: #dc3545; }
-
-    .resultado-container { width: 100%; overflow-x: auto; margin-top: 20px; }
-    table { border-collapse: collapse; width: 100%; background: white; }
-    th, td { border: 1px solid #dee2e6; padding: 8px 10px; text-align: left; font-size: 13px; }
-    th { background: #005b96; color: white; position: sticky; top: 0; }
+    .btn-primario { background: #2563eb; color: white; }
+    .btn-exito { background: #16a34a; color: white; }
+    .btn-aviso { background: #f59e0b; color: #1e293b; }
+    .btn-peligro { background: #dc2626; color: white; }
+    button:active { transform: scale(0.97); }
+    #inputImagen { display: none; }
+    .preview-wrapper { position: relative; margin: 16px 0; border: 2px solid #334155; border-radius: 12px; overflow: auto; max-width: 100%; }
+    #previewImg { display: block; max-width: 100%; height: auto; }
+    #canvasLineas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+    .progreso { margin: 16px 0; background: #1e293b; border-radius: 8px; height: 24px; overflow: hidden; }
+    #barraProgreso { height: 100%; background: linear-gradient(90deg, #22c55e, #3b82f6); width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
+    .etapa { display: flex; justify-content: space-between; margin: 8px 0; font-size: 0.9rem; color: #94a3b8; }
+    #logContainer { background: #1e293b; border-radius: 8px; padding: 12px; margin: 16px 0; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.6; }
+    #tablaResultado { width: 100%; border-collapse: collapse; margin-top: 16px; background: #1e293b; border-radius: 8px; overflow: hidden; }
+    #tablaResultado th, #tablaResultado td { border: 1px solid #334155; padding: 8px; text-align: center; font-size: 0.85rem; }
+    #tablaResultado th { background: #1e40af; color: white; }
+    .zona-aprendizaje { background: #1e293b; border-radius: 8px; padding: 12px; margin: 16px 0; border-left: 3px solid #22c55e; }
+    .zona-aprendizaje h3 { font-size: 0.9rem; color: #22c55e; margin-bottom: 8px; }
+    .tiempo { text-align: right; font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
   </style>
 </head>
 <body>
 
-  <h1>📋 MAR Caribe — Escáner de Tablas</h1>
+<h1>📊 MAR Caribe — Escáner de Tablas + 🧠 Aprendizaje</h1>
 
-  <button id="btnCargar" class="btn-cargar">📷 Cargar Imagen</button>
-  <input type="file" id="inputImagen" accept="image/*" style="display:none">
+<div class="zona-botones">
+  <button id="btnCargar" class="btn-primario">📁 Elegir Imagen</button>
+  <input type="file" id="inputImagen" accept="image/*">
+  <button id="btnProcesar" class="btn-exito" disabled>▶️ Procesar Tabla</button>
+  <button id="btnCopiarLog" class="btn-aviso">📋 Copiar Log</button>
+</div>
 
-  <div class="preview-container" id="previewContainer" style="display:none;">
-    <img id="previewImg">
+<div class="zona-aprendizaje">
+  <h3>🧠 Control de Aprendizaje Automático</h3>
+  <div class="zona-botones">
+    <button id="btnEditarLineas" class="btn-primario" onclick="activarEdicionLineas()">✏️ Editar Líneas</button>
+    <button id="btnGuardarAjustes" class="btn-exito">💾 Guardar y Aprender</button>
+    <button id="btnReiniciarAprendizaje" class="btn-peligro">🗑️ Reiniciar</button>
   </div>
+  <p style="font-size:0.8rem; color:#94a3b8; margin-top:8px;">Arrastra las líneas a su posición correcta → Guardar → El sistema aprende para la siguiente imagen</p>
+</div>
 
-  <button id="btnProcesar" class="btn-procesar" disabled>🔍 Procesar Tabla</button>
+<div class="tiempo" id="tiempoInfo">Transcurrido: 0.0s</div>
+<div class="etapa">
+  <span id="etapaActual">Esperando imagen...</span>
+</div>
+<div class="progreso">
+  <div id="barraProgreso"><span id="textoProgreso">0%</span></div>
+</div>
 
-  <div class="etapa-actual" id="etapaActual">Listo para iniciar</div>
-  <div class="progreso-container">
-    <div class="progreso-barra" id="barraProgreso"></div>
-    <div class="progreso-texto" id="textoProgreso">0%</div>
-  </div>
-  <div class="tiempo-info" id="tiempoInfo"></div>
+<div class="preview-wrapper" id="previewContainer" style="display:none;">
+  <img id="previewImg" alt="Vista previa">
+  <canvas id="canvasLineas"></canvas>
+</div>
 
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px;">
-    <h3 style="color:#005b96; font-size:16px;">📝 Log de Depuración</h3>
-    <button id="btnCopiarLog" class="btn-copiar">📋 Copiar Log</button>
-  </div>
-  <div class="log-container" id="logContainer">
-    <div class="log-titulo">=== MAR Caribe — Log de Depuración ===</div>
-    <div id="logContenido"></div>
-  </div>
+<div id="logContainer">
+  <div id="logContenido"></div>
+</div>
 
-  <div class="resultado-container" id="resultadoContainer" style="display:none;">
-    <h3 style="color:#005b96; margin:20px 0 10px;">📊 Tabla Extraída</h3>
-    <table id="tablaResultado"></table>
-  </div>
+<h2>📋 Tabla Extraída</h2>
+<table id="tablaResultado"></table>
 
-  <script src="js/app.js"></script>
+<script src="js/app.js"></script>
 </body>
 </html>
