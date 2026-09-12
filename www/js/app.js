@@ -1,664 +1,425 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const fileInput = document.getElementById('file-input');
-    const canvas = document.getElementById('processing-canvas');
+let rutaImagenActual = null;
+let matrizDatos = [];
+let porcentajesCorte = [];
+
+const ESQUEMA_20_COLUMNAS = [
+  { id: 'No', tipo: 'numero' }, { id: 'Tipo', tipo: 'int_lat' },
+  { id: 'Nivel', tipo: 'nivel' }, { id: 'Nombre', tipo: 'texto' },
+  { id: 'Puesto/Op', tipo: 'texto' }, { id: 'Hotel', tipo: 'texto' },
+  { id: 'Promotor', tipo: 'texto' }, { id: 'Hora Pick Up', tipo: 'hora' },
+  { id: 'Monto/Factor', tipo: 'decimal' }, { id: 'Fecha', tipo: 'fecha' },
+  { id: 'Folio', tipo: 'texto' }, { id: 'Depósito', tipo: 'texto' },
+  { id: 'Monto Dep.', tipo: 'numero' }, { id: 'Moneda', tipo: 'moneda' },
+  { id: 'País/Ciudad', tipo: 'texto' }, { id: 'Notas', tipo: 'texto' },
+  { id: 'Edad', tipo: 'numero' }, { id: 'Estado Civil', tipo: 'marital' },
+  { id: 'Locación', tipo: 'texto' }, { id: 'Horario Cierre', tipo: 'hora' }
+];
+
+const NIVELES_MAR = ['PREMIER T3A', 'PREMIER T3B', 'PREMIER T4A', 'PREMIER T4B', 'T2A-CH', 'T2B-CH'];
+
+function setProgreso(porcentaje, pasoTexto) {
+  const wrapper = document.getElementById('progressWrapper');
+  if (wrapper) wrapper.style.display = 'block';
+  const fill = document.getElementById('progressFill');
+  if (fill) fill.style.width = `${porcentaje}%`;
+  const step = document.getElementById('progressStep');
+  if (step) step.innerText = pasoTexto;
+  const pct = document.getElementById('progressPercent');
+  if (pct) pct.innerText = `${porcentaje}%`;
+  const st = document.getElementById('statusText');
+  if (st) st.innerText = `[${porcentaje}%] ${pasoTexto}`;
+}
+
+function ocultarProgreso() {
+  const wrapper = document.getElementById('progressWrapper');
+  if (wrapper) wrapper.style.display = 'none';
+  const st = document.getElementById('statusText');
+  if (st) st.innerText = "Listo.";
+}
+
+async function capturarImagen() {
+  try {
+    const Camera = window.Capacitor?.Plugins?.Camera;
+    if (Camera) {
+      const photo = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: 'uri',
+        source: 'PROMPT'
+      });
+      let path = photo.webPath;
+      if (window.Capacitor?.convertFileSrc && photo.path) {
+        path = window.Capacitor.convertFileSrc(photo.path);
+      }
+      cargarEnCanvas(path);
+    } else {
+      document.getElementById('fileInput').click();
+    }
+  } catch (e) {
+    document.getElementById('fileInput').click();
+  }
+}
+
+function cargarDesdeInput(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => cargarEnCanvas(e.target.result);
+  reader.readAsDataURL(file);
+}
+
+function cargarEnCanvas(src) {
+  rutaImagenActual = src;
+  const img = document.getElementById('imgPreview');
+  if (img) {
+    img.src = src;
+    img.onload = () => {
+      inicializarRejilla();
+      const st = document.getElementById('statusText');
+      if (st) st.innerText = "Imagen cargada. Rejilla lista.";
+    };
+  }
+}
+
+function inicializarRejilla() {
+  const img = document.getElementById('imgPreview');
+  const canvas = document.getElementById('gridCanvas');
+  if (!img || !canvas || !img.naturalWidth) return;
+  canvas.width = img.clientWidth;
+  canvas.height = img.clientHeight;
+  
+  if (porcentajesCorte.length === 0) {
+    for (let i = 1; i <= 19; i++) porcentajesCorte.push(Number((i / 20).toFixed(3)));
+  }
+  dibujarLineas();
+}
+
+function dibujarLineas() {
+  const canvas = document.getElementById('gridCanvas');
+  const img = document.getElementById('imgPreview');
+  if (!canvas || !img || !img.naturalWidth) return;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = '#d97706';
+
+  porcentajesCorte.forEach(pct => {
+    let x = Math.floor(pct * canvas.width) + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  });
+}
+
+function resetRejilla() {
+  porcentajesCorte = [];
+  for (let i = 1; i <= 19; i++) porcentajesCorte.push(Number((i / 20).toFixed(3)));
+  const canvas = document.getElementById('gridCanvas');
+  const img = document.getElementById('imgPreview');
+  if (img && img.naturalWidth) {
+    dibujarLineas();
+  } else if (canvas) {
     const ctx = canvas.getContext('2d');
-    const canvasScaler = document.getElementById('canvas-scaler');
-    const viewport = document.getElementById('viewport');
-    const loadingOverlay = document.getElementById('loading-overlay');
-    const progressText = document.getElementById('progress-text');
-    const loadingStatusTitle = document.getElementById('loading-status-title');
-    const umbralSlider = document.getElementById('umbral-slider');
-    const umbralVal = document.getElementById('umbral-val');
-    const engineTabs = document.querySelectorAll('.engine-tab');
-    const excelStatus = document.getElementById('excel-status');
-    const cellValueInput = document.getElementById('cell-value-input');
-    const activeCellLabel = document.getElementById('active-cell-label');
-    const excelTbody = document.getElementById('excel-tbody');
-    const excelContainer = document.querySelector('.excel-container') || excelTbody.closest('.table-responsive') || excelTbody.parentElement;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+function obtenerCanvasProcesado() {
+  const imgElement = document.getElementById('imgPreview');
+  if (!imgElement || !imgElement.naturalWidth) return null;
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = imgElement.naturalWidth;
+  canvas.height = imgElement.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgElement, 0, 0);
+
+  const applyLowPass = document.getElementById('lowPassToggle')?.checked;
+  if (applyLowPass) {
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const src = imgData.data;
+    const width = canvas.width;
+    const height = canvas.height;
+    const tempGray = new Float32Array(width * height);
+
+    for (let i = 0; i < src.length; i += 4) {
+      tempGray[i / 4] = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
+    }
+
+    const dst = src;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let sum = 0, count = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            let nx = x + dx, ny = y + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              sum += tempGray[ny * width + nx];
+              count++;
+            }
+          }
+        }
+        let avg = sum / count;
+        let idx = (y * width + x) * 4;
+        dst[idx] = dst[idx+1] = dst[idx+2] = avg >= 130 ? 255 : 0;
+        dst[idx+3] = 255;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  return canvas;
+}
+
+async function autoAlinearHibrida() {
+  if (!rutaImagenActual) { alert("Carga una imagen primero."); return; }
+  setProgreso(10, "Analizando distribución de texto...");
+
+  try {
+    const canvasElement = obtenerCanvasProcesado();
+    const worker = await Tesseract.createWorker({
+      langPath: './lang-data',
+      gzip: false
+    });
+    await worker.loadLanguage('spa');
+    await worker.initialize('spa');
+
+    setProgreso(40, "Mapeando coordenadas X de palabras...");
+    const { data } = await worker.recognize(canvasElement);
+    await worker.terminate();
+
+    if (!data || !data.words || data.words.length < 10) {
+      alert("No se detectó suficiente texto para calcular las columnas.");
+      ocultarProgreso();
+      return;
+    }
+
+    const widthImg = canvasElement.width;
+    let centrosX = data.words
+      .filter(w => w.confidence > 40 && w.text.trim().length > 0)
+      .map(w => (w.bbox.x0 + w.bbox.x1) / 2);
+
+    setProgreso(70, "Calculando fronteras de columnas...");
+
+    let clusters = inicializarClusters(centrosX, 20);
+    for (let i = 0; i < 12; i++) {
+      clusters = asignarYActualizarClusters(centrosX, clusters);
+    }
+
+    let centrosValidos = clusters
+      .filter(c => c.puntos.length > 0)
+      .map(c => c.centro)
+      .sort((a, b) => a - b);
+
+    let nuevosCortes = [];
+    for (let i = 0; i < centrosValidos.length - 1; i++) {
+      let corte = (centrosValidos[i] + centrosValidos[i+1]) / 2;
+      nuevosCortes.push(Number((corte / widthImg).toFixed(3)));
+    }
+
+    if (nuevosCortes.length > 0) {
+      porcentajesCorte = nuevosCortes;
+      dibujarLineas();
+    }
     
-    const btnExportar = document.getElementById('btn-exportar');
-    const btnSearch = document.getElementById('btn-search');
-    const btnVaciar = document.getElementById('btn-vaciar') || document.getElementById('btn-clear');
+    const st = document.getElementById('statusText');
+    if (st) st.innerText = `Rejilla alineada (${centrosValidos.length} columnas activas).`;
+    ocultarProgreso();
 
-    const toolbarButtons = document.querySelectorAll('.toolbar button, .toolbar-btn');
-    let btnBloquear = null;
-    let btnResetL = null;
-    let btnH = null;
-    let btnV = null;
+  } catch (err) {
+    console.error(err);
+    alert("Error en alineación: " + (err.message || err));
+    ocultarProgreso();
+  }
+}
 
-    toolbarButtons.forEach(btn => {
-        const txt = btn.textContent.trim().toLowerCase();
-        if (txt.includes('bloquear')) btnBloquear = btn;
-        else if (txt.includes('reset')) btnResetL = btn;
-        else if (txt.includes('l.h.') || txt.includes('h.')) btnH = btn;
-        else if (txt.includes('l.v.') || txt.includes('v.')) btnV = btn;
+function inicializarClusters(datos, k) {
+  datos.sort((a, b) => a - b);
+  let clusters = [];
+  let step = Math.floor(datos.length / k);
+  for (let i = 0; i < k; i++) {
+    clusters.push({ centro: datos[Math.min(i * step, datos.length - 1)], puntos: [] });
+  }
+  return clusters;
+}
+
+function asignarYActualizarClusters(datos, clusters) {
+  clusters.forEach(c => c.puntos = []);
+  datos.forEach(d => {
+    let cercano = clusters[0];
+    let minDist = Math.abs(d - clusters[0].centro);
+    for (let i = 1; i < clusters.length; i++) {
+      let dist = Math.abs(d - clusters[i].centro);
+      if (dist < minDist) {
+        minDist = dist;
+        cercano = clusters[i];
+      }
+    }
+    cercano.puntos.push(d);
+  });
+  
+  return clusters.map(c => {
+    if (c.puntos.length === 0) return c;
+    let suma = c.puntos.reduce((a, b) => a + b, 0);
+    return { centro: suma / c.puntos.length, puntos: [] };
+  });
+}
+
+async function ejecutarEscaneoConFiltros() {
+  if (!rutaImagenActual) { alert("Carga una imagen primero."); return; }
+
+  const engine = document.getElementById('engineSelect')?.value || 'tesseract';
+
+  try {
+    setProgreso(10, `Cargando motor OCR (${engine.toUpperCase()})...`);
+    const canvasElement = obtenerCanvasProcesado();
+    
+    const worker = await Tesseract.createWorker({
+      langPath: './lang-data',
+      gzip: false
+    });
+    await worker.loadLanguage('spa');
+    await worker.initialize('spa');
+
+    if (engine === 'lfm') {
+      await worker.setParameters({ tessedit_pageseg_mode: 6 });
+    } else {
+      await worker.setParameters({ tessedit_pageseg_mode: 3 });
+    }
+
+    setProgreso(40, "Extrayendo texto y coordenadas...");
+    const { data } = await worker.recognize(canvasElement);
+    await worker.terminate();
+
+    setProgreso(75, "Asignando palabras a la matriz...");
+
+    const widthImg = canvasElement.width;
+    const limitesX = [0, ...porcentajesCorte.map(p => p * widthImg), widthImg];
+
+    let palabras = [];
+    if (data && data.words) {
+      data.words.forEach(w => {
+        if (w.text && w.text.trim().length > 0) {
+          palabras.push({
+            text: w.text.trim(),
+            x: (w.bbox.x0 + w.bbox.x1) / 2,
+            y: (w.bbox.y0 + w.bbox.y1) / 2
+          });
+        }
+      });
+    }
+
+    palabras.sort((a, b) => a.y - b.y);
+    let filas = [];
+    let umbralFila = 18;
+
+    palabras.forEach(p => {
+      let f = filas.find(row => Math.abs(row.yCentro - p.y) < umbralFila);
+      if (f) {
+        f.palabras.push(p);
+      } else {
+        filas.push({ yCentro: p.y, palabras: [p] });
+      }
     });
 
-    if (!btnH) btnH = document.getElementById('btn-h');
-    if (!btnV) btnV = document.getElementById('btn-v');
-    if (!btnResetL) btnResetL = document.getElementById('reset-l');
-    if (!btnBloquear) btnBloquear = document.getElementById('btn-bloquear');
+    setProgreso(90, "Formateando tabla...");
 
-    // Configuración robusta del contenedor para permitir scroll libre en cualquier dirección
-    if (viewport) {
-        viewport.style.overflow = 'auto';
-        viewport.style.display = 'block';
-        viewport.style.position = 'relative';
-    }
-    if (canvasScaler) {
-        canvasScaler.style.position = 'absolute';
-        canvasScaler.style.top = '0px';
-        canvasScaler.style.left = '0px';
-        canvasScaler.style.transformOrigin = '0 0';
-    }
+    matrizDatos = filas.map(fila => {
+      let filaCols = new Array(20).fill("");
+      fila.palabras.forEach(p => {
+        let colIdx = limitesX.findIndex((lim, i) => i > 0 && p.x <= lim) - 1;
+        if (colIdx < 0) colIdx = 0;
+        if (colIdx >= 20) colIdx = 19;
 
-    let currentImage = null;
-    let originalImageBackup = null; 
-    let activeEngine = 'tesseract';
-    let activePipeline = 'standard'; 
-    let currentZoom = 1.0;
-    let modoDibujoLinea = null; 
-    let isBloqueado = false;   
-    let manualLines = []; 
-    let selectedLineIndex = null; 
-    let ultimoCsvGenerado = "";
-    let logDepuracion = [];
-    let isProcessingOCR = false;
-
-    let isPanning = false;
-    let startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
-
-    let pipelineSelector = document.getElementById('pipeline-selector');
-    if (!pipelineSelector) {
-        const toolbarContainer = document.querySelector('.toolbar') || document.body;
-        const pipelineDiv = document.createElement('div');
-        pipelineDiv.style.cssText = "display:inline-flex;align-items:center;gap:5px;margin-left:10px;font-size:12px;color:#fff;";
-        pipelineDiv.innerHTML = `
-            <label for="pipeline-selector" style="color:#f39c12;font-weight:bold;">Modo:</label>
-            <select id="pipeline-selector" style="background:#222;color:#fff;border:1px solid #444;padding:4px;border-radius:4px;">
-                <option value="standard">Estándar / OCR</option>
-                <option value="ultrasound">Ultrasonido (Low-Pass)</option>
-                <option value="optics">Óptica / Retinografía</option>
-            </select>
-        `;
-        toolbarContainer.appendChild(pipelineDiv);
-        pipelineSelector = document.getElementById('pipeline-selector');
-    }
-
-    pipelineSelector.addEventListener('change', (e) => {
-        activePipeline = e.target.value;
-        registrarLog(`Pipeline especializado cambiado a: ${activePipeline.toUpperCase()}`);
-        if (currentImage && !isBloqueado) {
-            rederizarCanvasConLineas(parseInt(umbralSlider.value));
-        }
+        filaCols[colIdx] = filaCols[colIdx] ? filaCols[colIdx] + " " + p.text : p.text;
+      });
+      return filaCols.map((val, idx) => aplicarReglasFuzzy(val, idx));
     });
 
-    viewport.addEventListener('mousedown', (e) => {
-        if (isBloqueado) return;
-        if (modoDibujoLinea) {
-            manejarAccionLinea(e.clientX, e.clientY, 'start');
-            return;
-        }
-        if (currentZoom > 1.0) {
-            isPanning = true;
-            viewport.style.cursor = 'grabbing';
-            startX = e.pageX - viewport.offsetLeft;
-            startY = e.pageY - viewport.offsetTop;
-            scrollLeft = viewport.scrollLeft;
-            scrollTop = viewport.scrollTop;
-        }
-    });
-
-    viewport.addEventListener('mousemove', (e) => {
-        if (isBloqueado) return;
-        if (selectedLineIndex !== null) {
-            actualizarPosicionLinea(e.clientX, e.clientY);
-            return;
-        }
-        if (isPanning && currentZoom > 1.0) {
-            e.preventDefault();
-            viewport.scrollLeft = scrollLeft - (e.pageX - viewport.offsetLeft - startX);
-            viewport.scrollTop = scrollTop - (e.pageY - viewport.offsetTop - startY);
-        }
-    });
-
-    viewport.addEventListener('mouseup', () => { 
-        isPanning = false; 
-        selectedLineIndex = null;
-        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default'; 
-    });
-
-    viewport.addEventListener('mouseleave', () => { 
-        isPanning = false; 
-        selectedLineIndex = null;
-        viewport.style.cursor = 'grab'; 
-    });
-
-    viewport.addEventListener('touchstart', (e) => {
-        if (isBloqueado || e.touches.length !== 1) return;
-        const touch = e.touches[0];
-        if (modoDibujoLinea) {
-            manejarAccionLinea(touch.clientX, touch.clientY, 'start');
-        } else if (currentZoom > 1.0) {
-            isPanning = true;
-            startX = touch.pageX - viewport.offsetLeft;
-            startY = touch.pageY - viewport.offsetTop;
-            scrollLeft = viewport.scrollLeft;
-            scrollTop = viewport.scrollTop;
-        }
-    }, { passive: true });
-
-    viewport.addEventListener('touchmove', (e) => {
-        if (isBloqueado || e.touches.length !== 1) return;
-        if (selectedLineIndex !== null) {
-            const touch = e.touches[0];
-            actualizarPosicionLinea(touch.clientX, touch.clientY);
-        } else if (isPanning && currentZoom > 1.0) {
-            const touch = e.touches[0];
-            viewport.scrollLeft = scrollLeft - (touch.pageX - viewport.offsetLeft - startX);
-            viewport.scrollTop = scrollTop - (touch.pageY - viewport.offsetTop - startY);
-        }
-    }, { passive: true });
-
-    viewport.addEventListener('touchend', () => {
-        isPanning = false;
-        selectedLineIndex = null;
-    });
-
-    if (excelContainer) {
-        ['mousedown', 'mousemove', 'mouseup', 'touchstart', 'touchmove', 'touchend'].forEach(evtName => {
-            excelContainer.addEventListener(evtName, (e) => {
-                e.stopPropagation();
-            }, { passive: true });
-        });
-    }
-
-    engineTabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            if (isProcessingOCR) {
-                registrarLog(`Cambio de motor bloqueado: Proceso en curso.`);
-                return;
-            }
-            engineTabs.forEach(t => t.classList.remove('active'));
-            tab.classList.add('active');
-            activeEngine = tab.getAttribute('data-engine');
-            registrarLog(`Motor seleccionado manualmente: ${activeEngine.toUpperCase()}`);
-            excelStatus.textContent = `Motor activo: ${activeEngine.toUpperCase()}. Procesando...`;
-            excelTbody.innerHTML = '';
-            if (currentImage) {
-                ejecutarMotorOCRReal(parseInt(umbralSlider.value), activeEngine);
-            }
-        });
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        loadingOverlay.style.display = 'flex';
-        loadingStatusTitle.textContent = 'Cargando imagen...';
-        progressText.textContent = '100%';
-        registrarLog(`Carga de imagen: ${file.name} (${file.size} bytes)`);
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                
-                // Ajustar contenedor al tamaño real de la imagen para asegurar scroll correcto en ambos ejes
-                if (canvasScaler) {
-                    canvasScaler.style.width = img.width + 'px';
-                    canvasScaler.style.height = img.height + 'px';
-                }
-
-                currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                originalImageBackup = ctx.createImageData(canvas.width, canvas.height);
-                originalImageBackup.data.set(currentImage.data);
-                manualLines = [];
-
-                rederizarCanvasConLineas(parseInt(umbralSlider.value));
-                isBloqueado = false;
-                if (btnBloquear) btnBloquear.style.background = '';
-                
-                registrarLog(`Imagen pintada en canvas correctamente: ${img.width}x${img.height}px`);
-                setTimeout(() => { loadingOverlay.style.display = 'none'; }, 200);
-                excelStatus.textContent = "Imagen lista. Mueve la imagen, añade líneas o procesa.";
-            }
-            img.src = event.target.result;
-        }
-        reader.readAsDataURL(file);
-    });
-
-    umbralSlider.addEventListener('input', (e) => {
-        const val = e.target.value;
-        umbralVal.textContent = val;
-        if (currentImage && !isBloqueado) rederizarCanvasConLineas(parseInt(val));
-    });
-
-    if (btnBloquear) {
-        btnBloquear.addEventListener('click', (e) => {
-            e.preventDefault();
-            isBloqueado = !isBloqueado;
-            modoDibujoLinea = null;
-            if (btnH) btnH.style.background = '';
-            if (btnV) btnV.style.background = '';
-
-            btnBloquear.style.background = isBloqueado ? '#27ae60' : '';
-            const msg = isBloqueado ? "🔒 Bloqueado: Líneas fijas. Selecciona tu motor." : "🔓 Desbloqueado: Puedes mover imagen o líneas.";
-            excelStatus.textContent = msg;
-            registrarLog(msg);
-        });
-    }
-
-    function activarModoLinea(tipo) {
-        if (!currentImage) {
-            alert("Primero carga una imagen.");
-            return;
-        }
-        if (isBloqueado) {
-            alert("El visor está bloqueado. Desbloquéalo primero.");
-            return;
-        }
-        
-        if (modoDibujoLinea === tipo) {
-            modoDibujoLinea = null;
-            if (btnH) btnH.style.background = '';
-            if (btnV) btnV.style.background = '';
-            excelStatus.textContent = "Modo dibujo desactivado. Panning libre activo.";
-            registrarLog("Modo de línea desactivado manualmente.");
-            return;
-        }
-
-        modoDibujoLinea = tipo;
-        if (btnH) btnH.style.background = (tipo === 'H') ? '#f39c12' : '';
-        if (btnV) btnV.style.background = (tipo === 'V') ? '#f39c12' : '';
-
-        const mensaje = (tipo === 'H') ? "▶ Modo Línea Horizontal activo" : "▶ Modo Línea Vertical activo";
-        excelStatus.textContent = mensaje;
-        registrarLog(`Activado modo de línea ${tipo}.`);
-    }
-
-    if (btnH) {
-        btnH.addEventListener('click', (e) => { e.preventDefault(); activarModoLinea('H'); });
-    }
-
-    if (btnV) {
-        btnV.addEventListener('click', (e) => { e.preventDefault(); activarModoLinea('V'); });
-    }
-
-    if (btnResetL) {
-        const ejecutarResetL = () => {
-            if (!originalImageBackup) return;
-            manualLines = [];
-            rederizarCanvasConLineas(parseInt(umbralSlider.value));
-            modoDibujoLinea = null;
-            isBloqueado = false;
-            if (btnH) btnH.style.background = '';
-            if (btnV) btnV.style.background = '';
-            if (btnBloquear) btnBloquear.style.background = '';
-            excelStatus.textContent = "Líneas restablecidas.";
-            registrarLog("Reset L ejecutado.");
-        };
-        btnResetL.addEventListener('click', (e) => { e.preventDefault(); ejecutarResetL(); });
-    }
-
-    function manejarAccionLinea(clientX, clientY, action) {
-        if (!currentImage || isBloqueado) return;
-
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const x = (clientX - rect.left) * scaleX;
-        const y = (clientY - rect.top) * scaleY;
-
-        if (action === 'start') {
-            const tolerancia = 30 * scaleX;
-            let encontrada = -1;
-            
-            manualLines.forEach((l, idx) => {
-                if (l.type === modoDibujoLinea) {
-                    if (l.type === 'H' && Math.abs(l.pos - y) < tolerancia) encontrada = idx;
-                    if (l.type === 'V' && Math.abs(l.pos - x) < tolerancia) encontrada = idx;
-                }
-            });
-
-            if (encontrada !== -1) {
-                selectedLineIndex = encontrada;
-                registrarLog(`Seleccionada línea ${manualLines[encontrada].type} para reposicionar.`);
-            } else {
-                const nuevaPos = (modoDibujoLinea === 'H') ? y : x;
-                manualLines.push({ type: modoDibujoLinea, pos: nuevaPos });
-                selectedLineIndex = manualLines.length - 1;
-                registrarLog(`Nueva línea ${modoDibujoLinea} creada en posición ${Math.round(nuevaPos)}.`);
-            }
-            rederizarCanvasConLineas(parseInt(umbralSlider.value));
-        }
-    }
-
-    function actualizarPosicionLinea(clientX, clientY) {
-        if (selectedLineIndex === null || selectedLineIndex >= manualLines.length) return;
-        const rect = canvas.getBoundingClientRect();
-        const scaleX = canvas.width / rect.width;
-        const scaleY = canvas.height / rect.height;
-        const x = (clientX - rect.left) * scaleX;
-        const y = (clientY - rect.top) * scaleY;
-
-        const linea = manualLines[selectedLineIndex];
-        linea.pos = (linea.type === 'H') ? y : x;
-        rederizarCanvasConLineas(parseInt(umbralSlider.value));
-    }
-
-    function aplicarPipelineEspecializado(dst, src, width, height, thresholdValue) {
-        const baseThreshold = (thresholdValue / 100) * 255;
-
-        if (activePipeline === 'ultrasound') {
-            const tempGray = new Uint8ClampedArray(width * height);
-            for (let i = 0; i < src.length; i += 4) {
-                tempGray[i / 4] = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-            }
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    let idx = (y * width + x) * 4;
-                    let sum = 0, count = 0;
-                    for (let dy = -1; dy <= 1; dy++) {
-                        for (let dx = -1; dx <= 1; dx++) {
-                            let nx = x + dx, ny = y + dy;
-                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                                sum += tempGray[ny * width + nx];
-                                count++;
-                            }
-                        }
-                    }
-                    let smoothedVal = sum / count;
-                    let finalVal = smoothedVal >= baseThreshold ? 255 : 0;
-                    dst[idx] = dst[idx+1] = dst[idx+2] = finalVal;
-                    dst[idx+3] = src[idx+3];
-                }
-            }
-            registrarLog("Pipeline aplicado: Ultrasonido con Filtro Pasabajos (Low-Pass Denoiser)");
-
-        } else if (activePipeline === 'optics') {
-            let sumLuminance = 0;
-            const pixelsCount = (width * height);
-            for (let i = 0; i < src.length; i += 4) {
-                sumLuminance += (0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2]);
-            }
-            let avgBrightness = sumLuminance / pixelsCount;
-            let factorContraste = avgBrightness < 120 ? 1.4 : 1.1;
-
-            for (let i = 0; i < src.length; i += 4) {
-                let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-                let adjusted = Math.min(255, Math.max(0, (gray - 128) * factorContraste + 128));
-                let finalVal = adjusted >= baseThreshold ? 255 : 0;
-                dst[i] = dst[i+1] = dst[i+2] = finalVal;
-                dst[i+3] = src[i+3];
-            }
-            registrarLog("Pipeline aplicado: Óptica / Retinografía (Normalización de fondo)");
-
-        } else {
-            for (let i = 0; i < src.length; i += 4) {
-                let gray = 0.299 * src[i] + 0.587 * src[i+1] + 0.114 * src[i+2];
-                let processed = gray >= baseThreshold ? 255 : 0;
-                dst[i] = dst[i+1] = dst[i+2] = processed;
-                dst[i+3] = src[i+3];
-            }
-            registrarLog("Pipeline aplicado: Estándar / OCR");
-        }
-    }
-
-    function rederizarCanvasConLineas(thresholdValue) {
-        if (!originalImageBackup) return;
-        const width = originalImageBackup.width;
-        const height = originalImageBackup.height;
-        const imgData = ctx.createImageData(width, height);
-        const src = originalImageBackup.data;
-        const dst = imgData.data;
-
-        aplicarPipelineEspecializado(dst, src, width, height, thresholdValue);
-        ctx.putImageData(imgData, 0, 0);
-
-        const grosorFino = Math.max(1, Math.round(width / 900));
-        ctx.lineWidth = grosorFino;
-        ctx.strokeStyle = '#000000';
-
-        manualLines.forEach(l => {
-            ctx.beginPath();
-            if (l.type === 'H') {
-                ctx.moveTo(0, l.pos);
-                ctx.lineTo(width, l.pos);
-            } else {
-                ctx.moveTo(l.pos, 0);
-                ctx.lineTo(l.pos, height);
-            }
-            ctx.stroke();
-        });
-
-        currentImage = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    }
-
-    async function ejecutarMotorOCRReal(thresholdValue, engine) {
-        if (!currentImage || isProcessingOCR) return;
-        isProcessingOCR = true;
-        
-        loadingOverlay.style.display = 'flex';
-        progressText.textContent = '0%';
-        loadingStatusTitle.textContent = `Procesando celdas con ${engine.toUpperCase()} (${activePipeline})...`;
-        
-        rederizarCanvasConLineas(thresholdValue);
-        const imageDataURL = canvas.toDataURL('image/png');
-        let simbolosDetectados = [];
-
-        try {
-            registrarLog(`Iniciando motor [Motor: ${engine} | Pipeline: ${activePipeline}] - Umbral: ${thresholdValue}`);
-
-            let progresoSimulado = 5;
-            const intervaloProgreso = setInterval(() => {
-                if (progresoSimulado < 85) {
-                    progresoSimulado += 8;
-                    progressText.textContent = `${progresoSimulado}%`;
-                }
-            }, 180);
-
-            if (engine === 'lfm') {
-                const worker = await Tesseract.createWorker('spa', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text' && m.progress) {
-                            clearInterval(intervaloProgreso);
-                            const porcentajeReal = Math.round(m.progress * 100);
-                            progressText.textContent = `${porcentajeReal}%`;
-                        }
-                    }
-                });
-                await worker.setParameters({ tessedit_pageseg_mode: 6 });
-                const ret = await worker.recognize(imageDataURL);
-                await worker.terminate();
-
-                clearInterval(intervaloProgreso);
-                progressText.textContent = '100%';
-                simbolosDetectados = ret.data.lines || [];
-                registrarLog(`[LFM 2.5-VL] Análisis estructurado local completado. Líneas: ${simbolosDetectados.length}`);
-            } else {
-                let psmConfig = 3;
-                if (engine === 'paddle') psmConfig = 6;
-                else if (engine === 'mlkit') psmConfig = 11;
-                else if (engine === 'tesseract') psmConfig = 4;
-
-                const worker = await Tesseract.createWorker('spa', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text' && m.progress) {
-                            clearInterval(intervaloProgreso);
-                            const porcentajeReal = Math.round(m.progress * 100);
-                            progressText.textContent = `${porcentajeReal}%`;
-                        }
-                    }
-                });
-                
-                await worker.setParameters({ tessedit_pageseg_mode: psmConfig });
-                const ret = await worker.recognize(imageDataURL);
-                await worker.terminate();
-
-                clearInterval(intervaloProgreso);
-                progressText.textContent = '100%';
-                simbolosDetectados = ret.data.lines || [];
-                registrarLog(`[${engine.toUpperCase()}] Finalizado. Líneas detectadas: ${simbolosDetectados.length}`);
-            }
-
-        } catch (err) {
-            registrarLog(`ERROR en motor ${engine}: ${err.message}`);
-        } finally {
-            isProcessingOCR = false;
-        }
-
-        procesarMatrizYConstruirExcel(simbolosDetectados, engine);
-        setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300);
-    }
-
-    function procesarMatrizYConstruirExcel(lines, engineName) {
-        let filasAgrupadas = [];
-        let toleranciaY = 22; 
-        let lineasOrdenadas = [...lines].sort((a, b) => a.bbox.y0 - b.bbox.y0);
-
-        let filaActual = [];
-        let ultimoY = -1;
-
-        lineasOrdenadas.forEach(item => {
-            let yCentro = (item.bbox.y0 + item.bbox.y1) / 2;
-            let textoLimpio = item.text.trim().replace(/\s+/g, ' ');
-            if (!textoLimpio) return;
-
-            if (ultimoY === -1 || Math.abs(yCentro - ultimoY) <= toleranciaY) {
-                filaActual.push({ text: textoLimpio, x0: item.bbox.x0 });
-                ultimoY = (ultimoY + yCentro) / 2;
-            } else {
-                if (filaActual.length > 0) {
-                    filaActual.sort((a, b) => a.x0 - b.x0);
-                    filasAgrupadas.push(filaActual.map(el => el.text));
-                }
-                filaActual = [{ text: textoLimpio, x0: item.bbox.x0 }];
-                ultimoY = yCentro;
-            }
-        });
-        if (filaActual.length > 0) {
-            filaActual.sort((a, b) => a.x0 - b.x0);
-            filasAgrupadas.push(filaActual.map(el => el.text));
-        }
-
-        let csvRows = [];
-        excelTbody.innerHTML = '';
-
-        filasAgrupadas.slice(0, 150).forEach((filaArr, rowIndex) => {
-            let tr = document.createElement('tr');
-            let celdasLimpias = [];
-
-            filaArr.forEach(fragmento => {
-                const partes = fragmento.split(/\s{2,}|\t|\|/);
-                partes.forEach(p => {
-                    let limpio = p.trim();
-                    if (limpio) celdasLimpias.push(limpio);
-                });
-            });
-
-            if (celdasLimpias.length === 0) celdasLimpias = filaArr;
-
-            csvRows.push(`"Fila ${rowIndex + 1}","${celdasLimpias.join('","')}"`);
-
-            let tdIndex = document.createElement('td');
-            tdIndex.style.cssText = "border:1px solid #444;padding:6px;background:#1a1a1a;color:#f39c12;font-weight:bold;";
-            tdIndex.textContent = `R${rowIndex + 1}`;
-            tr.appendChild(tdIndex);
-
-            celdasLimpias.forEach(celdaTxt => {
-                let td = document.createElement('td');
-                td.style.cssText = "border:1px solid #444;padding:6px;color:#fff;white-space:nowrap;";
-                td.textContent = celdaTxt;
-                tr.appendChild(td);
-            });
-
-            excelTbody.appendChild(tr);
-        });
-
-        ultimoCsvGenerado = csvRows.join("\n");
-        registrarLog(`Estructura (${engineName}): ${filasAgrupadas.length} filas procesadas en celdas.`);
-        excelStatus.textContent = `Mini Excel (${engineName.toUpperCase()} / ${activePipeline.toUpperCase()}) - ${filasAgrupadas.length} filas`;
-        
-        if (filasAgrupadas.length > 0 && filasAgrupadas[0].length > 0) {
-            cellValueInput.value = filasAgrupadas[0][0];
-            activeCellLabel.textContent = "A1";
-        }
-    }
-
-    function registrarLog(mensaje) {
-        const timestamp = new Date().toISOString().split('T')[1].slice(0, 8);
-        const logEntry = `[${timestamp}] ${mensaje}`;
-        logDepuracion.push(logEntry);
-        console.log(logEntry);
-    }
-
-    // Zoom ampliado hasta 6.0x máximo
-    document.getElementById('zoom-in').addEventListener('click', () => { currentZoom = Math.min(currentZoom + 0.5, 6.0); actualizarZoom(); });
-    document.getElementById('zoom-out').addEventListener('click', () => { currentZoom = Math.max(currentZoom - 0.5, 0.5); actualizarZoom(); });
-    document.getElementById('zoom-reset').addEventListener('click', () => { currentZoom = 1.0; actualizarZoom(); });
-
-    function actualizarZoom() {
-        canvasScaler.style.transform = `scale(${currentZoom})`;
-        if (canvas.width && canvas.height) {
-            canvasScaler.style.width = (canvas.width * currentZoom) + 'px';
-            canvasScaler.style.height = (canvas.height * currentZoom) + 'px';
-        }
-        viewport.style.cursor = currentZoom > 1.0 ? 'grab' : 'default';
-        registrarLog(`Zoom ajustado a: ${currentZoom}x`);
-    }
-
-    if (btnVaciar) {
-        btnVaciar.addEventListener('click', () => {
-            excelTbody.innerHTML = '';
-            ultimoCsvGenerado = "";
-            cellValueInput.value = "";
-            excelStatus.textContent = "Estado: Texto vaciado (Imagen conservada)";
-            registrarLog("Limpieza selectiva ejecutada: Texto y tabla borrados, imagen intacta.");
-            alert("¡Resultados de texto vaciados! La imagen se mantiene cargada.");
-        });
-    }
-
-    btnSearch.addEventListener('click', () => {
-        const contenidoVentana = "=== LOG DE DEPURACION ===\n" + logDepuracion.join("\n") + "\n\n=== CSV GENERADO ===\n" + ultimoCsvGenerado;
-        
-        let modal = document.getElementById('csv-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'csv-modal';
-            modal.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;padding:15px;box-sizing:border-box;";
-            modal.innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <h3 style="color:#f39c12;margin:0;font-size:16px;">📋 Log y CSV Generado</h3>
-                    <button id="btn-cerrar-modal" style="background:#e74c3c;color:white;border:none;padding:5px 12px;border-radius:4px;font-weight:bold;">X Cerrar</button>
-                </div>
-                <textarea id="csv-textarea" style="flex:1;background:#111;color:#0ff;padding:10px;border:1px solid #444;font-family:monospace;font-size:12px;resize:none;border-radius:6px;"></textarea>
-                <button id="btn-copiar-clipboard" style="background:#27ae60;color:white;border:none;padding:12px;border-radius:6px;margin-top:10px;font-weight:bold;font-size:14px;">📋 Copiar al Portapapeles</button>
-            `;
-            document.body.appendChild(modal);
-
-            document.getElementById('btn-cerrar-modal').addEventListener('click', () => { modal.style.display = 'none'; });
-            document.getElementById('btn-copiar-clipboard').addEventListener('click', () => {
-                const ta = document.getElementById('csv-textarea');
-                ta.select();
-                navigator.clipboard.writeText(ta.value).then(() => {
-                    alert("¡Copiado al portapapeles con éxito!");
-                }).catch(() => {
-                    alert("Selecciona el texto manualmente para copiarlo.");
-                });
-            });
-        }
-        
-        document.getElementById('csv-textarea').value = contenidoVentana;
-        modal.style.display = 'flex';
-    });
-
-    btnExportar.addEventListener('click', () => {
-        btnSearch.click();
-    });
-});
+    setProgreso(100, "¡Escaneo completado!");
+    setTimeout(ocultarProgreso, 600);
+    renderizarMatriz();
+
+  } catch (err) {
+    console.error(err);
+    ocultarProgreso();
+    alert("Error en escaneo: " + (err.message || err));
+  }
+}
+
+function aplicarReglasFuzzy(valRaw, colIdx) {
+  if (!valRaw) return "";
+  let t = valRaw.replace(/[|¦\\]/g, "").trim();
+  let tipo = ESQUEMA_20_COLUMNAS[colIdx]?.tipo || 'texto';
+
+  switch(tipo) {
+    case 'numero': return t.replace(/[^0-9]/g, "");
+    case 'decimal': return t.replace(/[^0-9.]/g, "");
+    case 'int_lat':
+      if (/I[N1]T/i.test(t)) return "INT";
+      if (/L[A4]T/i.test(t)) return "LAT";
+      return t;
+    case 'nivel':
+      let c = t.toUpperCase().replace(/\s+/g, "");
+      for (let nv of NIVELES_MAR) if (c.includes(nv.replace(/\s+/g, ""))) return nv;
+      return t;
+    case 'moneda':
+      if (/USD|US|\$/i.test(t)) return "USD";
+      if (/MXN|MX|PESO/i.test(t)) return "MXN";
+      return t;
+    default: return t;
+  }
+}
+
+function renderizarMatriz() {
+  const wrapper = document.getElementById('tableWrapper');
+  const rowCount = document.getElementById('rowCount');
+  if (rowCount) rowCount.innerText = `${matrizDatos.length} filas`;
+  if (!wrapper) return;
+
+  if (!matrizDatos.length) {
+    wrapper.innerHTML = '<div class="empty-state">No hay datos procesados.</div>';
+    return;
+  }
+
+  let html = "<table><thead><tr>";
+  for (let i = 0; i < 20; i++) html += `<th>${ESQUEMA_20_COLUMNAS[i]?.id || `Col ${i+1}`}</th>`;
+  html += "</tr></thead><tbody>";
+
+  matrizDatos.forEach((row) => {
+    html += "<tr>";
+    for (let c = 0; c < 20; c++) html += `<td contenteditable="true">${row[c] || ""}</td>`;
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  wrapper.innerHTML = html;
+}
+
+function filtrarMatriz() {
+  let q = document.getElementById('searchInput').value.toLowerCase();
+  document.querySelectorAll("#tableWrapper tbody tr").forEach(tr => {
+    tr.style.display = tr.innerText.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+async function copiarAlPortapapeles() {
+  if (!matrizDatos.length) { alert("No hay datos para copiar."); return; }
+  let headers = ESQUEMA_20_COLUMNAS.map(c => c.id).join("\t");
+  let tsv = headers + "\n" + matrizDatos.map(f => f.join("\t")).join("\n");
+  
+  const Clipboard = window.Capacitor?.Plugins?.Clipboard;
+  if (Clipboard) {
+    await Clipboard.write({ string: tsv });
+    alert("¡Copiado al portapapeles!");
+  } else {
+    navigator.clipboard.writeText(tsv);
+    alert("Copiado en formato TSV.");
+  }
+}
+
+function limpiarTabla() {
+  matrizDatos = [];
+  renderizarMatriz();
+}
