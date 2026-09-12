@@ -273,12 +273,6 @@ async function ejecutarEscaneoConFiltros() {
     
     const worker = await Tesseract.createWorker('spa');
 
-    if (engine === 'lfm') {
-      await worker.setParameters({ tessedit_pageseg_mode: 6 });
-    } else {
-      await worker.setParameters({ tessedit_pageseg_mode: 3 });
-    }
-
     setProgreso(40, "Extrayendo texto y coordenadas...");
     const { data } = await worker.recognize(canvasElement);
     await worker.terminate();
