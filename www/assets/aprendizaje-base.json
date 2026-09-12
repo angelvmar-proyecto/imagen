@@ -1,18 +1,33 @@
 {
   "version_aprendizaje": 1,
   "fecha_actualizacion": "2026-09-12",
-  "descripcion": "Posiciones calibradas de líneas para tablas MAR Caribe — 10 filas × 21 columnas",
+  "descripcion": "Posiciones calibradas, espacios, umbral y reglas para tablas MAR Caribe",
   "configuracion": {
     "filas": 10,
     "columnas": 21,
-    "tiene_encabezados": false
+    "tiene_encabezados": false,
+    "peso_nuevo": 0.70,
+    "peso_historico": 0.30
+  },
+  "umbral": {
+    "tipo": "DinamicoAdaptativo",
+    "metodo": "PorZonas",
+    "cantidad_zonas": 4,
+    "rango_ajuste": 0.20,
+    "promedio_historico": 128
   },
   "lineas_internas": {
     "H": [0.1000, 0.2000, 0.3000, 0.4000, 0.5000, 0.6000, 0.7000, 0.8000, 0.9000],
     "V": [0.0476, 0.0952, 0.1429, 0.1905, 0.2381, 0.2857, 0.3333, 0.3810, 0.4286, 0.4762, 0.5238, 0.5714, 0.6190, 0.6667, 0.7143, 0.7619, 0.8095, 0.8571, 0.9048, 0.9524]
   },
-  "promedio_movil": {
-    "peso_nuevo": 0.70,
-    "peso_historico": 0.30
+  "espacios_promedio": {
+    "alto_filas": [0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000, 0.1000],
+    "ancho_columnas": [0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476, 0.0476]
+  },
+  "reglas_texto": {
+    "celda_multi_renglon": true,
+    "preservar_saltos_de_linea": true,
+    "agrupar_texto_misma_celda": true,
+    "separador_renglones": "\n"
   }
 }

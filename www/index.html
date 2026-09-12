@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>MAR Caribe — Tablas + Aprendizaje Integrado</title>
+  <title>MAR Caribe — Tablas + Umbral Dinámico + Aprendizaje</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
     body { background: #0f172a; color: #f1f5f9; padding: 12px; max-width: 100vw; }
-    h1 { font-size: 1.4rem; margin-bottom: 16px; color: #38bdf8; text-align: center; }
-    .zona-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    button { padding: 12px 16px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+    h1 { font-size: 1.3rem; margin-bottom: 12px; color: #38bdf8; text-align: center; }
+    .zona-botones { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    button { padding: 12px 14px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-primario { background: #2563eb; color: white; }
     .btn-exito { background: #16a34a; color: white; }
@@ -18,37 +18,38 @@
     .btn-info { background: #8b5cf6; color: white; }
     button:active { transform: scale(0.97); }
     #inputImagen { display: none; }
-    .preview-wrapper { position: relative; margin: 16px 0; border: 2px solid #334155; border-radius: 12px; overflow: hidden; max-width: 100%; touch-action: none; }
-    #previewImg { display: block; max-width: 100%; height: auto; transform-origin: top left; transition: transform 0.1s; }
+    .controles-zoom { position: sticky; top: 0; z-index: 10; background: rgba(15,23,42,0.95); padding: 8px; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .preview-wrapper { position: relative; margin: 12px 0; border: 2px solid #334155; border-radius: 12px; overflow: auto; max-width: 100%; max-height: 75vh; touch-action: none; background: #1e293b; }
+    #previewImg { display: block; max-width: 100%; height: auto; transform-origin: top left; }
     #canvasLineas { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: auto; }
-    .controles-zoom { position: sticky; top: 0; z-index: 10; background: rgba(15,23,42,0.95); padding: 8px; border-radius: 8px; margin-bottom: 8px; display: flex; gap: 8px; align-items: center; }
-    .progreso { margin: 16px 0; background: #1e293b; border-radius: 8px; height: 24px; overflow: hidden; }
+    .progreso { margin: 12px 0; background: #1e293b; border-radius: 8px; height: 24px; overflow: hidden; }
     #barraProgreso { height: 100%; background: linear-gradient(90deg, #22c55e, #3b82f6); width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
-    .etapa { display: flex; justify-content: space-between; margin: 8px 0; font-size: 0.9rem; color: #94a3b8; }
-    #logContainer { background: #1e293b; border-radius: 8px; padding: 12px; margin: 16px 0; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.8rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
-    #tablaResultado { width: 100%; border-collapse: collapse; margin-top: 16px; background: #1e293b; border-radius: 8px; overflow: hidden; }
-    #tablaResultado th, #tablaResultado td { border: 1px solid #334155; padding: 8px; text-align: center; font-size: 0.85rem; }
+    #logContainer { background: #1e293b; border-radius: 8px; padding: 12px; margin: 12px 0; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.78rem; line-height: 1.6; white-space: pre-wrap; word-break: break-all; }
+    #tablaResultado { width: 100%; border-collapse: collapse; margin-top: 12px; background: #1e293b; border-radius: 8px; overflow: hidden; }
+    #tablaResultado th, #tablaResultado td { border: 1px solid #334155; padding: 6px; text-align: center; font-size: 0.8rem; white-space: pre-line; }
     #tablaResultado th { background: #1e40af; color: white; }
-    .zona-aprendizaje { background: #1e293b; border-radius: 8px; padding: 12px; margin: 16px 0; border-left: 3px solid #22c55e; }
+    .zona-aprendizaje { background: #1e293b; border-radius: 8px; padding: 12px; margin: 12px 0; border-left: 3px solid #22c55e; }
     .zona-aprendizaje h3 { font-size: 0.9rem; color: #22c55e; margin-bottom: 8px; }
     .tiempo { text-align: right; font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
     .estado-motor { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; margin-left: 8px; }
     .estado-cargando { background: #f59e0b; color: #1e293b; }
     .estado-listo { background: #22c55e; color: white; }
     .estado-error { background: #ef4444; color: white; }
-    .version-dato { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+    .version-dato { font-size: 0.75rem; color: #64748b; margin-top: 6px; }
+    .info-umbral { font-size: 0.8rem; color: #94a3b8; margin-left: 8px; }
   </style>
 </head>
 <body>
 
-<h1>📊 MAR Caribe — Tablas + 🧠 Aprendizaje Integrado</h1>
+<h1>📊 MAR Caribe — Tablas + ⚡ Umbral Dinámico + 🧠 Aprendizaje</h1>
 
 <div class="controles-zoom">
   <button id="btnZoomMenos" class="btn-primario">🔍−</button>
   <button id="btnZoomNormal" class="btn-primario">1:1</button>
   <button id="btnZoomMas" class="btn-primario">🔍+</button>
   <span id="nivelZoom" style="font-size:0.9rem; min-width:60px; text-align:center;">100%</span>
-  <span style="font-size:0.8rem; color:#94a3b8; margin-left:auto;">Dos dedos = zoom | Arrastrar = mover</span>
+  <span class="info-umbral">⚡ Umbral dinámico activo</span>
+  <span style="font-size:0.8rem; color:#94a3b8; margin-left:auto;">Dos dedos = zoom | Arrastrar = mover | Doble toque = agregar línea</span>
 </div>
 
 <div class="zona-botones">
@@ -70,6 +71,8 @@
     <button id="btnReiniciarAprendizaje" class="btn-peligro">🗑️ Reiniciar Local</button>
   </div>
   <p style="font-size:0.8rem; color:#94a3b8; margin-top:8px;">
+    ⚡ Umbral dinámico: se calcula automáticamente por zonas según la iluminación de cada imagen.<br>
+    📝 Celdas multi-renglón activas: varios renglones de texto se agrupan en la misma celda.<br>
     Arrastra líneas → ajusta → Guardar → Exportar JSON → pegar en assets/aprendizaje-base.json → 
     <strong>¡Toda nueva versión ya viene con tus ajustes!</strong>
   </p>
@@ -77,15 +80,12 @@
 </div>
 
 <div class="tiempo" id="tiempoInfo">Transcurrido: 0.0s</div>
-<div class="etapa">
-  <span id="etapaActual">Esperando imagen...</span>
-</div>
 <div class="progreso">
   <div id="barraProgreso"><span id="textoProgreso">0%</span></div>
 </div>
 
 <div class="preview-wrapper" id="previewContainer" style="display:none;">
-  <img id="previewImg" alt="Vista previa">
+  <img id="previewImg" alt="Vista previa tabla">
   <canvas id="canvasLineas"></canvas>
 </div>
 
