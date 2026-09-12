@@ -1,7 +1,7 @@
 // ==============================================
-// MAR Caribe — Escáner de Tablas COMPLETO
-// CORRECCIÓN: Área ampliada + Líneas movibles + Botón activo + Procesamiento
-// Versión: 1.2 | Fecha: 2026-09-12
+// MAR Caribe — Escáner de Tablas
+// Versión: 1.3 | Fecha: 2026-09-12
+// Cambio: Área imagen mínima 33vh / 1/3 pantalla + botones compactos
 // ==============================================
 
 const CONFIG = {
@@ -9,13 +9,11 @@ const CONFIG = {
   PESO_NUEVO: 0.70,
   PESO_HISTORICO: 0.30,
   UMBRAL_ZONAS: 4,
-  UMBRAL_RANGO: 0.20,
-  ANCHO_LINEA: 2.0,
-  AREA_TOCAR_LINEA: 25, // 🔴 ÁREA GRANDE para agarrar líneas — ¡FÁCIL DE MOVER!
+  ANCHO_LINEA: 2.2,
+  AREA_TOCAR_LINEA: 35, // 🔴 ÁREA MUY GRANDE para agarrar líneas
   TIEMPO_LIMITE: 120000
 };
 
-// Elementos DOM
 const inputImagen     = document.getElementById('inputImagen');
 const btnCargar       = document.getElementById('btnCargar');
 const btnProcesar     = document.getElementById('btnProcesar');
@@ -44,7 +42,6 @@ const versionAprendizaje=document.getElementById('versionAprendizaje');
 const numLineasH      = document.getElementById('numLineasH');
 const numLineasV      = document.getElementById('numLineasV');
 
-// Estado global
 let imagenActual = null, imagenDatos = null, logCompleto = '';
 let tiempoInicio = 0;
 let lineasHActuales = [], lineasVActuales = [];
@@ -53,9 +50,6 @@ let ultimoToque = 0;
 let escalaZoom = 1.0;
 let desplazamiento = { x: 0, y: 0 };
 
-// ==============================================
-// 📝 SISTEMA DE LOG
-// ==============================================
 function log(mensaje, tipo = 'info') {
   const iconos = { ok: '✅', info: 'ℹ️', warn: '⚠️', error: '❌' };
   const colores = { ok: '#4ade80', info: '#60a5fa', warn: '#fbbf24', error: '#f87171' };
@@ -65,9 +59,6 @@ function log(mensaje, tipo = 'info') {
   logContainer.scrollTop = logContainer.scrollHeight;
 }
 
-// ==============================================
-// ⚡ UMBRAL DINÁMICO
-// ==============================================
 const UmbralDinamico = {
   calcular(imagenData, ancho, alto) {
     const zonas = CONFIG.UMBRAL_ZONAS;
@@ -89,14 +80,11 @@ const UmbralDinamico = {
       }
     }
     const brilloProm = Math.round(brilloTotal / pixeles);
-    log(`⚡ Umbral calculado: ${brilloProm} (brillo promedio de imagen)`, 'info');
+    log(`⚡ Umbral calculado: ${brilloProm}`, 'info');
     return brilloProm;
   }
 };
 
-// ==============================================
-// 🧠 APRENDIZAJE
-// ==============================================
 const Aprendizaje = {
   base: null, sesion: null,
 
@@ -180,9 +168,6 @@ const Aprendizaje = {
   }
 };
 
-// ==============================================
-// 🔍 ZOOM
-// ==============================================
 function aplicarZoom() {
   previewImg.style.transform = `scale(${escalaZoom}) translate(${desplazamiento.x}px, ${desplazamiento.y}px)`;
   canvasLineas.style.transform = `scale(${escalaZoom}) translate(${desplazamiento.x}px, ${desplazamiento.y}px)`;
@@ -193,7 +178,6 @@ btnZoomMas.addEventListener('click', () => { escalaZoom = Math.min(5, escalaZoom
 btnZoomMenos.addEventListener('click', () => { escalaZoom = Math.max(0.5, escalaZoom / 1.3); aplicarZoom(); });
 btnZoomNormal.addEventListener('click', () => { escalaZoom = 1.0; desplazamiento = {x:0,y:0}; aplicarZoom(); });
 
-// Zoom con dos dedos
 let toquesAnteriores = null;
 contenedorImagen.addEventListener('touchstart', e => {
   if (e.touches.length === 2) {
@@ -212,9 +196,6 @@ contenedorImagen.addEventListener('touchmove', e => {
 });
 contenedorImagen.addEventListener('touchend', () => toquesAnteriores = null);
 
-// ==============================================
-// 🖼️ CARGA DE IMAGEN
-// ==============================================
 btnCargar.addEventListener('click', () => inputImagen.click());
 inputImagen.addEventListener('change', async e => {
   const arch = e.target.files[0];
@@ -242,28 +223,24 @@ inputImagen.addEventListener('change', async e => {
   previewImg.src = img.src;
   contenedorImagen.style.display = 'block';
 
-  // Esperar que la imagen se dibuje
   await new Promise(r => previewImg.onload = r);
 
-  // Ajustar tamaño del canvas EXACTAMENTE igual a la imagen visible
   canvasLineas.width = previewImg.clientWidth;
   canvasLineas.height = previewImg.clientHeight;
   log(`📐 Imagen visible: ${previewImg.clientWidth}×${previewImg.clientHeight} px — Original: ${img.width}×${img.height} px`, 'info');
 
-  // Generar líneas
   const { lineasH, lineasV } = Aprendizaje.generarLineas();
   lineasHActuales = lineasH;
   lineasVActuales = lineasV;
   actualizarContadorLineas();
   dibujarLineas();
 
-  // ✅ HABILITAR BOTÓN PROCESAR — ¡AHORA SÍ!
   btnProcesar.disabled = false;
   estadoMotor.textContent = '✅ Listo';
   estadoMotor.className = 'estado-motor estado-listo';
 
   log(`✅ Imagen cargada — Líneas: H=${lineasH.length}, V=${lineasV.length}`, 'ok');
-  log('💡 CONSEJO: Haz ZOOM primero → las líneas se separan y se mueven MUCHO más fácil', 'info');
+  log('💡 CONSEJO: Haz ZOOM primero → las líneas se separan y se mueven más fácil', 'info');
 });
 
 function actualizarContadorLineas() {
@@ -271,9 +248,6 @@ function actualizarContadorLineas() {
   numLineasV.textContent = lineasVActuales.length - 2;
 }
 
-// ==============================================
-// ✏️ DIBUJAR LÍNEAS — SIN NÚMEROS, LÍNEAS CLARAS
-// ==============================================
 function dibujarLineas() {
   const ctx = canvasLineas.getContext('2d');
   const ancho = canvasLineas.width;
@@ -281,14 +255,12 @@ function dibujarLineas() {
   ctx.clearRect(0, 0, ancho, alto);
   ctx.lineWidth = CONFIG.ANCHO_LINEA;
 
-  // Horizontales — AZUL
   ctx.strokeStyle = '#3b82f6';
   lineasHActuales.forEach(pos => {
     const y = pos * alto;
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(ancho, y); ctx.stroke();
   });
 
-  // Verticales — ROJO
   ctx.strokeStyle = '#ef4444';
   lineasVActuales.forEach(pos => {
     const x = pos * ancho;
@@ -296,17 +268,13 @@ function dibujarLineas() {
   });
 }
 
-// ==============================================
-// ✏️ MOVER LÍNEAS — CORREGIDO: ÁREA GRANDE PARA AGARRAR
-// ==============================================
 btnEditarLineas.addEventListener('click', () => {
   modoEdicionLineas = !modoEdicionLineas;
   canvasLineas.style.pointerEvents = modoEdicionLineas ? 'auto' : 'none';
   btnEditarLineas.style.background = modoEdicionLineas ? '#ef4444' : '';
-  log(modoEdicionLineas ? '✏️ MODO EDICIÓN ACTIVO — Toca CERCA de la línea y arrastra' : '👁️ Modo vista', modoEdicionLineas ? 'ok' : 'info');
+  log(modoEdicionLineas ? '✏️ MODO EDICIÓN ACTIVO' : '👁️ Modo vista', modoEdicionLineas ? 'ok' : 'info');
 });
 
-// Coordenadas reales del toque (sin zoom afectando)
 function coordsReales(clientX, clientY) {
   const rect = canvasLineas.getBoundingClientRect();
   return {
@@ -318,9 +286,8 @@ function coordsReales(clientX, clientY) {
 function buscarLineaCerca(x, y) {
   const ancho = canvasLineas.width;
   const alto = canvasLineas.height;
-  const umbral = CONFIG.AREA_TOCAR_LINEA; // 🔴 ÁREA AMPLIADA — ¡se agarra fácil!
+  const umbral = CONFIG.AREA_TOCAR_LINEA;
 
-  // Buscar líneas HORIZONTALES primero
   for (let i = 0; i < lineasHActuales.length; i++) {
     const ly = lineasHActuales[i] * alto;
     if (Math.abs(y - ly) < umbral) {
@@ -328,7 +295,6 @@ function buscarLineaCerca(x, y) {
     }
   }
 
-  // Buscar líneas VERTICALES
   for (let i = 0; i < lineasVActuales.length; i++) {
     const lx = lineasVActuales[i] * ancho;
     if (Math.abs(x - lx) < umbral) {
@@ -344,8 +310,9 @@ function iniciarArrastre(e) {
   lineaSeleccionada = buscarLineaCerca(x, y);
   if (lineaSeleccionada) {
     log(`🖐️ Agarraste línea ${lineaSeleccionada.tipo === 'H' ? 'HORIZONTAL' : 'VERTICAL'} #${lineaSeleccionada.indice}`, 'info');
-    offsetArrastre = lineaSeleccionada.tipo === 'H' ? y - lineasHActuales[lineaSeleccionada.indice] * canvasLineas.height
-                                                      : x - lineasVActuales[lineaSeleccionada.indice] * canvasLineas.width;
+    offsetArrastre = lineaSeleccionada.tipo === 'H'
+      ? y - lineasHActuales[lineaSeleccionada.indice] * alto
+      : x - lineasVActuales[lineaSeleccionada.indice] * ancho;
   }
 }
 
@@ -374,13 +341,11 @@ function terminarArrastre() {
   }
 }
 
-// Eventos Mouse
 canvasLineas.addEventListener('mousedown', iniciarArrastre);
 canvasLineas.addEventListener('mousemove', moverLinea);
 canvasLineas.addEventListener('mouseup', terminarArrastre);
 canvasLineas.addEventListener('mouseleave', terminarArrastre);
 
-// Eventos Táctiles
 canvasLineas.addEventListener('touchstart', e => {
   if (!modoEdicionLineas) return;
   const t = e.touches[0];
@@ -394,7 +359,6 @@ canvasLineas.addEventListener('touchmove', e => {
 });
 canvasLineas.addEventListener('touchend', terminarArrastre);
 
-// Doble toque para agregar línea
 canvasLineas.addEventListener('touchend', e => {
   if (!modoEdicionLineas) return;
   const ahora = Date.now();
@@ -408,14 +372,11 @@ canvasLineas.addEventListener('touchend', e => {
     lineasVActuales.sort((a, b) => a - b);
     actualizarContadorLineas();
     dibujarLineas();
-    log(`➕ Línea agregada en posición Y=${py.toFixed(4)}, X=${px.toFixed(4)}`, 'ok');
+    log(`➕ Línea agregada en Y=${py.toFixed(4)}, X=${px.toFixed(4)}`, 'ok');
   }
   ultimoToque = ahora;
 });
 
-// ==============================================
-// ✏️ Botones de edición
-// ==============================================
 btnAgregarLinea.addEventListener('click', () => {
   if (!modoEdicionLineas) { log('⚠️ Activa "Editar" primero', 'warn'); return; }
   lineasHActuales.push(0.5 + (Math.random() - 0.5) * 0.1);
@@ -424,7 +385,7 @@ btnAgregarLinea.addEventListener('click', () => {
   lineasVActuales.sort((a, b) => a - b);
   actualizarContadorLineas();
   dibujarLineas();
-  log(`➕ Líneas agregadas — Total H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
+  log(`➕ Líneas agregadas — H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
 });
 
 btnQuitarLinea.addEventListener('click', () => {
@@ -433,7 +394,7 @@ btnQuitarLinea.addEventListener('click', () => {
   if (lineasVActuales.length > 2) lineasVActuales.splice(Math.floor(lineasVActuales.length/2), 1);
   actualizarContadorLineas();
   dibujarLineas();
-  log(`➖ Líneas quitadas — Total H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
+  log(`➖ Líneas quitadas — H: ${lineasHActuales.length}, V: ${lineasVActuales.length}`, 'ok');
 });
 
 btnGuardarAjustes.addEventListener('click', () => {
@@ -456,9 +417,6 @@ btnReiniciarAprendizaje.addEventListener('click', () => {
   }
 });
 
-// ==============================================
-// ▶️ PROCESAR TABLA — ¡AHORA SÍ FUNCIONA!
-// ==============================================
 btnProcesar.addEventListener('click', async () => {
   if (!imagenActual) { log('❌ No hay imagen cargada', 'error'); return; }
 
@@ -467,7 +425,6 @@ btnProcesar.addEventListener('click', async () => {
   btnProcesar.disabled = true;
   barraProgreso.style.width = '10%'; textoProgreso.textContent = '10%';
 
-  // 1. Calcular umbral dinámico
   log('⚡ Paso 1: Calculando umbral dinámico...', 'info');
   const canvasTemp = document.createElement('canvas');
   canvasTemp.width = imagenDatos.w;
@@ -478,20 +435,16 @@ btnProcesar.addEventListener('click', async () => {
   const umbral = UmbralDinamico.calcular(datosImg, imagenDatos.w, imagenDatos.h);
   barraProgreso.style.width = '30%'; textoProgreso.textContent = '30%';
 
-  // 2. Definir celdas con las líneas
   log('📐 Paso 2: Definiendo celdas desde líneas...', 'info');
   const filas = lineasHActuales.length - 1;
   const cols = lineasVActuales.length - 1;
   log(`📊 Celdas: ${filas} filas × ${cols} columnas = ${filas*cols} celdas`, 'ok');
   barraProgreso.style.width = '50%'; textoProgreso.textContent = '50%';
 
-  // 3. Simular extracción de texto (aquí se integrará PaddleOCR)
-  log('📝 Paso 3: Extrayendo texto de celdas...', 'info');
-  log('ℹ️ Nota: Reconocimiento OCR pendiente de integración con PaddleOCR/Yolo', 'warn');
-  log('✅ Estructura de celdas lista para recibir datos OCR', 'ok');
+  log('📝 Paso 3: Estructura lista para OCR...', 'info');
+  log('ℹ️ Reconocimiento OCR pendiente de integración con PaddleOCR/Yolo', 'warn');
   barraProgreso.style.width = '80%'; textoProgreso.textContent = '80%';
 
-  // 4. Generar tabla de resultados
   log('📋 Paso 4: Construyendo tabla...', 'info');
   tablaResultado.innerHTML = '';
   const encabezado = document.createElement('tr');
@@ -516,30 +469,22 @@ btnProcesar.addEventListener('click', async () => {
 
   log(`✅ === PROCESAMIENTO COMPLETO en ${tiempoTotal}s ===`, 'ok');
   log(`📊 Tabla: ${filas} filas × ${cols} columnas`, 'ok');
-  log('ℹ️ Las celdas están definidas — el texto se agregará al conectar el motor OCR', 'info');
 
   btnProcesar.disabled = false;
 });
 
-// ==============================================
-// 📋 Copiar Log
-// ==============================================
 btnCopiarLog.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(logCompleto); log('📋 Log copiado al portapapeles ✅', 'ok'); }
   catch { log('⚠️ No se pudo copiar — selecciona manualmente', 'warn'); }
 });
 
-// ==============================================
-// INICIALIZACIÓN
-// ==============================================
 document.addEventListener('DOMContentLoaded', () => {
   log('═════════════════════════════════════════', 'info');
-  log('✅ Sistema inicializado — CORRECCIONES APLICADAS:', 'ok');
-  log('   📐 Área de imagen ampliada al 65% de pantalla', 'info');
-  log('   ✋ Área de toque en líneas: 25px — ¡se agarran fácil!', 'info');
-  log('   🔵 Líneas HORIZONTALES y 🔴 VERTICALES movibles', 'info');
-  log('   ▶️ Botón "Procesar Tabla" se ACTIVA al cargar imagen', 'info');
-  log('   📋 Estructura de tabla generada — lista para OCR', 'info');
+  log('✅ Sistema inicializado — Área imagen ampliada', 'ok');
+  log('   📐 Área imagen: mínimo 33vh / 1/3 pantalla', 'info');
+  log('   ✋ Área toque líneas: 35px', 'info');
+  log('   🔵 Líneas H y 🔴 V movibles', 'info');
+  log('   ▶️ Botón Procesar activo al cargar imagen', 'info');
   log('═════════════════════════════════════════', 'info');
   estadoMotor.textContent = '✅ Listo';
   estadoMotor.className = 'estado-motor estado-listo';

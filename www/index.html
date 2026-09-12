@@ -3,73 +3,235 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>MAR Caribe — Tablas + Umbral Dinámico + Aprendizaje</title>
+  <title>MAR Caribe — Tablas</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
-    body { background: #0f172a; color: #f1f5f9; padding: 4px; max-width: 100vw; overflow-x: hidden; }
-    h1 { font-size: 1rem; margin-bottom: 4px; color: #38bdf8; text-align: center; }
-    
-    /* 🔹 CONTROLES — compactos arriba */
-    .barra-superior { position: sticky; top: 0; z-index: 20; background: rgba(15,23,42,0.98); padding: 6px 8px; border-radius: 10px; margin-bottom: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-    button { padding: 10px 10px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.15s; min-height: 44px; }
-    button:disabled { opacity: 0.4; cursor: not-allowed; }
-    button:active { transform: scale(0.96); }
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      padding: 2px;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
+    h1 {
+      font-size: 0.95rem;
+      margin-bottom: 4px;
+      color: #38bdf8;
+      text-align: center;
+    }
+
+    /* 🔹 CONTROLES SUPERIORES MÁS COMPACTOS */
+    .barra-superior {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      background: rgba(15,23,42,0.98);
+      padding: 4px 6px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    button {
+      padding: 8px 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      min-height: 38px;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    button:active {
+      transform: scale(0.96);
+    }
+
     .btn-primario { background: #2563eb; color: white; }
     .btn-exito { background: #16a34a; color: white; }
     .btn-aviso { background: #f59e0b; color: #1e293b; }
     .btn-peligro { background: #dc2626; color: white; }
     .btn-info { background: #8b5cf6; color: white; }
-    .btn-zoom { width: 56px; padding: 8px 4px; font-size: 1rem; }
-    
-    /* 🔹 ÁREA DE IMAGEN — OCUPA CASI TODA LA PANTALLA 👇 */
-    .contenedor-imagen { position: relative; width: 100%; max-height: 65vh; overflow: auto; border: 2px solid #334155; border-radius: 12px; background: #1e293b; margin: 4px 0; touch-action: none; }
-    #previewImg { display: block; max-width: 100%; height: auto; transform-origin: top left; }
-    #canvasLineas { position: absolute; top: 0; left: 0; transform-origin: top left; pointer-events: auto; width: 100%; height: 100%; }
-    
-    /* 🔹 Resto de elementos */
+    .btn-zoom { width: 48px; padding: 6px 2px; font-size: 1rem; }
+
+    /* 🔹 ÁREA DE IMAGEN — MÍNIMO 33% / 1/3 DE PANTALLA */
+    .contenedor-imagen {
+      position: relative;
+      width: 100%;
+      min-height: 33vh;
+      max-height: 48vh;
+      overflow: auto;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      background: #1e293b;
+      margin: 4px 0;
+      touch-action: none;
+    }
+
+    #previewImg {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      transform-origin: top left;
+    }
+
+    #canvasLineas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      transform-origin: top left;
+      pointer-events: auto;
+      width: 100%;
+      height: 100%;
+    }
+
     #inputImagen { display: none; }
-    .info-lineas { font-size: 0.75rem; color: #94a3b8; margin-left: auto; }
-    .progreso { height: 16px; background: #1e293b; border-radius: 8px; margin: 6px 0; overflow: hidden; }
-    #barraProgreso { height: 100%; background: linear-gradient(90deg, #22c55e, #3b82f6); width: 0%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: bold; }
-    .zona-botones { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
-    .zona-aprendizaje { background: #1e293b; border-radius: 10px; padding: 10px; margin: 6px 0; border-left: 3px solid #22c55e; }
-    .zona-aprendizaje h3 { font-size: 0.85rem; color: #22c55e; margin-bottom: 6px; }
-    .zona-aprendizaje p { font-size: 0.75rem; color: #94a3b8; margin-top: 6px; line-height: 1.4; }
-    #logContainer { background: #1e293b; border-radius: 8px; padding: 8px; margin: 6px 0; max-height: 180px; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
-    #tablaResultado { width: 100%; border-collapse: collapse; margin-top: 8px; background: #1e293b; border-radius: 8px; overflow: hidden; }
-    #tablaResultado th, #tablaResultado td { border: 1px solid #334155; padding: 6px; text-align: center; font-size: 0.75rem; }
-    #tablaResultado th { background: #1e40af; color: white; }
-    .tiempo { font-size: 0.75rem; color: #94a3b8; text-align: right; }
-    .version-dato { font-size: 0.7rem; color: #64748b; margin-top: 4px; }
-    .estado-motor { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; }
+
+    .info-lineas {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      margin-left: auto;
+    }
+
+    .progreso {
+      height: 14px;
+      background: #1e293b;
+      border-radius: 7px;
+      margin: 4px 0;
+      overflow: hidden;
+    }
+
+    #barraProgreso {
+      height: 100%;
+      background: linear-gradient(90deg, #22c55e, #3b82f6);
+      width: 0%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: bold;
+    }
+
+    /* 🔹 CONTROLES DE EDICIÓN — MÁS CHICOS */
+    .zona-aprendizaje {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 8px;
+      margin: 4px 0;
+      border-left: 3px solid #22c55e;
+    }
+
+    .zona-aprendizaje h3 {
+      font-size: 0.8rem;
+      color: #22c55e;
+      margin-bottom: 4px;
+    }
+
+    .zona-botones {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin: 4px 0;
+    }
+
+    .zona-aprendizaje p {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      line-height: 1.3;
+    }
+
+    #logContainer {
+      background: #1e293b;
+      border-radius: 8px;
+      padding: 6px;
+      margin: 4px 0;
+      max-height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.68rem;
+      line-height: 1.3;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    #tablaResultado {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 6px;
+      background: #1e293b;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    #tablaResultado th, #tablaResultado td {
+      border: 1px solid #334155;
+      padding: 5px;
+      text-align: center;
+      font-size: 0.7rem;
+    }
+
+    #tablaResultado th {
+      background: #1e40af;
+      color: white;
+    }
+
+    .tiempo {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-align: right;
+    }
+
+    .version-dato {
+      font-size: 0.65rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    .estado-motor {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 6px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+    }
+
     .estado-cargando { background: #f59e0b; color: #1e293b; }
     .estado-listo { background: #22c55e; color: white; }
   </style>
 </head>
 <body>
 
-<h1>📊 MAR Caribe — Escáner de Tablas</h1>
+<h1>📊 MAR Caribe — Tablas</h1>
 
-<!-- 🔹 BARRA SUPERIOR: Zoom + Botones principales -->
 <div class="barra-superior">
   <button id="btnZoomMenos" class="btn-primario btn-zoom">🔍−</button>
   <button id="btnZoomNormal" class="btn-primario btn-zoom">1:1</button>
   <button id="btnZoomMas" class="btn-primario btn-zoom">🔍+</button>
-  <span id="nivelZoom" style="min-width:50px; text-align:center; font-weight:bold;">100%</span>
+  <span id="nivelZoom" style="min-width:46px; text-align:center; font-weight:bold;">100%</span>
   <button id="btnCargar" class="btn-primario">📁 Imagen</button>
   <input type="file" id="inputImagen" accept="image/*">
-  <button id="btnProcesar" class="btn-exito" disabled>▶️ Procesar Tabla</button>
+  <button id="btnProcesar" class="btn-exito" disabled>▶️ Procesar</button>
   <span id="estadoMotor" class="estado-motor estado-cargando">⏳</span>
-  <span class="info-lineas">📐 Líneas: H=<span id="numLineasH">0</span> V=<span id="numLineasV">0</span></span>
+  <span class="info-lineas">L:H=<span id="numLineasH">0</span> V=<span id="numLineasV">0</span></span>
 </div>
 
-<!-- 🔹 ÁREA DE IMAGEN — MÁXIMO TAMAÑO, LÍNEAS DETECTABLES -->
+<!-- 🔹 ÁREA DE IMAGEN: MÍNIMO 1/3 DE PANTALLA -->
 <div class="contenedor-imagen" id="contenedorImagen" style="display:none;">
   <img id="previewImg" alt="Vista previa tabla">
   <canvas id="canvasLineas"></canvas>
 </div>
 
-<!-- 🔹 CONTROLES DE EDICIÓN -->
 <div class="zona-aprendizaje">
   <h3>✏️ Edición de Líneas</h3>
   <div class="zona-botones">
@@ -81,9 +243,9 @@
     <button id="btnReiniciarAprendizaje" class="btn-peligro">🗑️ Reiniciar</button>
   </div>
   <p>
-    ⚡ Umbral dinámico activo &nbsp;|&nbsp; 👆 Tocar y arrastrar CERCA de la línea para moverla<br>
-    💡 Consejo: HAZ ZOOM primero → las líneas se separan y se agarran MUCHO más fácil<br>
-    📌 Doble toque = agregar línea &nbsp;|&nbsp; ⚡ Umbral: auto por iluminación de zona
+    ⚡ Umbral dinámico | Tocar y arrastrar CERCA de la línea para moverla<br>
+    💡 HAZ ZOOM primero → las líneas se separan y se agarran más fácil<br>
+    📌 Doble toque = agregar línea
   </p>
   <div class="version-dato" id="versionAprendizaje">Versión: —</div>
 </div>
@@ -91,11 +253,10 @@
 <div class="tiempo" id="tiempoInfo">Transcurrido: 0.0s</div>
 <div class="progreso"><div id="barraProgreso"><span id="textoProgreso">0%</span></div></div>
 
-<!-- 🔹 LOGS Y RESULTADOS -->
-<button id="btnCopiarLog" class="btn-aviso" style="width:100%; margin:6px 0;">📋 Copiar Log Completo</button>
+<button id="btnCopiarLog" class="btn-aviso" style="width:100%; margin:4px 0;">📋 Copiar Log Completo</button>
 <div id="logContainer"><div id="logContenido"></div></div>
 
-<h2 style="font-size:0.95rem; margin:10px 0 4px;">📋 Tabla Extraída</h2>
+<h2 style="font-size:0.9rem; margin:8px 0 4px;">📋 Tabla Extraída</h2>
 <table id="tablaResultado"></table>
 
 <script src="js/app.js"></script>
