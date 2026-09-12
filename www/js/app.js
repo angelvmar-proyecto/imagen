@@ -39,6 +39,20 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!btnResetL) btnResetL = document.getElementById('reset-l');
     if (!btnBloquear) btnBloquear = document.getElementById('btn-bloquear');
 
+    // Corrección crítica de estilos para permitir paneo libre en todas direcciones (incluyendo izquierda)
+    if (viewport) {
+        viewport.style.overflow = 'auto';
+        viewport.style.display = 'flex';
+        viewport.style.justifyContent = 'flex-start';
+        viewport.style.alignItems = 'flex-start';
+        viewport.style.position = 'relative';
+    }
+    if (canvasScaler) {
+        canvasScaler.style.margin = 'auto';
+        canvasScaler.style.flexShrink = '0';
+        canvasScaler.style.transformOrigin = 'top left';
+    }
+
     let currentImage = null;
     let originalImageBackup = null; 
     let activeEngine = 'tesseract';
@@ -445,7 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 180);
 
             if (engine === 'lfm') {
-                // Motor LFM ultrarrápido integrado analizando la imagen real en canvas mediante Tesseract en modo rápido o extracción por regiones
                 const worker = await Tesseract.createWorker('spa', 1, {
                     logger: m => {
                         if (m.status === 'recognizing text' && m.progress) {
