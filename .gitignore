@@ -1,0 +1,7 @@
+node_modules/
+android/
+www/lang-data/*.gz
+www/lang-data/*.traineddata
+.DS_Store
+*.apk
+capacitor.config.json
