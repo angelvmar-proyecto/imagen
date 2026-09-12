@@ -1,0 +1,21 @@
+name: Compilar APK Android
+on:
+  push: { branches: [main] }
+  workflow_dispatch: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { java-version: '17', distribution: 'temurin' }
+      - run: npm ci
+      - run: npx cap sync android
+      - run: sed -i '/defaultConfig {/a\        ndk {\n            abiFilters "armeabi-v7a"\n        }' android/app/build.gradle
+      - run: cd android && chmod +x gradlew && ./gradlew assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MAR-Caribe-Escaner-Tablas
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
