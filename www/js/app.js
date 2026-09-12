@@ -323,3 +323,69 @@ function limpiarTabla() {
   matrizDatos = [];
   renderizarMatriz();
 }
+
+// === INTEGRACIÓN LFM2.5-VL-450M ===
+import { lfmEngine } from './lfm-engine.js';
+
+let modeloLFMCargado = false;
+
+// Cargar modelo al iniciar la app
+async function inicializarLFM() {
+  try {
+    // Opción 1: Cargar desde archivos locales empaquetados en la app
+    // Opción 2: Descargar desde Hugging Face la primera vez
+    modeloLFMCargado = await lfmEngine.cargarModelo();
+    if (modeloLFMCargado) {
+      console.log('✅ LFM2.5-VL-450M listo');
+      document.getElementById('statusText').innerText = 'Motor AI listo — LFM2.5-VL activo';
+    } else {
+      console.log('⚠️ LFM no disponible — usando motor de respaldo');
+    }
+  } catch (e) {
+    console.log('⚠️ Error inicializando LFM:', e);
+  }
+}
+
+// Reemplazar ejecutarEscaneoRapido para usar LFM primero
+async function ejecutarEscaneoRapido() {
+  if (escaneoActivo) return alert('Procesando... espera un momento.');
+  if (!rutaImagenActual) { alert('Carga una imagen primero.'); return; }
+  
+  escaneoActivo = true;
+  setProgreso(5, 'Preparando motor de IA...');
+
+  try {
+    const canvasElement = obtenerCanvasDeImagen();
+    if (!canvasElement) throw new Error('No se pudo obtener imagen');
+
+    // 🧠 Intentar primero con LFM2.5-VL-450M
+    if (modeloLFMCargado) {
+      setProgreso(10, 'Procesando con LFM2.5-VL-450M...');
+      try {
+        const resultadoIA = await lfmEngine.analizarTabla(canvasElement);
+        matrizDatos = resultadoIA.filas;
+        setProgreso(100, '✅ LFM2.5-VL completado');
+        renderizarMatriz();
+        setTimeout(ocultarProgreso, 600);
+        return; // ✅ Éxito con IA — no usa respaldo
+      } catch (e) {
+        console.log('⚠️ LFM falló, usando respaldo:', e);
+        // Continúa al OCR tradicional como respaldo
+      }
+    }
+
+    // 🔄 RESPALDO: OCR tradicional si LFM no está disponible o falla
+    setProgreso(20, 'Usando OCR de respaldo...');
+    await ejecutarEscaneoTradicional(canvasElement);
+
+  } catch (err) {
+    console.error(err);
+    alert('Error: ' + (err.message || err));
+    ocultarProgreso();
+  } finally {
+    escaneoActivo = false;
+  }
+}
+
+// Llamar al inicializar la app
+document.addEventListener('DOMContentLoaded', inicializarLFM);

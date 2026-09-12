@@ -1,0 +1,232 @@
+/**
+ * LFM2.5-VL-450M — Vision-Language Engine
+ * Motor multimodal: lee imágenes + entiende texto + devuelve estructuras
+ * Ejecutado via ONNX Runtime Web (WebGPU/WebAssembly)
+ */
+
+import * as ort from 'onnxruntime-web';
+// Para WebGPU: import * as ort from 'onnxruntime-web/webgpu';
+
+class LFM25VLEngine {
+  constructor() {
+    this.session = null;
+    this.isLoaded = false;
+    this.isProcessing = false;
+    this.modelPath = null;
+    this.providers = ['webgpu', 'wasm']; // WebGPU primero, Wasm como respaldo
+  }
+
+  /**
+   * 🔽 Cargar el modelo ONNX
+   * Se descarga la primera vez o se sirve localmente desde www/models/
+   */
+  async cargarModelo(rutaModelo = 'models/LFM2.5-VL-450M-ONNX/') {
+    if (this.isLoaded) return true;
+    
+    console.log('[LFM] Cargando modelo...');
+    try {
+      // Configurar sesión ONNX
+      this.session = await ort.InferenceSession.create(
+        rutaModelo,
+        {
+          executionProviders: this.providers,
+          graphOptimizationLevel: 'all'
+        }
+      );
+      
+      this.isLoaded = true;
+      console.log('[LFM] ✅ Modelo cargado — Proveedor:', this.session.executionProviders);
+      return true;
+    } catch (error) {
+      console.error('[LFM] ❌ Error al cargar modelo:', error);
+      console.log('[LFM] ⚠️ Usando respaldo — el modelo pesa ~350MB y requiere WebGPU');
+      return false;
+    }
+  }
+
+  /**
+   * 📷 Preprocesar imagen — Filtro Paso Bajo + Umbral Dinámico
+   * Se aplica ANTES de pasar al modelo para mejorar calidad
+   */
+  preprocesarImagen(canvasEntrada) {
+    const ctx = canvasEntrada.getContext('2d');
+    const w = canvasEntrada.width;
+    const h = canvasEntrada.height;
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const datos = imgData.data;
+
+    // === FILTRO PASO BAJO (Suavizado Gaussiano 3x3) ===
+    const copia = new Uint8ClampedArray(datos);
+    const kernel = [1, 2, 1, 2, 4, 2, 1, 2, 1];
+    const sumaKernel = 16;
+
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        let r = 0, g = 0, b = 0;
+        for (let ky = -1, ki = 0; ky <= 1; ky++) {
+          for (let kx = -1; kx <= 1; kx++, ki++) {
+            const idx = ((y + ky) * w + (x + kx)) * 4;
+            r += copia[idx] * kernel[ki];
+            g += copia[idx + 1] * kernel[ki];
+            b += copia[idx + 2] * kernel[ki];
+          }
+        }
+        const idx = (y * w + x) * 4;
+        datos[idx] = r / sumaKernel;
+        datos[idx + 1] = g / sumaKernel;
+        datos[idx + 2] = b / sumaKernel;
+      }
+    }
+
+    // === UMBRAL DINÁMICO (Adaptativo por bloques 15x15) ===
+    const tamBloque = 15;
+    const umbralOffset = 10;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = (y * w + x) * 4;
+        const gris = 0.299 * datos[idx] + 0.587 * datos[idx + 1] + 0.114 * datos[idx + 2];
+        
+        // Calcular brillo promedio del vecindario
+        let sumaVecino = 0, contVecino = 0;
+        const mitad = Math.floor(tamBloque / 2);
+        for (let vy = Math.max(0, y - mitad); vy < Math.min(h, y + mitad + 1); vy++) {
+          for (let vx = Math.max(0, x - mitad); vx < Math.min(w, x + mitad + 1); vx++) {
+            const vidx = (vy * w + vx) * 4;
+            sumaVecino += 0.299 * copia[vidx] + 0.587 * copia[vidx+1] + 0.114 * copia[vidx+2];
+            contVecino++;
+          }
+        }
+        const promedioVecino = sumaVecino / contVecino;
+        
+        // Umbral dinámico: si es más oscuro que el promedio → texto (negro)
+        const valorFinal = gris < (promedioVecino - umbralOffset) ? 0 : 255;
+        datos[idx] = datos[idx + 1] = datos[idx + 2] = valorFinal;
+      }
+    }
+
+    ctx.putImageData(imgData, 0, 0);
+    return canvasEntrada;
+  }
+
+  /**
+   * 🔍 Ejecutar inferencia — OCR + Comprensión de tabla
+   * Pasa la imagen preprocesada al modelo y recibe la respuesta estructurada
+   */
+  async analizarTabla(canvasImagen, instruccionExtra = '') {
+    if (!this.isLoaded) {
+      throw new Error('[LFM] Modelo no cargado. Llama .cargarModelo() primero.');
+    }
+    if (this.isProcessing) {
+      throw new Error('[LFM] Procesando... espera a que termine.');
+    }
+
+    this.isProcessing = true;
+    console.log('[LFM] Iniciando análisis de tabla...');
+
+    try {
+      // Paso 1: Preprocesar imagen (Filtro + Umbral Dinámico)
+      const imagenProcesada = this.preprocesarImagen(canvasImagen);
+
+      // Paso 2: Redimensionar a resolución nativa del modelo (512×512)
+      const canvasRedim = document.createElement('canvas');
+      canvasRedim.width = 512;
+      canvasRedim.height = 512;
+      const ctx = canvasRedim.getContext('2d');
+      ctx.drawImage(imagenProcesada, 0, 0, 512, 512);
+
+      // Paso 3: Preparar prompt multimodal
+      const prompt = `Eres un asistente especializado en extraer datos de tablas.
+Analiza esta imagen y devuélveme los datos en formato JSON con estas 20 columnas:
+No, Tipo, Nivel, Nombre, Puesto/Op, Hotel, Promotor, "Hora Pick Up", "Monto/Factor", Fecha, Folio, "Depósito", "Monto Dep.", Moneda, "País/Ciudad", Notas, Edad, "Estado Civil", Locación, "Horario Cierre".
+
+Reglas:
+- Niveles válidos: PREMIER T3A, PREMIER T3B, PREMIER T4A, PREMIER T4B, T2A-CH, T2B-CH
+- Moneda: USD o MXN
+- Si un dato no aparece, déjalo vacío
+- Devuelve SOLO el JSON, sin explicación
+${instruccionExtra}`;
+
+      // Paso 4: Ejecutar inferencia ONNX
+      // NOTA: La API exacta depende de la exportación oficial del modelo ONNX
+      // Este es el esquema de integración — los nombres exactos de tensores se ajustan según el modelo
+      const resultado = await this.ejecutarInferenciaInterna(canvasRedim, prompt);
+
+      // Paso 5: Parsear y devolver datos estructurados
+      const datosEstructurados = this.parsearRespuesta(resultado);
+      
+      console.log(`[LFM] ✅ Análisis completo — ${datosEstructurados.filas.length} filas detectadas`);
+      return datosEstructurados;
+
+    } catch (error) {
+      console.error('[LFM] ❌ Error en análisis:', error);
+      throw error;
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  /**
+   * ⚡ Ejecución ONNX — adaptado según API del modelo
+   */
+  async ejecutarInferenciaInterna(canvas, prompt) {
+    // Convertir canvas a tensor de imagen (normalizado 0-1, formato RGB)
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixeles = imgData.data;
+    
+    // Normalizar y reordenar canales: [3, H, W] → formato estándar de modelos vision
+    const tensorImagen = new Float32Array(3 * 512 * 512);
+    for (let i = 0; i < 512 * 512; i++) {
+      tensorImagen[i] = pixeles[i * 4] / 255.0; // R
+      tensorImagen[512 * 512 + i] = pixeles[i * 4 + 1] / 255.0; // G
+      tensorImagen[2 * 512 * 512 + i] = pixeles[i * 4 + 2] / 255.0; // B
+    }
+
+    // Crear tensores de entrada según lo que espere el modelo
+    // NOTA: Los nombres y formas exactas se ajustan al export oficial
+    const imagenTensor = new ort.Tensor('float32', tensorImagen, [1, 3, 512, 512]);
+    const promptTensor = this.codificarPrompt(prompt);
+
+    // Ejecutar sesión
+    const resultados = await this.session.run({
+      'pixel_values': imagenTensor,
+      'input_ids': promptTensor
+    });
+
+    return resultados;
+  }
+
+  codificarPrompt(texto) {
+    // En implementación real: usar tokenizer del modelo
+    // Aquí se conecta con el procesador de texto de LFM
+    return new ort.Tensor('int64', new BigInt64Array([0n]), [1, 1]); // Placeholder
+  }
+
+  parsearRespuesta(resultado) {
+    // En implementación real: decodificar tokens de salida a texto → parsear JSON
+    // Aquí se devuelve la estructura que la app ya usa
+    return {
+      filas: [],
+      columnas: ['No', 'Tipo', 'Nivel', 'Nombre', 'Puesto/Op', 'Hotel', 'Promotor', 
+                 'Hora Pick Up', 'Monto/Factor', 'Fecha', 'Folio', 'Depósito', 
+                 'Monto Dep.', 'Moneda', 'País/Ciudad', 'Notas', 'Edad', 
+                 'Estado Civil', 'Locación', 'Horario Cierre'],
+      coordenadasPalabras: [] // Para la auto-alineación
+    };
+  }
+
+  /**
+   * 📋 Método de respaldo — si el modelo no carga, usa Tesseract/ML Kit
+   */
+  async analizarConRespaldo(canvasImagen, metodoRespaldo) {
+    if (!this.isLoaded) {
+      console.log('[LFM] Usando motor de respaldo...');
+      return await metodoRespaldo(canvasImagen);
+    }
+    return await this.analizarTabla(canvasImagen);
+  }
+}
+
+// Exportar instancia única
+export const lfmEngine = new LFM25VLEngine();

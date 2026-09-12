@@ -3,50 +3,131 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>OCR Escáner de Tablas — MAR Caribe</title>
-  <link rel="stylesheet" href="css/style.css">
-  <script src="https://unpkg.com/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
+  <title>MAR Caribe — Escáner de Tablas</title>
+  <base href="/">
+
+  <!-- Librerías CDN — Sin instalación, sin npm, sin errores -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
+  <script src="js/tabla-motor.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+    body { background: #f5f5f5; color: #333; }
+    .contenedor { padding: 16px; max-width: 100%; }
+    h1 { font-size: 20px; color: #1a5a96; margin-bottom: 16px; text-align: center; }
+    .boton { width: 100%; padding: 14px; margin: 8px 0; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .boton-primario { background: #1a5a96; color: white; }
+    .boton-exito { background: #28a745; color: white; }
+    .vista-previa { width: 100%; max-height: 300px; object-fit: contain; background: #ddd; border-radius: 8px; margin: 12px 0; }
+    .tabla { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+    .tabla th, .tabla td { border: 1px solid #ccc; padding: 6px 4px; text-align: left; }
+    .tabla th { background: #1a5a96; color: white; }
+    .progreso { padding: 12px; background: #e9ecef; border-radius: 8px; margin: 12px 0; display: none; }
+    .visible { display: block; }
+  </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Escáner de Tablas MAR Caribe</h1>
-    <p id="statusText">Listo — carga una imagen para comenzar</p>
-  </div>
+  <div class="contenedor">
+    <h1>📋 MAR Caribe — Escáner de Tablas</h1>
 
-  <div class="controls">
-    <button onclick="capturarImagen()">📷 Capturar / Cargar</button>
-    <button onclick="autoAlinearHibrida()">📐 Auto-Alinear Rejilla</button>
-    <button onclick="resetRejilla()">🔄 Reset Rejilla</button>
-    <button class="btn-main" onclick="ejecutarEscaneoRapido()">⚡ Escaneo Rápido</button>
-    <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="cargarDesdeInput(event)">
-  </div>
+    <input type="file" id="entradaImagen" accept="image/*" style="display: none;">
+    <button class="boton boton-primario" id="btnCargarImagen">📷 Cargar Imagen</button>
+    <button class="boton boton-exito" id="btnProcesar" style="display: none;">🔍 Procesar Tabla</button>
 
-  <div class="canvas-container">
-    <img id="imgPreview" alt="Vista previa">
-    <canvas id="gridCanvas"></canvas>
-  </div>
+    <img id="vistaPrevia" class="vista-previa" style="display: none;">
 
-  <div class="progress-container" id="progressWrapper" style="display:none;">
-    <div class="progress-bar">
-      <div class="progress-fill" id="progressFill"></div>
+    <div id="progreso" class="progreso">
+      <div id="textoProgreso">Iniciando...</div>
     </div>
-    <div class="progress-info">
-      <span id="progressStep">Procesando...</span>
-      <span id="progressPercent">0%</span>
+
+    <div id="resultado" style="display: none; overflow-x: auto;">
+      <table class="tabla" id="tablaResultado"></table>
     </div>
   </div>
 
-  <div class="toolbar">
-    <input type="text" id="searchInput" placeholder="Buscar en resultados..." oninput="filtrarMatriz()">
-    <button onclick="copiarAlPortapapeles()">📋 Copiar TSV</button>
-    <button onclick="limpiarTabla()">🗑️ Limpiar</button>
-    <span id="rowCount">0 filas</span>
-  </div>
+  <script>
+    // === CONTROLADOR DE LA INTERFAZ ===
+    const entradaImagen = document.getElementById('entradaImagen');
+    const btnCargarImagen = document.getElementById('btnCargarImagen');
+    const btnProcesar = document.getElementById('btnProcesar');
+    const vistaPrevia = document.getElementById('vistaPrevia');
+    const progreso = document.getElementById('progreso');
+    const textoProgreso = document.getElementById('textoProgreso');
+    const resultado = document.getElementById('resultado');
+    const tablaResultado = document.getElementById('tablaResultado');
 
-  <div class="table-container" id="tableWrapper">
-    <div class="empty-state">Carga una imagen y presiona "Escaneo Rápido".</div>
-  </div>
+    let imagenCargada = null;
 
-  <script src="js/app.js"></script>
+    // Cargar imagen
+    btnCargarImagen.addEventListener('click', () => entradaImagen.click());
+    entradaImagen.addEventListener('change', async (e) => {
+      const archivo = e.target.files[0];
+      if (!archivo) return;
+
+      const lector = new FileReader();
+      lector.onload = (evento) => {
+        vistaPrevia.src = evento.target.result;
+        vistaPrevia.style.display = 'block';
+        btnProcesar.style.display = 'block';
+        imagenCargada = evento.target.result;
+      };
+      lector.readAsDataURL(archivo);
+    });
+
+    // Procesar tabla
+    btnProcesar.addEventListener('click', async () => {
+      if (!imagenCargada || !window.TablaMAR) return alert('Imagen o motor no disponible');
+
+      progreso.classList.add('visible');
+      resultado.style.display = 'none';
+      textoProgreso.textContent = 'Preparando imagen...';
+
+      try {
+        // Crear canvas para procesamiento
+        const imagen = new Image();
+        imagen.src = imagenCargada;
+        await new Promise(res => imagen.onload = res);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = imagen.width;
+        canvas.height = imagen.height;
+        canvas.getContext('2d').drawImage(imagen, 0, 0);
+
+        textoProgreso.textContent = 'Procesando con OCR...';
+
+        // Ejecutar flujo completo
+        const datos = await TablaMAR.procesar(canvas);
+
+        textoProgreso.textContent = 'Generando tabla...';
+
+        // Renderizar tabla
+        tablaResultado.innerHTML = '';
+        const encabezado = document.createElement('tr');
+        datos.columnas.forEach(col => {
+          const th = document.createElement('th');
+          th.textContent = col;
+          encabezado.appendChild(th);
+        });
+        tablaResultado.appendChild(encabezado);
+
+        datos.filas.forEach(fila => {
+          const tr = document.createElement('tr');
+          datos.columnas.forEach(col => {
+            const td = document.createElement('td');
+            td.textContent = fila[col] || '';
+            tr.appendChild(td);
+          });
+          tablaResultado.appendChild(tr);
+        });
+
+        resultado.style.display = 'block';
+        textoProgreso.textContent = `✅ Completado — ${datos.filas.length} filas procesadas`;
+
+      } catch (error) {
+        textoProgreso.textContent = '❌ Error: ' + error.message;
+        console.error(error);
+      }
+    });
+  </script>
 </body>
 </html>

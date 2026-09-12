@@ -1,20 +1,18 @@
 {
-  "name": "mar-caribe-ocr",
+  "name": "mar-caribe-escanner",
   "version": "1.0.0",
-  "description": "Escáner OCR de Tablas — MAR Caribe",
+  "description": "Escáner de tablas MAR Caribe con OCR",
+  "main": "index.html",
   "scripts": {
-    "dev": "npx serve www",
-    "build:android": "npx cap sync android && cd android && ./gradlew assembleRelease"
+    "build": "echo 'Build completo'",
+    "cap:sync": "cap sync android",
+    "cap:add": "cap add android",
+    "cap:build": "cap build android"
   },
-  "dependencies": {
-    "@capacitor/android": "^6.0.0",
-    "@capacitor/camera": "^6.0.0",
-    "@capacitor/clipboard": "^6.0.0",
-    "@capacitor/core": "^6.0.0",
-    "tesseract.js": "^4.0.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@capacitor/cli": "^6.0.0",
-    "typescript": "^7.0.2"
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0"
   }
 }
