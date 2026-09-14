@@ -13,7 +13,7 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Iniciando worker y cargando datos...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Iniciando worker...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
@@ -21,29 +21,33 @@ async function ejecutarCalibracionDual() {
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = () => reject(new Error('Error al leer bytes de imagen.'));
+            reader.onerror = (err) => reject(new Error('Error al leer bytes de imagen: ' + (err.message || 'desconocido')));
             reader.readAsDataURL(file);
         });
 
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('Error al decodificar objeto Image.'));
+            img.onerror = (err) => reject(new Error('Error al decodificar objeto Image'));
             img.src = base64Data;
         });
 
-        // Tesseract v4 con logger detallado para ver el progreso real en pantalla y consola
-        const worker = await Tesseract.createWorker('spa', {
-            langPath: 'tessdata',
-            gzip: true,
+        if (statusEl) statusEl.innerText = 'Creando worker de Tesseract...';
+        
+        // Forma segura y compatible con v4/v5 de Tesseract.js
+        const worker = await Tesseract.createWorker({
             logger: m => {
                 console.log(m);
                 if (statusEl && m.status) {
-                    let progreso = m.progress ? ` (${Math.round(m.progress * 100)}%)` : '';
+                    let progreso = (m.progress !== undefined && m.progress !== null) ? ` (${Math.round(m.progress * 100)}%)` : '';
                     statusEl.innerText = `${m.status}${progreso}`;
                 }
             }
         });
+
+        if (statusEl) statusEl.innerText = 'Cargando idioma español...';
+        await worker.loadLanguage('spa');
+        await worker.initialize('spa');
 
         const canvas = document.createElement('canvas');
         canvas.width = imgElement.naturalWidth || imgElement.width;
@@ -62,6 +66,8 @@ async function ejecutarCalibracionDual() {
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
             const dataURL = subCanvas.toDataURL('image/png');
+            if (statusEl) statusEl.innerText = `Reconociendo bloque ${i + 1} de 5...`;
+            
             const ret = await worker.recognize(dataURL);
             
             let texto = '';
@@ -84,10 +90,11 @@ async function ejecutarCalibracionDual() {
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
-        alert('Error real de Tesseract: ' + error.message);
+        const mensajeError = error && error.message ? error.message : JSON.stringify(error);
+        alert('Error real de Tesseract: ' + mensajeError);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + error.message + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
         }
     }
 }
