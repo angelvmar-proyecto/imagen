@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando proceso OCR...');
+    alert('Iniciando proceso OCR local...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -9,16 +9,27 @@ async function ejecutarCalibracionDual() {
 
         const file = imageInput.files[0];
         const tbody = document.querySelector('#tabla-resultados tbody');
-        const thead = document.querySelector('#tabla-resultados th_ead') || document.querySelector('#tabla-resultados thead');
+        const thead = document.querySelector('#tabla-resultados thead');
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor Tesseract local...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Leyendo imagen y cargando Tesseract...</td></tr>';
         }
 
-        // Lectura por Base64 segura y compatible con Android WebView
-        const base64Data = await leerArchivoComoBase64(file);
-        const imgElement = await cargarImagenDesdeDataURL(base64Data);
+        // Lectura segura por Base64 con FileReader clásico para evitar bloqueos en Android
+        const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+            reader.readAsDataURL(file);
+        });
+
+        const imgElement = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = () => reject(new Error('Fallo al decodificar la imagen.'));
+            img.src = base64Data;
+        });
 
         const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
@@ -74,24 +85,6 @@ async function ejecutarCalibracionDual() {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Error: ' + error.message + '</td></tr>';
         }
     }
-}
-
-function leerArchivoComoBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = () => reject(new Error('Fallo al leer los bytes del archivo en Android.'));
-        reader.readAsDataURL(file);
-    });
-}
-
-function cargarImagenDesdeDataURL(dataURL) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Fallo al renderizar la imagen desde Base64.'));
-        img.src = dataURL;
-    });
 }
 
 function renderizarTablaDinamica(datos) {
