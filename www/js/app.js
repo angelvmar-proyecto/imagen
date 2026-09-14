@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando proceso OCR local...');
+    alert('Iniciando OCR real...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,24 +13,24 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Leyendo imagen y cargando Tesseract...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Procesando imagen con Tesseract...</td></tr>';
         }
 
-        // Lectura segura por Base64 con FileReader clásico para evitar bloqueos en Android
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = () => reject(new Error('No se pudo leer el archivo seleccionado.'));
+            reader.onerror = () => reject(new Error('Error al leer bytes de imagen.'));
             reader.readAsDataURL(file);
         });
 
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('Fallo al decodificar la imagen.'));
+            img.onerror = () => reject(new Error('Error al decodificar objeto Image.'));
             img.src = base64Data;
         });
 
+        // Inicialización estricta local
         const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
             gzip: true,
@@ -53,36 +53,34 @@ async function ejecutarCalibracionDual() {
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            let texto = 'Fila ' + (i + 1);
-            try {
-                const dataURL = subCanvas.toDataURL('image/png');
-                const ret = await worker.recognize(dataURL);
-                if (ret && ret.data && ret.data.text) {
-                    texto = ret.data.text.trim().replace(/\n/g, ' | ');
-                }
-            } catch (err) {
-                console.error('Error al reconocer segmento local:', err);
+            // SIN TEXTOS FALSOS: Si falla, lanzará el error real para depurarlo
+            const dataURL = subCanvas.toDataURL('image/png');
+            const ret = await worker.recognize(dataURL);
+            
+            let texto = '';
+            if (ret && ret.data && ret.data.text) {
+                texto = ret.data.text.trim().replace(/\n/g, ' | ');
             }
 
             filasExtraidas.push({
                 id: i + 1,
-                columnas: [texto !== '' ? texto : 'Vacío'],
+                columnas: [texto !== '' ? texto : '(Vacío / Sin texto detectado)'],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Local Offline OK'
+                calibracionEstado: 'Real OCR OK'
             });
         }
 
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡Procesamiento OCR completado con éxito!');
+        alert('¡OCR finalizado sin datos simulados!');
 
     } catch (error) {
-        console.error('Error crítico local:', error);
-        alert('Error en OCR local: ' + error.message);
+        console.error('Error crítico OCR:', error);
+        alert('Error real de Tesseract: ' + error.message);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Error: ' + error.message + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + error.message + '</td></tr>';
         }
     }
 }
