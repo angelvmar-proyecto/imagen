@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR local estrictamente offline con Tesseract v4...');
+    alert('Iniciando lectura directa de imagen...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -16,14 +16,15 @@ async function ejecutarCalibracionDual() {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor local sin red...</td></tr>';
         }
 
-        // Tesseract v4: Inicialización directa y limpia sin llamadas a .load() obsoletas
+        // Carga segura de imagen compatible con Capacitor
+        const imgElement = await cargarImagenNativa(file);
+
         const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
             gzip: true,
             logger: m => console.log(m)
         });
 
-        const imgElement = await cargarImagenSegura(file);
         const canvas = document.createElement('canvas');
         canvas.width = imgElement.naturalWidth || imgElement.width;
         canvas.height = imgElement.naturalHeight || imgElement.height;
@@ -74,17 +75,19 @@ async function ejecutarCalibracionDual() {
     }
 }
 
-function cargarImagenSegura(file) {
+function cargarImagenNativa(file) {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = () => reject(new Error('No se pudo decodificar la imagen seleccionada.'));
-            img.src = e.target.result;
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(img);
         };
-        reader.onerror = () => reject(new Error('Error al leer el archivo de imagen.'));
-        reader.readAsDataURL(file);
+        img.onerror = () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error('Error al leer el archivo de imagen nativo.'));
+        };
+        img.src = objectUrl;
     });
 }
 
