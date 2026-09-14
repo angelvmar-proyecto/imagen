@@ -9,7 +9,7 @@ async function procesarArchivoDual(excelFile, imageFile) {
     ctx.drawImage(imagenBitmap, 0, 0);
 
     const lineasVisuales = detectarCoordenadasY(ctx, canvas.width, canvas.height);
-    const resultadoCalibrado = ajustarMatrizConAprendizaje(datosExcel, lineasVisuales);
+    const resultadoCalibrado = aplicarAprendizajeYProcesar(datosExcel, lineasVisuales);
 
     return resultadoCalibrado;
 }
@@ -42,35 +42,41 @@ function detectarCoordenadasY(ctx, width, height) {
     return cortesY;
 }
 
-function ajustarMatrizConAprendizaje(filasExcel, cortesY) {
-    let historialAprendizaje = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
+function aplicarAprendizajeYProcesar(filasExcel, cortesY) {
+    // Cargar historial de aprendizaje previo para auto-corrección
+    let historial = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
     
-    const resultado = filasExcel.map((filaOriginal, index) => {
-        let yEstimado = cortesY[index] || (index * 25); 
-        let yTeoricoEsperado = index * 25; // Patrón base de estimación
-        let desvio = yEstimado - yTeoricoEsperado;
+    // Calcular factor de corrección basado en aprendizaje anterior si existe
+    let factorCorreccion = 0;
+    if (historial.length > 0) {
+        const ultimosDesvios = historial.slice(-10).map(h => h.desvioCalculado);
+        const promedioDesvio = ultimosDesvios.reduce((a, b) => a + b, 0) / ultimosDesvios.length;
+        factorCorreccion = promedioDesvio * 0.1; // Autoajuste ponderado
+    }
 
-        let registroFeedback = {
+    const resultado = filasExcel.map((filaOriginal, index) => {
+        let yEstimado = (cortesY[index] || (index * 25)) - factorCorreccion; 
+        let desvio = yEstimado - (index * 25);
+
+        // Registrar aprendizaje de esta pasada
+        historial.push({
             idFila: index,
-            contenido: JSON.stringify(filaOriginal),
-            yDetectado: yEstimado,
             desvioCalculado: desvio,
             timestamp: new Date().toISOString()
-        };
+        });
 
-        // Guardar en el log de aprendizaje local
-        historialAprendizaje.push(registroFeedback);
+        // Asegurar que filaOriginal sea un array de columnas limpias
+        let celdas = Array.isArray(filaOriginal) ? filaOriginal : [String(filaOriginal)];
 
         return {
             id: index,
-            contenidoTeorico: JSON.stringify(filaOriginal),
-            cordYAsignada: yEstimado,
-            desvio: desvio
+            columnas: celdas,
+            cordYAsignada: Math.round(yEstimado),
+            desvio: Math.round(desvio)
         };
     });
 
-    // Guardar cambios acumulados en localStorage
-    localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historialAprendizaje));
+    localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historial));
     return resultado;
 }
 
@@ -98,21 +104,42 @@ async function ejecutarCalibracionDual() {
     }
     
     const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
-    renderizarTabla(datosProcesados);
-    alert("¡Calibración completada y patrones registrados en el log de aprendizaje!");
+    renderizarTablaDinamica(datosProcesados);
+    alert("¡Calibración con aprendizaje inteligente aplicada!");
 }
 
-function renderizarTabla(datos) {
+function renderizarTablaDinamica(datos) {
+    const thead = document.querySelector("#tabla-resultados thead");
     const tbody = document.querySelector("#tabla-resultados tbody");
+    
+    thead.innerHTML = "";
     tbody.innerHTML = "";
+
+    if (datos.length === 0) return;
+
+    // Detectar el máximo de columnas para armar la cabecera dinámicamente
+    let maxCols = Math.max(...datos.map(d => d.columnas.length));
+
+    let headerTr = document.createElement('tr');
+    headerTr.style.background = '#333';
+    headerTr.innerHTML = `<th>#</th>`;
+    for(let i = 0; i < maxCols; i++) {
+        headerTr.innerHTML += `<th>Col ${i+1}</th>`;
+    }
+    headerTr.innerHTML += `<th>Pos Y / Desvío</th>`;
+    thead.appendChild(headerTr);
+
+    // Rellenar filas de la tabla separadas por columnas
     datos.forEach(row => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${row.id}</td>
-            <td>${row.contenidoTeorico}</td>
-            <td>${row.cordYAsignada} px</td>
-            <td>Desvío: ${row.desvio} px</td>
-        `;
+        let html = `<td><b>${row.id}</b></td>`;
+        
+        for(let i = 0; i < maxCols; i++) {
+            let valorCelda = row.columnas[i] !== undefined ? row.columnas[i] : "";
+            html += `<td>${valorCelda}</td>`;
+        }
+        html += `<td style="font-size:10px; color:#00bcd4;">Y:${row.cordYAsignada}px<br>Desv:${row.desvio}</td>`;
+        tr.innerHTML = html;
         tbody.appendChild(tr);
     });
 }
