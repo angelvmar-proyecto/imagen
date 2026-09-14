@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR real...');
+    alert('Iniciando OCR con Tesseract y depurador...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,8 +13,10 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Procesando imagen con Tesseract...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Iniciando worker y cargando datos...</td></tr>';
         }
+
+        const statusEl = document.getElementById('ocr-status');
 
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -30,11 +32,17 @@ async function ejecutarCalibracionDual() {
             img.src = base64Data;
         });
 
-        // Inicialización estricta local
+        // Tesseract v4 con logger detallado para ver el progreso real en pantalla y consola
         const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
             gzip: true,
-            logger: m => console.log(m)
+            logger: m => {
+                console.log(m);
+                if (statusEl && m.status) {
+                    let progreso = m.progress ? ` (${Math.round(m.progress * 100)}%)` : '';
+                    statusEl.innerText = `${m.status}${progreso}`;
+                }
+            }
         });
 
         const canvas = document.createElement('canvas');
@@ -53,7 +61,6 @@ async function ejecutarCalibracionDual() {
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            // SIN TEXTOS FALSOS: Si falla, lanzará el error real para depurarlo
             const dataURL = subCanvas.toDataURL('image/png');
             const ret = await worker.recognize(dataURL);
             
@@ -73,7 +80,7 @@ async function ejecutarCalibracionDual() {
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡OCR finalizado sin datos simulados!');
+        alert('¡OCR finalizado con éxito!');
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
