@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando lectura directa de imagen...');
+    alert('Iniciando proceso OCR...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -9,15 +9,16 @@ async function ejecutarCalibracionDual() {
 
         const file = imageInput.files[0];
         const tbody = document.querySelector('#tabla-resultados tbody');
-        const thead = document.querySelector('#tabla-resultados thead');
+        const thead = document.querySelector('#tabla-resultados th_ead') || document.querySelector('#tabla-resultados thead');
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor local sin red...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor Tesseract local...</td></tr>';
         }
 
-        // Carga segura de imagen compatible con Capacitor
-        const imgElement = await cargarImagenNativa(file);
+        // Lectura por Base64 segura y compatible con Android WebView
+        const base64Data = await leerArchivoComoBase64(file);
+        const imgElement = await cargarImagenDesdeDataURL(base64Data);
 
         const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
@@ -63,7 +64,7 @@ async function ejecutarCalibracionDual() {
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡Procesamiento OCR local completado con éxito!');
+        alert('¡Procesamiento OCR completado con éxito!');
 
     } catch (error) {
         console.error('Error crítico local:', error);
@@ -75,19 +76,21 @@ async function ejecutarCalibracionDual() {
     }
 }
 
-function cargarImagenNativa(file) {
+function leerArchivoComoBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = () => reject(new Error('Fallo al leer los bytes del archivo en Android.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+function cargarImagenDesdeDataURL(dataURL) {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        const objectUrl = URL.createObjectURL(file);
-        img.onload = () => {
-            URL.revokeObjectURL(objectUrl);
-            resolve(img);
-        };
-        img.onerror = () => {
-            URL.revokeObjectURL(objectUrl);
-            reject(new Error('Error al leer el archivo de imagen nativo.'));
-        };
-        img.src = objectUrl;
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Fallo al renderizar la imagen desde Base64.'));
+        img.src = dataURL;
     });
 }
 
