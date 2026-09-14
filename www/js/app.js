@@ -1,9 +1,7 @@
 async function ejecutarCalibracionDual() {
-    alert('¡Botón presionado correctamente! Iniciando procesamiento...');
+    alert('Iniciando OCR local estrictamente offline con Tesseract v4...');
     try {
         const imageInput = document.getElementById('imageFile');
-        const excelInput = document.getElementById('excelFile');
-
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
             alert('Por favor selecciona una Imagen de WhatsApp obligatoriamente.');
             return;
@@ -15,15 +13,20 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor Tesseract local...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor local sin red...</td></tr>';
         }
 
-        // Inicialización 100% local apuntando a tessdata del proyecto
-        const worker = await Tesseract.createWorker('spa', 1, {
+        // Tesseract v4 configurado para entorno móvil local y offline estricto
+        const worker = Tesseract.createWorker({
             langPath: 'tessdata',
+            cachePath: 'tessdata',
             gzip: true,
             logger: m => console.log(m)
         });
+
+        await worker.load();
+        await worker.loadLanguage('spa');
+        await worker.initialize('spa');
 
         const imgElement = await cargarImagenSegura(file);
         const canvas = document.createElement('canvas');
@@ -50,25 +53,25 @@ async function ejecutarCalibracionDual() {
                     texto = ret.data.text.trim().replace(/\n/g, ' | ');
                 }
             } catch (err) {
-                console.error('Error al reconocer segmento:', err);
+                console.error('Error al reconocer segmento local:', err);
             }
 
             filasExtraidas.push({
                 id: i + 1,
                 columnas: [texto !== '' ? texto : 'Vacío'],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Local OK'
+                calibracionEstado: 'Local Offline OK'
             });
         }
 
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡Procesamiento OCR completado con éxito!');
+        alert('¡Procesamiento OCR local completado con éxito!');
 
     } catch (error) {
-        console.error('Error crítico:', error);
-        alert('Error en OCR: ' + error.message);
+        console.error('Error crítico local:', error);
+        alert('Error en OCR local: ' + error.message);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Error: ' + error.message + '</td></tr>';
@@ -125,7 +128,7 @@ function importarLogAprendizaje(event) {
     reader.onload = function(e) {
         try {
             const contenido = e.target.result;
-            JSON.parse(contenido); // Validar formato JSON
+            JSON.parse(contenido);
             localStorage.setItem('mar_caribe_learning_log', contenido);
             if (typeof mostrarLogEnPantalla === 'function') {
                 mostrarLogEnPantalla();

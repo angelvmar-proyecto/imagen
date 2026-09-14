@@ -7,8 +7,8 @@
     <link rel="stylesheet" href="css/style.css">
     <!-- SheetJS para lectura de Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <!-- Tesseract.js para OCR real -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
+    <!-- Tesseract.js versión 4.1.1 para compatibilidad offline estable en móvil -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v4/dist/tesseract.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -81,7 +81,7 @@
             document.getElementById('imageFile').value = '';
             document.getElementById('tabla-resultados').querySelector('thead').innerHTML = '<tr style="background: #333;"><th>Esperando datos...</th></tr>';
             document.getElementById('tabla-resultados').querySelector('tbody').innerHTML = '';
-            alert("Campios limpiados correctamente. Listo para una nueva prueba.");
+            alert("Campos limpiados correctamente. Listo para una nueva prueba.");
         }
 
         window.onload = function() {
