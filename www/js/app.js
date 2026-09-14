@@ -43,29 +43,25 @@ function detectarCoordenadasY(ctx, width, height) {
 }
 
 function aplicarAprendizajeYProcesar(filasExcel, cortesY) {
-    // Cargar historial de aprendizaje previo para auto-corrección
     let historial = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
     
-    // Calcular factor de corrección basado en aprendizaje anterior si existe
     let factorCorreccion = 0;
     if (historial.length > 0) {
         const ultimosDesvios = historial.slice(-10).map(h => h.desvioCalculado);
         const promedioDesvio = ultimosDesvios.reduce((a, b) => a + b, 0) / ultimosDesvios.length;
-        factorCorreccion = promedioDesvio * 0.1; // Autoajuste ponderado
+        factorCorreccion = promedioDesvio * 0.1;
     }
 
     const resultado = filasExcel.map((filaOriginal, index) => {
         let yEstimado = (cortesY[index] || (index * 25)) - factorCorreccion; 
         let desvio = yEstimado - (index * 25);
 
-        // Registrar aprendizaje de esta pasada
         historial.push({
             idFila: index,
             desvioCalculado: desvio,
             timestamp: new Date().toISOString()
         });
 
-        // Asegurar que filaOriginal sea un array de columnas limpias
         let celdas = Array.isArray(filaOriginal) ? filaOriginal : [String(filaOriginal)];
 
         return {
@@ -81,31 +77,42 @@ function aplicarAprendizajeYProcesar(filasExcel, cortesY) {
 }
 
 async function leerEstructuraExcel(file) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-            const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-            resolve(jsonData);
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                resolve(jsonData);
+            } catch (err) {
+                reject(err);
+            }
         };
+        reader.onerror = (err) => reject(err);
         reader.readAsArrayBuffer(file);
     });
 }
 
 async function ejecutarCalibracionDual() {
-    const excelInput = document.getElementById('excelFile').files[0];
-    const imageInput = document.getElementById('imageFile').files[0];
-    
-    if(!excelInput || !imageInput) {
-        alert("Seleccione el Excel y la imagen.");
-        return;
+    try {
+        const excelInput = document.getElementById('excelFile').files[0];
+        const imageInput = document.getElementById('imageFile').files[0];
+        
+        if(!excelInput || !imageInput) {
+            alert("Por favor seleccione ambos archivos (Excel e Imagen).");
+            return;
+        }
+        
+        console.log("Iniciando procesamiento...");
+        const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
+        renderizarTablaDinamica(datosProcesados);
+        alert("¡Calibración con aprendizaje inteligente aplicada con éxito!");
+    } catch (error) {
+        console.error("Error en ejecución:", error);
+        alert("Ocurrió un error al procesar los archivos: " + error.message);
     }
-    
-    const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
-    renderizarTablaDinamica(datosProcesados);
-    alert("¡Calibración con aprendizaje inteligente aplicada!");
 }
 
 function renderizarTablaDinamica(datos) {
@@ -115,9 +122,8 @@ function renderizarTablaDinamica(datos) {
     thead.innerHTML = "";
     tbody.innerHTML = "";
 
-    if (datos.length === 0) return;
+    if (!datos || datos.length === 0) return;
 
-    // Detectar el máximo de columnas para armar la cabecera dinámicamente
     let maxCols = Math.max(...datos.map(d => d.columnas.length));
 
     let headerTr = document.createElement('tr');
@@ -129,7 +135,6 @@ function renderizarTablaDinamica(datos) {
     headerTr.innerHTML += `<th>Pos Y / Desvío</th>`;
     thead.appendChild(headerTr);
 
-    // Rellenar filas de la tabla separadas por columnas
     datos.forEach(row => {
         const tr = document.createElement('tr');
         let html = `<td><b>${row.id}</b></td>`;
@@ -153,4 +158,26 @@ function exportarLogAprendizaje() {
     a.href = url;
     a.download = `learning_log_${Date.now()}.json`;
     a.click();
+}
+
+function importarLogAprendizaje(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const contenidoJSON = JSON.parse(e.target.result);
+            if (Array.isArray(contenidoJSON)) {
+                localStorage.setItem('mar_caribe_learning_log', JSON.stringify(contenidoJSON));
+                alert(`¡Log importado con éxito! Se cargaron ${contenidoJSON.length} registros.`);
+            } else {
+                alert("El archivo JSON no tiene un formato válido.");
+            }
+        } catch (error) {
+            alert("Error al parsear el archivo JSON.");
+            console.error(error);
+        }
+    };
+    reader.readAsText(file);
 }
