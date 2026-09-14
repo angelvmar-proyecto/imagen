@@ -21,7 +21,10 @@
             <label>2. Imagen de WhatsApp (Obligatoria):</label>
             <input type="file" id="imageFile" accept="image/*">
             
-            <button onclick="ejecutarCalibracionDual()">Procesar y Extraer con OCR</button>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button onclick="ejecutarCalibracionDual()" style="flex: 2; background: #00bcd4; color: #000; font-weight: bold;">Procesar con OCR</button>
+                <button onclick="limpiarFormulario()" style="flex: 1; background: #d32f2f; color: #fff;">Limpiar</button>
+            </div>
         </div>
 
         <div class="card-upload" style="background: #181818; border: 1px dashed #444; margin-top: 15px;">
@@ -55,7 +58,6 @@
 
     <script src="js/app.js"></script>
     <script>
-        // Función auxiliar visual para mostrar el log en tiempo real en la pantalla
         function mostrarLogEnPantalla() {
             const logGuardado = localStorage.getItem('mar_caribe_learning_log') || '[]';
             try {
@@ -74,7 +76,14 @@
             }
         }
 
-        // Cargar automáticamente la vista al abrir la app
+        function limpiarFormulario() {
+            document.getElementById('excelFile').value = '';
+            document.getElementById('imageFile').value = '';
+            document.getElementById('tabla-resultados').querySelector('thead').innerHTML = '<tr style="background: #333;"><th>Esperando datos...</th></tr>';
+            document.getElementById('tabla-resultados').querySelector('tbody').innerHTML = '';
+            alert("Campios limpiados correctamente. Listo para una nueva prueba.");
+        }
+
         window.onload = function() {
             mostrarLogEnPantalla();
         };

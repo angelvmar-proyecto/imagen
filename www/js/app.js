@@ -1,5 +1,3 @@
-// Motor Óptico Real con Tesseract.js y Segmentación por Coordenadas
-
 async function procesarArchivoDual(excelFile, imageFile) {
     let datosExcel = [];
     if (excelFile) {
@@ -13,20 +11,16 @@ async function procesarArchivoDual(excelFile, imageFile) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(imgElement, 0, 0);
 
-    // 1. Detección geométrica pura de los bordes de las filas en la imagen actual
     const datosImagenOriginal = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const lineasVisualesY = detectarGeometriaEstructuralPura(datosImagenOriginal, canvas.width, canvas.height);
 
-    // 2. Extracción REAL mediante Tesseract.js recortando cada celda según las coordenadas detectadas
-    console.log("Iniciando reconocimiento óptico real (OCR) con Tesseract...");
+    console.log("Iniciando reconocimiento óptico real (OCR) con Tesseract local...");
     const resultadosOCR = await extraerTextoRealConTesseract(ctx, canvas, lineasVisualesY, datosExcel);
 
-    // 3. Registro en el log de aprendizaje visible
     if (excelFile && datosExcel.length > 0) {
         calibrarYRegistrarAprendizaje(datosExcel, lineasVisualesY);
     }
 
-    // Actualizar vista del visor de log automáticamente si existe la función
     if (typeof mostrarLogEnPantalla === 'function') {
         mostrarLogEnPantalla();
     }
@@ -74,7 +68,7 @@ function detectarGeometriaEstructuralPura(imgData, width, height) {
         if (perfilDensidadY[y] > umbralTransicion && !enLineaDivisoria) {
             cortesY.push(y);
             enLineaDivisoria = true;
-        } else if (perfilDensidadY[y] <= umbralTransicion && enLineaDivisoria) {
+        } else if (perfilDensidadY[y] <= umbralTransicion && enLineaDivisioria) {
             enLineaDivisoria = false;
         }
     }
@@ -91,13 +85,14 @@ function detectarGeometriaEstructuralPura(imgData, width, height) {
     return filasEstructurales;
 }
 
-// Extracción real usando Tesseract.js sobre los recortes del Canvas
 async function extraerTextoRealConTesseract(ctx, canvas, lineasY, datosExcel) {
     let filasExtraidas = [];
     let totalFilas = lineasY.length > 1 ? lineasY.length - 1 : (datosExcel.length > 0 ? datosExcel.length : 10);
 
-    // Inicializar Tesseract Worker en español e inglés
-    const worker = await Tesseract.createWorker('spa+eng');
+    // Apuntando langPath a la carpeta local donde descargamos los entrenamientos
+    const worker = await Tesseract.createWorker('spa+eng', 1, {
+        langPath: './tessdata'
+    });
 
     for (let i = 0; i < totalFilas; i++) {
         let yInicio = lineasY[i] || (i * 35);
@@ -105,13 +100,11 @@ async function extraerTextoRealConTesseract(ctx, canvas, lineasY, datosExcel) {
         let alto = yFin - yInicio;
         if (alto < 10) alto = 35;
 
-        // Crear un sub-canvas temporal para recortar únicamente esta celda/fila de la imagen nueva
         const subCanvas = document.createElement('canvas');
         subCanvas.width = canvas.width;
         subCanvas.height = alto;
         const subCtx = subCanvas.getContext('2d');
         
-        // Copiar el fragmento exacto de la imagen subida
         subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
         
         let textoExtraido = `Fila ${i+1} (Sin texto detectado)`;
@@ -125,7 +118,6 @@ async function extraerTextoRealConTesseract(ctx, canvas, lineasY, datosExcel) {
             console.error("Error en celda OCR:", err);
         }
 
-        // Si tenemos datos de referencia en Excel, podemos emparejar el dato real de OCR con la estructura
         let referenciaExcel = (datosExcel[i] && datosExcel[i].join) ? datosExcel[i].join(' | ') : `Registro ${i+1}`;
 
         filasExtraidas.push({
@@ -133,7 +125,7 @@ async function extraerTextoRealConTesseract(ctx, canvas, lineasY, datosExcel) {
             columnas: [textoExtraido !== "" ? textoExtraido : "Vacío"],
             referencia: referenciaExcel,
             cordYAsignada: yInicio,
-            calibracionEstado: "OCR Real Procesado"
+            calibracionEstado: "OCR Real Local"
         });
     }
 
@@ -164,15 +156,15 @@ async function ejecutarCalibracionDual() {
             return;
         }
         
-        document.getElementById('tabla-resultados').querySelector('tbody').innerHTML = `<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Procesando imagen con Tesseract OCR real (Esto puede tardar unos segundos)...</td></tr>`;
+        document.getElementById('tabla-resultados').querySelector('tbody').innerHTML = `<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Procesando imagen con Tesseract local (Esto tomará unos segundos reales)...</td></tr>`;
 
         const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
         renderizarTablaDinamica(datosProcesados);
         
-        alert("¡Extracción con Tesseract OCR completada exitosamente con los datos de la nueva imagen!");
+        alert("¡Procesamiento OCR completado con éxito!");
     } catch (error) {
         console.error("Error en ejecución:", error);
-        alert("Ocurrió un error al procesar el OCR: " + error.message);
+        alert("Ocurrió un error al procesar el OCR local: " + error.message);
     }
 }
 
@@ -206,7 +198,7 @@ function renderizarTablaDinamica(datos) {
 
     let headerTr = document.createElement('tr');
     headerTr.style.background = '#333';
-    headerTr.innerHTML = `<th>#</th><th>Texto Extraído por Tesseract OCR (Imagen Nueva)</th><th>Pos Y / Estado</th>`;
+    headerTr.innerHTML = `<th>#</th><th>Texto Extraído por Tesseract Local</th><th>Pos Y / Estado</th>`;
     thead.appendChild(headerTr);
 
     datos.forEach(row => {
