@@ -1,11 +1,10 @@
-// Algoritmo de Calibración Cruzada Excel + Imagen para MAR Caribe
 async function procesarArchivoDual(excelFile, imageFile) {
     console.log("=== INICIANDO CALIBRACIÓN CRUZADA EXCEL + IMAGEN ===");
 
     // 1. Leer la estructura esperada del Excel usando SheetJS (XLSX)
     const datosExcel = await leerEstructuraExcel(excelFile);
     
-    // 2. Cargar la imagen en un Canvas local para análisis de píxeles
+    // 2. Cargar la imagen en un Canvas local para análisis de píxeles y visualización
     const imagenBitmap = await createImageBitmap(imageFile);
     const canvas = document.createElement('canvas');
     canvas.width = imagenBitmap.width;
@@ -23,7 +22,6 @@ async function procesarArchivoDual(excelFile, imageFile) {
     return resultadoCalibrado;
 }
 
-// Lógica de soporte para analizar filas horizontales en la imagen
 function detectarCoordenadasY(ctx, width, height) {
     const imgData = ctx.getImageData(0, 0, width, height);
     const data = imgData.data;
@@ -52,7 +50,6 @@ function detectarCoordenadasY(ctx, width, height) {
     return cortesY;
 }
 
-// Función de autoajuste comparando el patrón del Excel con la imagen
 function ajustarMatriz(filasExcel, cortesY) {
     return filasExcel.map((filaOriginal, index) => {
         let yEstimado = cortesY[index] || (index * 20); 
@@ -60,7 +57,7 @@ function ajustarMatriz(filasExcel, cortesY) {
             id: index,
             contenidoTeorico: filaOriginal,
             cordYAsignada: yEstimado,
-            estado: "Ajustado por Auto-Calibración"
+            estado: "Ajustado y Sincronizado"
         };
     });
 }
@@ -84,11 +81,12 @@ async function ejecutarCalibracionDual() {
     const imageInput = document.getElementById('imageFile').files[0];
     
     if(!excelInput || !imageInput) {
-        alert("Por favor cargue ambos archivos.");
+        alert("Por favor seleccione ambos archivos.");
         return;
     }
     
+    alert("Procesando matriz y autoajustando líneas...");
     const resultado = await procesarArchivoDual(excelInput, imageInput);
     console.table(resultado);
-    alert("¡Proceso de autoajuste completado con éxito!");
+    alert("¡Calibración cruzada finalizada con éxito!");
 }
