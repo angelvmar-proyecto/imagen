@@ -1,10 +1,6 @@
 async function procesarArchivoDual(excelFile, imageFile) {
-    console.log("=== INICIANDO CALIBRACIÓN CRUZADA EXCEL + IMAGEN ===");
-
-    // 1. Leer la estructura esperada del Excel usando SheetJS (XLSX)
     const datosExcel = await leerEstructuraExcel(excelFile);
     
-    // 2. Cargar la imagen en un Canvas local para análisis de píxeles y visualización
     const imagenBitmap = await createImageBitmap(imageFile);
     const canvas = document.createElement('canvas');
     canvas.width = imagenBitmap.width;
@@ -12,13 +8,9 @@ async function procesarArchivoDual(excelFile, imageFile) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(imagenBitmap, 0, 0);
 
-    // 3. Detección de líneas base por densidad de píxeles (Eje Y)
     const lineasVisuales = detectarCoordenadasY(ctx, canvas.width, canvas.height);
+    const resultadoCalibrado = ajustarMatrizConAprendizaje(datosExcel, lineasVisuales);
 
-    // 4. Algoritmo de Comparación y Autoajuste Iterativo
-    const resultadoCalibrado = ajustarMatriz(datosExcel, lineasVisuales);
-
-    console.log("Calibración completada con éxito. Filas ajustadas:", resultadoCalibrado.length);
     return resultadoCalibrado;
 }
 
@@ -50,16 +42,36 @@ function detectarCoordenadasY(ctx, width, height) {
     return cortesY;
 }
 
-function ajustarMatriz(filasExcel, cortesY) {
-    return filasExcel.map((filaOriginal, index) => {
-        let yEstimado = cortesY[index] || (index * 20); 
+function ajustarMatrizConAprendizaje(filasExcel, cortesY) {
+    let historialAprendizaje = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
+    
+    const resultado = filasExcel.map((filaOriginal, index) => {
+        let yEstimado = cortesY[index] || (index * 25); 
+        let yTeoricoEsperado = index * 25; // Patrón base de estimación
+        let desvio = yEstimado - yTeoricoEsperado;
+
+        let registroFeedback = {
+            idFila: index,
+            contenido: JSON.stringify(filaOriginal),
+            yDetectado: yEstimado,
+            desvioCalculado: desvio,
+            timestamp: new Date().toISOString()
+        };
+
+        // Guardar en el log de aprendizaje local
+        historialAprendizaje.push(registroFeedback);
+
         return {
             id: index,
-            contenidoTeorico: filaOriginal,
+            contenidoTeorico: JSON.stringify(filaOriginal),
             cordYAsignada: yEstimado,
-            estado: "Ajustado y Sincronizado"
+            desvio: desvio
         };
     });
+
+    // Guardar cambios acumulados en localStorage
+    localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historialAprendizaje));
+    return resultado;
 }
 
 async function leerEstructuraExcel(file) {
@@ -81,12 +93,37 @@ async function ejecutarCalibracionDual() {
     const imageInput = document.getElementById('imageFile').files[0];
     
     if(!excelInput || !imageInput) {
-        alert("Por favor seleccione ambos archivos.");
+        alert("Seleccione el Excel y la imagen.");
         return;
     }
     
-    alert("Procesando matriz y autoajustando líneas...");
-    const resultado = await procesarArchivoDual(excelInput, imageInput);
-    console.table(resultado);
-    alert("¡Calibración cruzada finalizada con éxito!");
+    const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
+    renderizarTabla(datosProcesados);
+    alert("¡Calibración completada y patrones registrados en el log de aprendizaje!");
+}
+
+function renderizarTabla(datos) {
+    const tbody = document.querySelector("#tabla-resultados tbody");
+    tbody.innerHTML = "";
+    datos.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${row.id}</td>
+            <td>${row.contenidoTeorico}</td>
+            <td>${row.cordYAsignada} px</td>
+            <td>Desvío: ${row.desvio} px</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function exportarLogAprendizaje() {
+    const logData = localStorage.getItem('mar_caribe_learning_log') || '[]';
+    const blob = new Blob([logData], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `learning_log_${Date.now()}.json`;
+    a.click();
 }

@@ -5,21 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAR Caribe — Escáner de Tablas</title>
     <link rel="stylesheet" href="css/style.css">
-    <!-- SheetJS para lectura local de Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
     <div class="container">
-        <h1>MAR Caribe - Autoajuste OCR</h1>
+        <h1>MAR Caribe - Autoajuste & Aprendizaje</h1>
         
         <div class="card-upload">
-            <label>1. Seleccionar Archivo Excel de Referencia:</label>
+            <label>1. Archivo Excel de Referencia:</label>
             <input type="file" id="excelFile" accept=".xlsx, .xls">
             
-            <label>2. Seleccionar Imagen de WhatsApp:</label>
+            <label>2. Imagen de WhatsApp:</label>
             <input type="file" id="imageFile" accept="image/*">
             
-            <button onclick="ejecutarCalibracionDual()">Procesar y Autoajustar</button>
+            <button onclick="ejecutarCalibracionDual()">Procesar, Calibrar y Aprender</button>
+        </div>
+
+        <div id="results-section" style="margin-top: 20px;">
+            <h3>Resultados de Calibración</h3>
+            <div style="overflow-x: auto;">
+                <table id="tabla-resultados" border="1" style="width:100%; border-collapse: collapse; color: #fff;">
+                    <thead>
+                        <tr style="background: #333;">
+                            <th>Fila</th>
+                            <th>Teórico (Excel)</th>
+                            <th>Coordenada Y</th>
+                            <th>Desvío / Aprendizaje</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dinámico -->
+                    </tbody>
+                </table>
+            </div>
+            <button onclick="exportarLogAprendizaje()" style="margin-top: 15px;">Exportar Log de Aprendizaje</button>
         </div>
     </div>
 
