@@ -5,32 +5,44 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAR Caribe — Escáner de Tablas</title>
     <link rel="stylesheet" href="css/style.css">
+    <!-- SheetJS para lectura de Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Tesseract.js para OCR real -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v5/dist/tesseract.min.js"></script>
 </head>
 <body>
     <div class="container">
         <h1>MAR Caribe - Autoajuste & Aprendizaje</h1>
         
         <div class="card-upload">
-            <label>1. Archivo Excel de Referencia:</label>
+            <label>1. Archivo Excel de Referencia (Opcional):</label>
             <input type="file" id="excelFile" accept=".xlsx, .xls">
             
-            <label>2. Imagen de WhatsApp:</label>
+            <label>2. Imagen de WhatsApp (Obligatoria):</label>
             <input type="file" id="imageFile" accept="image/*">
             
-            <button onclick="ejecutarCalibracionDual()">Procesar, Calibrar y Aprender</button>
+            <button onclick="ejecutarCalibracionDual()">Procesar y Extraer con OCR</button>
+        </div>
+
+        <div class="card-upload" style="background: #181818; border: 1px dashed #444; margin-top: 15px;">
+            <label style="color: #00bcd4; font-weight: bold;">Visor y Gestión del Log de Aprendizaje:</label>
+            <div style="display: flex; gap: 10px; margin: 10px 0;">
+                <button onclick="mostrarLogEnPantalla()" style="flex: 1; background: #333;">Actualizar Vista</button>
+                <button onclick="limpiarLogLocal()" style="flex: 1; background: #5a2a2a;">Borrar Log</button>
+            </div>
+            <textarea id="visorLog" readonly style="width: 100%; height: 120px; background: #111; color: #00ffcc; font-family: monospace; font-size: 11px; padding: 8px; border: 1px solid #333; border-radius: 4px;" placeholder="El contenido del log aparecerá aquí..."></textarea>
+            
+            <label style="margin-top: 10px; font-size: 11px;">Importar Log Previo (.json):</label>
+            <input type="file" id="importLogFile" accept=".json" onchange="importarLogAprendizaje(event)">
         </div>
 
         <div id="results-section" style="margin-top: 20px;">
-            <h3>Resultados de Calibración</h3>
+            <h3>Resultados de Extracción</h3>
             <div style="overflow-x: auto;">
                 <table id="tabla-resultados" border="1" style="width:100%; border-collapse: collapse; color: #fff;">
                     <thead>
                         <tr style="background: #333;">
-                            <th>Fila</th>
-                            <th>Teórico (Excel)</th>
-                            <th>Coordenada Y</th>
-                            <th>Desvío / Aprendizaje</th>
+                            <th>Esperando datos...</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -38,10 +50,34 @@
                     </tbody>
                 </table>
             </div>
-            <button onclick="exportarLogAprendizaje()" style="margin-top: 15px;">Exportar Log de Aprendizaje</button>
         </div>
     </div>
 
     <script src="js/app.js"></script>
+    <script>
+        // Función auxiliar visual para mostrar el log en tiempo real en la pantalla
+        function mostrarLogEnPantalla() {
+            const logGuardado = localStorage.getItem('mar_caribe_learning_log') || '[]';
+            try {
+                const parsed = JSON.parse(logGuardado);
+                document.getElementById('visorLog').value = JSON.stringify(parsed, null, 2);
+            } catch(e) {
+                document.getElementById('visorLog').value = logGuardado;
+            }
+        }
+        
+        function limpiarLogLocal() {
+            if(confirm("¿Estás seguro de vaciar el historial de aprendizaje?")) {
+                localStorage.removeItem('mar_caribe_learning_log');
+                mostrarLogEnPantalla();
+                alert("Log eliminado.");
+            }
+        }
+
+        // Cargar automáticamente la vista al abrir la app
+        window.onload = function() {
+            mostrarLogEnPantalla();
+        };
+    </script>
 </body>
 </html>

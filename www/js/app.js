@@ -1,4 +1,4 @@
-// Motor de Calibración Cruzada y Geometría No Destructiva (Orden: Estructura -> Calibración -> Binarización Tardía)
+// Motor Óptico Real con Tesseract.js y Segmentación por Coordenadas
 
 async function procesarArchivoDual(excelFile, imageFile) {
     let datosExcel = [];
@@ -13,18 +13,25 @@ async function procesarArchivoDual(excelFile, imageFile) {
     const ctx = canvas.getContext('2d');
     ctx.drawImage(imgElement, 0, 0);
 
-    // PASO 1: Detección geométrica pura EN LA IMAGEN ORIGINAL (Sin binarizar ni destruir la tabla)
+    // 1. Detección geométrica pura de los bordes de las filas en la imagen actual
     const datosImagenOriginal = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const lineasVisualesY = detectarGeometriaEstructuralPura(datosImagenOriginal, canvas.width, canvas.height);
 
-    // PASO 2: Auto-calibración y aprendizaje cruzado con el Excel (si existe)
+    // 2. Extracción REAL mediante Tesseract.js recortando cada celda según las coordenadas detectadas
+    console.log("Iniciando reconocimiento óptico real (OCR) con Tesseract...");
+    const resultadosOCR = await extraerTextoRealConTesseract(ctx, canvas, lineasVisualesY, datosExcel);
+
+    // 3. Registro en el log de aprendizaje visible
     if (excelFile && datosExcel.length > 0) {
         calibrarYRegistrarAprendizaje(datosExcel, lineasVisualesY);
     }
 
-    // PASO 3: Construcción de la matriz y aplicación de binarización tardía solo por celdas recortadas
-    const resultadoFinal = ensamblarYExtraerConCalibracion(datosExcel, lineasVisualesY, ctx, canvas.width);
-    return resultadoFinal;
+    // Actualizar vista del visor de log automáticamente si existe la función
+    if (typeof mostrarLogEnPantalla === 'function') {
+        mostrarLogEnPantalla();
+    }
+
+    return resultadosOCR;
 }
 
 function cargarImagenSegura(file) {
@@ -41,21 +48,17 @@ function cargarImagenSegura(file) {
     });
 }
 
-// Detector geométrico puro sin alterar canales ni aplicar binarización global distorsionante
 function detectarGeometriaEstructuralPura(imgData, width, height) {
     const data = imgData.data;
     const perfilDensidadY = new Array(height).fill(0);
 
-    // Análisis de frecuencia lumínica y cambios de gradiente de los bordes originales
     for (let y = 0; y < height; y++) {
         let cambiosBorde = 0;
         let lumaAnterior = 0;
-        for (let x = 0; x < width; x += 2) { // Muestreo optimizado para móvil
+        for (let x = 0; x < width; x += 3) {
             const idx = (y * width + x) * 4;
             const luma = 0.299 * data[idx] + 0.587 * data[idx+1] + 0.114 * data[idx+2];
-            
-            // Detectar transiciones de contraste (fronteras de líneas divisorias de WhatsApp)
-            if (Math.abs(luma - lumaAnterior) > 25) {
+            if (Math.abs(luma - lumaAnterior) > 20) {
                 cambiosBorde++;
             }
             lumaAnterior = luma;
@@ -65,7 +68,7 @@ function detectarGeometriaEstructuralPura(imgData, width, height) {
 
     let cortesY = [];
     let enLineaDivisoria = false;
-    let umbralTransicion = width * 0.08;
+    let umbralTransicion = width * 0.05;
 
     for (let y = 0; y < height; y++) {
         if (perfilDensidadY[y] > umbralTransicion && !enLineaDivisoria) {
@@ -76,11 +79,10 @@ function detectarGeometriaEstructuralPura(imgData, width, height) {
         }
     }
 
-    // Filtrar y consolidar las coordenadas reales de las filas
     let filasEstructurales = [];
-    let ultimoY = -40;
+    let ultimoY = -30;
     cortesY.forEach(y => {
-        if (y - ultimoY > 22) { // Distancia mínima real entre filas de la app de promotores
+        if (y - ultimoY > 20) {
             filasEstructurales.push(y);
             ultimoY = y;
         }
@@ -89,58 +91,67 @@ function detectarGeometriaEstructuralPura(imgData, width, height) {
     return filasEstructurales;
 }
 
-// Calibración cruzada y registro de coeficientes de error en el log de aprendizaje
+// Extracción real usando Tesseract.js sobre los recortes del Canvas
+async function extraerTextoRealConTesseract(ctx, canvas, lineasY, datosExcel) {
+    let filasExtraidas = [];
+    let totalFilas = lineasY.length > 1 ? lineasY.length - 1 : (datosExcel.length > 0 ? datosExcel.length : 10);
+
+    // Inicializar Tesseract Worker en español e inglés
+    const worker = await Tesseract.createWorker('spa+eng');
+
+    for (let i = 0; i < totalFilas; i++) {
+        let yInicio = lineasY[i] || (i * 35);
+        let yFin = lineasY[i + 1] || (yInicio + 35);
+        let alto = yFin - yInicio;
+        if (alto < 10) alto = 35;
+
+        // Crear un sub-canvas temporal para recortar únicamente esta celda/fila de la imagen nueva
+        const subCanvas = document.createElement('canvas');
+        subCanvas.width = canvas.width;
+        subCanvas.height = alto;
+        const subCtx = subCanvas.getContext('2d');
+        
+        // Copiar el fragmento exacto de la imagen subida
+        subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
+        
+        let textoExtraido = `Fila ${i+1} (Sin texto detectado)`;
+        try {
+            const dataURL = subCanvas.toDataURL('image/png');
+            const ret = await worker.recognize(dataURL);
+            if (ret && ret.data && ret.data.text) {
+                textoExtraido = ret.data.text.trim().replace(/\n/g, ' | ');
+            }
+        } catch (err) {
+            console.error("Error en celda OCR:", err);
+        }
+
+        // Si tenemos datos de referencia en Excel, podemos emparejar el dato real de OCR con la estructura
+        let referenciaExcel = (datosExcel[i] && datosExcel[i].join) ? datosExcel[i].join(' | ') : `Registro ${i+1}`;
+
+        filasExtraidas.push({
+            id: i + 1,
+            columnas: [textoExtraido !== "" ? textoExtraido : "Vacío"],
+            referencia: referenciaExcel,
+            cordYAsignada: yInicio,
+            calibracionEstado: "OCR Real Procesado"
+        });
+    }
+
+    await worker.terminate();
+    return filasExtraidas;
+}
+
 function calibrarYRegistrarAprendizaje(datosExcel, lineasVisualesY) {
     let historial = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
-    
     let patron = {
         timestamp: new Date().toISOString(),
         filasExcelCount: datosExcel.length,
         lineasVisualesCount: lineasVisualesY.length,
-        proporcionGeometrica: lineasVisualesY.length > 0 ? (lineasVisualesY[lineasVisualesY.length - 1] / datosExcel.length) : 0,
         mapaMuestras: lineasVisualesY.slice(0, datosExcel.length)
     };
-
     historial.push(patron);
-    if (historial.length > 60) historial.shift(); // Mantener optimizado el almacenamiento local
-    
+    if (historial.length > 50) historial.shift();
     localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historial));
-    console.log("Calibración estructural cruzada guardada exitosamente.", patron);
-}
-
-// Ensamblaje inteligente utilizando el historial de aprendizaje si no hay Excel presente
-function ensamblarYExtraerConCalibracion(datosExcel, lineasVisualesY, ctx, width) {
-    let historial = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
-    let factorCalibrado = 28; // Espaciado predeterminado de respaldo
-
-    if (historial.length > 0) {
-        const sumaProporciones = historial.reduce((acc, curr) => acc + (curr.proporcionGeometrica || 28), 0);
-        factorCalibrado = sumaProporciones / historial.length;
-    }
-
-    let baseEstructura = datosExcel;
-    let modoAutonomo = false;
-
-    if (!baseEstructura || baseEstructura.length === 0) {
-        modoAutonomo = true;
-        const totalEstimado = lineasVisualesY.length > 0 ? lineasVisualesY.length : 12;
-        baseEstructura = new Array(totalEstimado).fill(0).map((_, idx) => [`Registro Autónomo extraído #${idx + 1}`]);
-    }
-
-    return baseEstructura.map((filaOriginal, index) => {
-        let cordY = lineasVisualesY[index] || Math.round(index * factorCalibrado);
-        let celdas = Array.isArray(filaOriginal) ? filaOriginal : [String(filaOriginal)];
-
-        // Aplicación opcional de binarización tardía focalizada solo en el bloque de la celda detectada
-        let estadoProceso = modoAutonomo ? "Predicción por Log Histórico" : "Calibrado Cruzado con Excel";
-
-        return {
-            id: index + 1,
-            columnas: celdas,
-            cordYAsignada: cordY,
-            calibracionEstado: estadoProceso
-        };
-    });
 }
 
 async function ejecutarCalibracionDual() {
@@ -149,22 +160,19 @@ async function ejecutarCalibracionDual() {
         const imageInput = document.getElementById('imageFile').files[0];
         
         if(!imageInput) {
-            alert("Por favor seleccione al menos la Imagen de WhatsApp.");
+            alert("Por favor seleccione la Imagen de WhatsApp.");
             return;
         }
         
-        console.log("Iniciando motor óptico no destructivo con calibración tardía...");
+        document.getElementById('tabla-resultados').querySelector('tbody').innerHTML = `<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Procesando imagen con Tesseract OCR real (Esto puede tardar unos segundos)...</td></tr>`;
+
         const datosProcesados = await procesarArchivoDual(excelInput, imageInput);
         renderizarTablaDinamica(datosProcesados);
         
-        if (excelInput) {
-            alert("¡Calibración y aprendizaje completados! Se ajustó la geometría y se actualizó el log.");
-        } else {
-            alert("¡Lectura autónoma ejecutada con éxito usando el historial de aprendizaje!");
-        }
+        alert("¡Extracción con Tesseract OCR completada exitosamente con los datos de la nueva imagen!");
     } catch (error) {
         console.error("Error en ejecución:", error);
-        alert("Ocurrió un error al procesar: " + error.message);
+        alert("Ocurrió un error al procesar el OCR: " + error.message);
     }
 }
 
@@ -196,76 +204,17 @@ function renderizarTablaDinamica(datos) {
 
     if (!datos || datos.length === 0) return;
 
-    let maxCols = Math.max(...datos.map(d => d.columnas.length));
-
     let headerTr = document.createElement('tr');
     headerTr.style.background = '#333';
-    headerTr.innerHTML = `<th>#</th>`;
-    for(let i = 0; i < maxCols; i++) {
-        headerTr.innerHTML += `<th>Columna ${i+1}</th>`;
-    }
-    headerTr.innerHTML += `<th>Pos Y / Calibración</th>`;
+    headerTr.innerHTML = `<th>#</th><th>Texto Extraído por Tesseract OCR (Imagen Nueva)</th><th>Pos Y / Estado</th>`;
     thead.appendChild(headerTr);
 
     datos.forEach(row => {
         const tr = document.createElement('tr');
         let html = `<td><b>${row.id}</b></td>`;
-        
-        for(let i = 0; i < maxCols; i++) {
-            let valorCelda = row.columnas[i] !== undefined ? row.columnas[i] : "";
-            html += `<td>${valorCelda}</td>`;
-        }
+        html += `<td style="font-family: monospace; font-size: 12px; color: #00ffcc;">${row.columnas[0]}</td>`;
         html += `<td style="font-size:10px; color:#00bcd4;">Y:${row.cordYAsignada}px<br><b>${row.calibracionEstado}</b></td>`;
         tr.innerHTML = html;
         tbody.appendChild(tr);
     });
-}
-
-async function exportarLogAprendizaje() {
-    try {
-        const logData = localStorage.getItem('mar_caribe_learning_log') || '[]';
-        const blob = new Blob([logData], { type: 'application/json' });
-        const file = new File([blob], `learning_log_${Date.now()}.json`, { type: 'application/json' });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({
-                title: 'Log de Aprendizaje Geométrico MAR Caribe',
-                text: 'Historial de calibración estructural no destructiva.',
-                files: [file]
-            });
-        } else {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `learning_log_${Date.now()}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-    } catch (error) {
-        const logData = localStorage.getItem('mar_caribe_learning_log') || '[]';
-        prompt("Copia tu log de aprendizaje manualmente:", logData);
-    }
-}
-
-function importarLogAprendizaje(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const contenidoJSON = JSON.parse(e.target.result);
-            if (Array.isArray(contenidoJSON)) {
-                localStorage.setItem('mar_caribe_learning_log', JSON.stringify(contenidoJSON));
-                alert(`¡Log importado con éxito! Se cargaron ${contenidoJSON.length} patrones de calibración.`);
-            } else {
-                alert("El archivo JSON no tiene un formato válido.");
-            }
-        } catch (error) {
-            alert("Error al parsear el archivo JSON.");
-        }
-    };
-    reader.readAsText(file);
 }
