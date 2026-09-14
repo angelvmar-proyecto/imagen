@@ -1,17 +1,32 @@
 async function procesarArchivoDual(excelFile, imageFile) {
     const datosExcel = await leerEstructuraExcel(excelFile);
     
-    const imagenBitmap = await createImageBitmap(imageFile);
+    // Carga segura compatible con móviles y archivos de WhatsApp
+    const imgElement = await cargarImagenSegura(imageFile);
     const canvas = document.createElement('canvas');
-    canvas.width = imagenBitmap.width;
-    canvas.height = imagenBitmap.height;
+    canvas.width = imgElement.naturalWidth || imgElement.width;
+    canvas.height = imgElement.naturalHeight || imgElement.height;
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(imagenBitmap, 0, 0);
+    ctx.drawImage(imgElement, 0, 0);
 
     const lineasVisuales = detectarCoordenadasY(ctx, canvas.width, canvas.height);
     const resultadoCalibrado = aplicarAprendizajeYProcesar(datosExcel, lineasVisuales);
 
     return resultadoCalibrado;
+}
+
+function cargarImagenSegura(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = (err) => reject(new Error("No se pudo decodificar la imagen."));
+            img.src = e.target.result;
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+    });
 }
 
 function detectarCoordenadasY(ctx, width, height) {
