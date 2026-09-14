@@ -16,17 +16,12 @@ async function ejecutarCalibracionDual() {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;">Cargando motor local sin red...</td></tr>';
         }
 
-        // Tesseract v4 configurado para entorno móvil local y offline estricto
-        const worker = Tesseract.createWorker({
+        // Tesseract v4: Inicialización directa y limpia sin llamadas a .load() obsoletas
+        const worker = await Tesseract.createWorker('spa', {
             langPath: 'tessdata',
-            cachePath: 'tessdata',
             gzip: true,
             logger: m => console.log(m)
         });
-
-        await worker.load();
-        await worker.loadLanguage('spa');
-        await worker.initialize('spa');
 
         const imgElement = await cargarImagenSegura(file);
         const canvas = document.createElement('canvas');
