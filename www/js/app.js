@@ -196,3 +196,35 @@ function importarLogAprendizaje(event) {
     };
     reader.readAsText(file);
 }
+
+async function exportarLogAprendizaje() {
+    try {
+        const logData = localStorage.getItem('mar_caribe_learning_log') || '[]';
+        const blob = new Blob([logData], { type: 'application/json' });
+        const file = new File([blob], `learning_log_${Date.now()}.json`, { type: 'application/json' });
+
+        // Usar el selector nativo de compartir de Android/Capacitor si está disponible
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({
+                title: 'Log de Aprendizaje MAR Caribe',
+                text: 'Adjunto el historial de calibración y aprendizaje.',
+                files: [file]
+            });
+        } else {
+            // Alternativa directa por descarga web tradicional si falla el share nativo
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `learning_log_${Date.now()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    } catch (error) {
+        console.error("Error al exportar:", error);
+        // Fallback de respaldo en caso de restricción estricta de la WebView
+        const logData = localStorage.getItem('mar_caribe_learning_log') || '[]';
+        prompt("Copia tu log de aprendizaje manualmente:", logData);
+    }
+}
