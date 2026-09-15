@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR con Tesseract y filtro óptico seguro...');
+    alert('Iniciando OCR con Tesseract y conversión Base64 para Android...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,22 +13,23 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Iniciando worker...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo archivo como Base64...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
 
+        // Conversión segura a Base64 para saltar restricciones de Android WebView
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = (err) => reject(new Error('Error al leer bytes de imagen: ' + (err.message || 'desconocido')));
+            reader.onerror = (err) => reject(new Error('Error al leer bytes de imagen: ' + (err.target && err.target.error ? err.target.error.message : 'desconocido')));
             reader.readAsDataURL(file);
         });
 
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => resolve(img);
-            img.onerror = (err) => reject(new Error('Error al decodificar objeto Image'));
+            img.onerror = (err) => reject(new Error('Error al decodificar objeto Image desde Base64'));
             img.src = base64Data;
         });
 
@@ -64,7 +65,7 @@ async function ejecutarCalibracionDual() {
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            // Capa óptica segura: Aplica binarización tardía y realce local sin destruir el contexto
+            // Capa óptica segura con manejo de excepciones
             aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
 
             const dataURL = subCanvas.toDataURL('image/png');
@@ -101,19 +102,19 @@ async function ejecutarCalibracionDual() {
     }
 }
 
-// Función defensiva de óptica local (Binarización tardía y estiramiento de contraste)
+// Función defensiva de óptica local
 function aplicarFiltroOpticoSeguro(ctx, width, height) {
     try {
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
-        const factor = 1.2; // Ganancia de contraste controlada
-        const offset = -15; // Ajuste de luminancia para fondos oscuros
+        const factor = 1.2;
+        const offset = -15;
 
         for (let i = 0; i < data.length; i += 4) {
             let r = data[i];
             let g = data[i + 1];
             let b = data[i + 2];
-            let v = 0.299 * r + 0.587 * g + 0.114 * b; // Luminancia óptica
+            let v = 0.299 * r + 0.587 * g + 0.114 * b;
 
             let newVal = v * factor + offset;
             if (newVal < 0) newVal = 0;
@@ -125,7 +126,6 @@ function aplicarFiltroOpticoSeguro(ctx, width, height) {
         }
         ctx.putImageData(imgData, 0, 0);
     } catch (e) {
-        // Fallback defensivo: si algo falla en el canvas, se omite silenciosamente dejando la imagen original intacta
         console.warn('Filtro óptico omitido por seguridad en este bloque:', e);
     }
 }
