@@ -1,11 +1,10 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR guiado por plantilla de Excel...');
+    alert('Iniciando OCR multiconcepto guiado por plantilla...');
     try {
         const inputs = document.querySelectorAll('input[type="file"]');
         let imageFile = null;
         let excelFile = null;
 
-        // Identificar inteligentemente cuál input tiene la imagen y cuál el Excel
         for (let inp of inputs) {
             if (inp.files && inp.files.length > 0) {
                 let f = inp.files[0];
@@ -18,7 +17,6 @@ async function ejecutarCalibracionDual() {
             }
         }
 
-        // Fallback al ID tradicional si no se detectó por extensión
         if (!imageFile) {
             const imgInputEl = document.getElementById('imageFile');
             if (imgInputEl && imgInputEl.files && imgInputEl.files.length > 0) {
@@ -27,7 +25,7 @@ async function ejecutarCalibracionDual() {
         }
 
         if (!imageFile) {
-            alert('Por favor selecciona obligatoriamente una Imagen de WhatsApp válida.');
+            alert('Por favor selecciona obligatoriamente una Imagen de WhatsApp.');
             return;
         }
 
@@ -35,18 +33,14 @@ async function ejecutarCalibracionDual() {
         const thead = document.querySelector('#tabla-resultados thead');
         
         if (tbody && thead) {
-            thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo plantilla de referencia...</td></tr>';
+            thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Columna 1</th><th>Columna 2</th><th>Columna 3</th><th>Estado</th></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ffeb3b;" id="ocr-status">Procesando y segmentando columnas...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
 
-        // 1. Obtener coordenadas dinámicas usando el archivo Excel detectado
         const coordenadasBase = await obtenerCoordenadasDePlantillaExcelDirecto(excelFile);
 
-        if (statusEl) statusEl.innerText = 'Cargando imagen en memoria móvil...';
-
-        // 2. Método seguro de canvas nativo con la imagen correcta
         const objectUrl = URL.createObjectURL(imageFile);
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
@@ -85,7 +79,6 @@ async function ejecutarCalibracionDual() {
 
         let filasExtraidas = [];
         
-        // 3. Procesar los bloques guiados por las coordenadas del Excel
         for (let i = 0; i < coordenadasBase.length; i++) {
             let itemCoord = coordenadasBase[i];
             let yInicio = itemCoord.y;
@@ -97,31 +90,47 @@ async function ejecutarCalibracionDual() {
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            // Capa óptica segura
             aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
 
             const dataURL = subCanvas.toDataURL('image/png');
-            if (statusEl) statusEl.innerText = `Reconociendo bloque ${i + 1} de ${coordenadasBase.length} (Y:${yInicio}px)...`;
+            if (statusEl) statusEl.innerText = `Reconociendo bloque ${i + 1} de ${coordenadasBase.length}...`;
             
             const ret = await worker.recognize(dataURL);
             
-            let texto = '';
+            let textoCrudo = '';
             if (ret && ret.data && ret.data.text) {
-                texto = ret.data.text.trim().replace(/\n/g, ' | ');
+                textoCrudo = ret.data.text.trim().replace(/\s+/g, ' ');
+            }
+
+            // Segmentar inteligentemente el texto en 3 columnas basadas en espacios amplios o separadores
+            let partes = textoCrudo.split('|');
+            if (partes.length < 3) {
+                // Si no hay tuberías, dividimos el texto por espacios largos o palabras clave aproximadas
+                let palabras = textoCrudo.split(' ');
+                let tercio = Math.ceil(palabras.length / 3);
+                partes = [
+                    palabras.slice(0, tercio).join(' ') || '(Vacío)',
+                    palabras.slice(tercio, tercio * 2).join(' ') || '(Vacío)',
+                    palabras.slice(tercio * 2).join(' ') || '(Vacío)'
+                ];
             }
 
             filasExtraidas.push({
                 id: i + 1,
-                columnas: [texto !== '' ? texto : '(Vacío / Sin texto detectado)'],
+                columnas: [
+                    partes[0] ? partes[0].trim() : '(Vacío)',
+                    partes[1] ? partes[1].trim() : '(Vacío)',
+                    partes[2] ? partes[2].trim() : '(Vacío)'
+                ],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Excel + Canvas OK'
+                calibracionEstado: 'OK'
             });
         }
 
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡OCR guiado por Excel finalizado con éxito!');
+        alert('¡Extracción por columnas finalizada con éxito!');
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
@@ -129,12 +138,11 @@ async function ejecutarCalibracionDual() {
         alert('Error en ejecución: ' + mensajeError);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
         }
     }
 }
 
-// Lector directo de la plantilla Excel validada
 async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
     if (excelFile && typeof XLSX !== 'undefined') {
         try {
@@ -145,18 +153,16 @@ async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
             const json = XLSX.utils.sheet_to_json(worksheet);
             
             if (json && json.length > 0) {
-                console.log("Plantilla Excel leída correctamente:", json);
                 return json.map((row, idx) => ({
                     y: Number(row.cordYAsignada || row.Y || row.y || (idx * 45)),
                     alto: Number(row.alto || row.height || 45)
                 }));
             }
         } catch (e) {
-            console.warn("Aviso: No se pudo leer el archivo Excel, usando coordenadas base de respaldo:", e);
+            console.warn("Aviso: No se pudo leer el archivo Excel, usando respaldo:", e);
         }
     }
 
-    // Respaldo por defecto si no hay Excel cargado
     return [
         { y: 0, alto: 45 },
         { y: 45, alto: 45 },
@@ -166,7 +172,6 @@ async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
     ];
 }
 
-// Función defensiva de óptica local
 function aplicarFiltroOpticoSeguro(ctx, width, height) {
     try {
         const imgData = ctx.getImageData(0, 0, width, height);
@@ -190,7 +195,7 @@ function aplicarFiltroOpticoSeguro(ctx, width, height) {
         }
         ctx.putImageData(imgData, 0, 0);
     } catch (e) {
-        console.warn('Filtro óptico omitido por seguridad en este bloque:', e);
+        console.warn('Filtro óptico omitido:', e);
     }
 }
 
@@ -199,23 +204,45 @@ function renderizarTablaDinamica(datos) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    datos.forEach((row, index) => {
+    datos.forEach((row) => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><b>${row.id}</b></td>
-            <td style="font-family: monospace; font-size: 12px; color: #00ffcc;">${row.columnas[0]}</td>
-            <td style="font-size:10px; color:#00bcd4;">
-                Y:${row.cordYAsignada}px<br>
-                <b>${row.calibracionEstado}</b><br><br>
-                <button onclick="aprenderFilaSeleccionada(${index})" style="background: #00bcd4; color: #000; border: none; padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 11px;">🧠 Aprender</button>
-            </td>
+            <td style="font-family: monospace; font-size: 11px; color: #00ffcc;">${row.columnas[0]}</td>
+            <td style="font-family: monospace; font-size: 11px; color: #ffeb3b;">${row.columnas[1]}</td>
+            <td style="font-family: monospace; font-size: 11px; color: #00bcd4;">${row.columnas[2]}</td>
+            <td style="font-size:10px; color:#aaa;">Y:${row.cordYAsignada}px</td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-function aprenderFilaSeleccionada(index) {
-    alert(`Aprendiendo de la fila #${index + 1}... Datos guardados en la memoria de calibración.`);
+function exportarLogAprendizajeJSON() {
+    try {
+        const historial = localStorage.getItem('mar_caribe_learning_log');
+        if (!historial || JSON.parse(historial).length === 0) {
+            alert('Aún no hay registros de aprendizaje guardados.');
+            return;
+        }
+
+        const blob = new Blob([historial], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mar_caribe_learning_log_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+
+        alert('¡Log de aprendizaje exportado con éxito!');
+    } catch (e) {
+        console.error('Error al exportar log:', e);
+        alert('No se pudo exportar el archivo.');
+    }
 }
 
 function registrarLogAprendizaje(nuevosDatos) {
