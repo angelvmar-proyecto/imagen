@@ -1,295 +1,204 @@
-async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR con columnas dinámicas desde Excel...');
-    try {
-        const inputs = document.querySelectorAll('input[type="file"]');
-        let imageFile = null;
-        let excelFile = null;
+// ==============================================
+// MAR Caribe — Escáner de Tablas v2.8
+// ✅ 5 ARCHIVOS LOCALES COMPLETOS — Tesseract.js v4
+// ==============================================
 
-        for (let inp of inputs) {
-            if (inp.files && inp.files.length > 0) {
-                let f = inp.files[0];
-                let name = f.name.toLowerCase();
-                if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.includes('image')) {
-                    imageFile = f;
-                } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.json')) {
-                    excelFile = f;
-                }
-            }
-        }
+const CONFIG = {
+  UMBRAL_V: 42, UMBRAL_H: 38,
+  DISTANCIA_MIN_V: 22, DISTANCIA_MIN_H: 24,
+  UMBRAL_CONTINUIDAD: 0.55, VENTANA_ECO: 3, UMBRAL_ECO: 25,
+  ANCHO_LINEA: 2.2, ZOOM_MIN: 1, ZOOM_MAX: 5, ZOOM_PASO: 0.5,
 
-        if (!imageFile) {
-            const imgInputEl = document.getElementById('imageFile');
-            if (imgInputEl && imgInputEl.files && imgInputEl.files.length > 0) {
-                imageFile = imgInputEl.files[0];
-            }
-        }
+  // 📖 NOMBRES CONFIRMADOS — EXACTAMENTE COMO EXISTEN ✅
+  RUTA_TESSDATA: 'tessdata/',
+  ARCHIVO_CORE: 'tesseract-core.js',  // ✅ SIN duplicado .wasm
+  IDIOMAS: 'spa+eng',
+  MIN_ANCHO_CELDA: 8, MIN_ALTO_CELDA: 6, ESCALA_OCR: 2
+};
 
-        if (!imageFile) {
-            alert('Por favor selecciona obligatoriamente una Imagen de WhatsApp.');
-            return;
-        }
+let imagenActual = null, lienzo = null, ctx = null;
+let lineasH = [], lineasV = [], zoom = 1, desplazamiento = {x:0,y:0};
+let trabajadorOCR = null, ocrListo = false;
 
-        const statusEl = document.getElementById('ocr-status-global') || document.getElementById('ocr-status');
+const entradaImagen = document.getElementById('entradaImagen');
+const lienzoElement = document.getElementById('lienzo');
+const btnCargar = document.getElementById('btnCargar');
+const btnAnalizar = document.getElementById('btnAnalizar');
+const btnLeer = document.getElementById('btnLeer');
+const btnMenosZoom = document.getElementById('btnMenosZoom');
+const btnMasZoom = document.getElementById('btnMasZoom');
+const btnVista = document.getElementById('btnVista');
+const btnLimpiar = document.getElementById('btnLimpiar');
+const logsElement = document.getElementById('logs');
+const contenidoTablaElement = document.getElementById('contenidoTabla');
 
-        // 1. Obtener estructura y columnas reales directamente del Excel
-        const plantillaData = await obtenerEstructuraPlantillaExcel(excelFile);
-        const coordenadasBase = plantillaData.coordenadas;
-        const nombresColumnas = plantillaData.columnas;
-
-        // Renderizar cabecera dinámica basada 100% en el Excel
-        renderizarCabeceraDinamica(nombresColumnas);
-
-        const objectUrl = URL.createObjectURL(imageFile);
-        const imgElement = await new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                URL.revokeObjectURL(objectUrl);
-                resolve(img);
-            };
-            img.onerror = (err) => {
-                URL.revokeObjectURL(objectUrl);
-                reject(new Error('Error al cargar la imagen en el WebView móvil'));
-            };
-            img.src = objectUrl;
-        });
-
-        const worker = await Tesseract.createWorker({
-            logger: m => {
-                console.log(m);
-                if (m.status) {
-                    let progreso = (m.progress !== undefined && m.progress !== null) ? ` (${Math.round(m.progress * 100)}%)` : '';
-                    console.log(`${m.status}${progreso}`);
-                }
-            }
-        });
-
-        await worker.loadLanguage('spa');
-        await worker.initialize('spa');
-
-        const canvas = document.createElement('canvas');
-        canvas.width = imgElement.naturalWidth || imgElement.width;
-        canvas.height = imgElement.naturalHeight || imgElement.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(imgElement, 0, 0);
-
-        let filasExtraidas = [];
-        
-        for (let i = 0; i < coordenadasBase.length; i++) {
-            let itemCoord = coordenadasBase[i];
-            let yInicio = itemCoord.y;
-            let alto = itemCoord.alto || 45;
-
-            const subCanvas = document.createElement('canvas');
-            subCanvas.width = canvas.width;
-            subCanvas.height = alto;
-            const subCtx = subCanvas.getContext('2d');
-            subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
-
-            aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
-
-            const dataURL = subCanvas.toDataURL('image/png');
-            const ret = await worker.recognize(dataURL);
-            
-            let textoCrudo = '';
-            if (ret && ret.data && ret.data.text) {
-                textoCrudo = ret.data.text.trim().replace(/\s+/g, ' ');
-            }
-
-            // Distribuir el texto reconocido equitativamente entre el total de columnas detectadas en el Excel
-            let tokens = textoCrudo.split('|').map(t => t.trim()).filter(t => t.length > 0);
-            if (tokens.length < nombresColumnas.length) {
-                let palabras = textoCrudo.split(' ');
-                let chunkSz = Math.max(1, Math.floor(palabras.length / nombresColumnas.length));
-                tokens = [];
-                for (let c = 0; c < nombresColumnas.length; c++) {
-                    let slice = palabras.slice(c * chunkSz, (c + 1) * chunkSz).join(' ');
-                    tokens.push(slice !== '' ? slice : '(Vacío)');
-                }
-            }
-
-            filasExtraidas.push({
-                id: i + 1,
-                columnas: tokens,
-                cordYAsignada: yInicio,
-                calibracionEstado: 'OK'
-            });
-        }
-
-        await worker.terminate();
-        renderizarCuerpoTablaDinamica(filasExtraidas);
-        registrarLogAprendizaje(filasExtraidas);
-        alert('¡Extracción adaptada a todas las columnas finalizada!');
-
-    } catch (error) {
-        console.error('Error crítico OCR:', error);
-        const mensajeError = error && error.message ? error.message : JSON.stringify(error);
-        alert('Error en ejecución: ' + mensajeError);
-        const tbody = document.querySelector('#tabla-resultados tbody');
-        if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
-        }
-    }
+function log(msg, tipo='info') {
+  const h = new Date().toLocaleTimeString();
+  const c = {info:'#60a5fa', exito:'#4ade80', alerta:'#fbbf24', error:'#f87171', sistema:'#c084fc'};
+  logsElement.innerHTML += `<div style="color:${c[tipo]}">[${h}] ${msg}</div>`;
+  logsElement.scrollTop = logsElement.scrollHeight;
 }
 
-// Leer estructura completa y nombres de columnas del Excel
-async function obtenerEstructuraPlantillaExcel(excelFile) {
-    let columnasDefecto = Array.from({length: 21}, (_, i) => `Col ${i + 1}`);
-    let coordenadasDefecto = [
-        { y: 0, alto: 45 },
-        { y: 45, alto: 45 },
-        { y: 90, alto: 45 },
-        { y: 135, alto: 45 },
-        { y: 180, alto: 45 }
-    ];
+function inicializar() {
+  log('═══════════════════════════════════', 'sistema');
+  log('🚀 MAR Caribe v2.8 — 5 ARCHIVOS LOCALES', 'sistema');
+  log(`📂 Ruta: ${CONFIG.RUTA_TESSDATA}`, 'sistema');
+  log(`📄 Core: ${CONFIG.ARCHIVO_CORE}`, 'sistema');
+  log('═══════════════════════════════════', 'sistema');
+  
+  lienzo = lienzoElement;
+  ctx = lienzo.getContext('2d');
+  inicializarOCR();
 
-    if (excelFile && typeof XLSX !== 'undefined') {
-        try {
-            const data = await excelFile.arrayBuffer();
-            const workbook = XLSX.read(data);
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
-            const json = XLSX.utils.sheet_to_json(worksheet);
-            
-            if (json && json.length > 0) {
-                // Extraer las llaves reales (nombres de columnas) de la primera fila del Excel
-                const keys = Object.keys(json[0]).filter(k => k.toLowerCase() !== 'y' && k.toLowerCase() !== 'cordyasignada' && k.toLowerCase() !== 'alto');
-                if (keys.length > 0) {
-                    columnasDefecto = keys;
-                }
+  btnCargar.onclick = () => { log('🟢 [Imagen] → presionado'); entradaImagen.click(); };
+  entradaImagen.onchange = (e) => cargarImagen(e);
+  btnAnalizar.onclick = () => { log('🟢 [Líneas] → Detectando'); analizarEspectroTriple(); };
+  btnLeer.onclick = () => {
+    if (!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
+    if (lineasH.length < 2 || lineasV.length < 2) { log('⚠️ Presiona [Líneas] primero', 'alerta'); return; }
+    procesarCeldas();
+  };
+  btnMenosZoom.onclick = () => aplicarZoom(zoom - CONFIG.ZOOM_PASO);
+  btnMasZoom.onclick = () => aplicarZoom(zoom + CONFIG.ZOOM_PASO);
+  btnVista.onclick = () => { zoom=1; desplazamiento={x:0,y:0}; dibujarTodo(); log('🔄 Vista restablecida'); };
+  btnLimpiar.onclick = limpiarTodo;
 
-                const coords = json.map((row, idx) => ({
-                    y: Number(row.cordYAsignada || row.Y || row.y || (idx * 45)),
-                    alto: Number(row.alto || row.height || 45)
-                }));
-
-                return {
-                    columnas: columnasDefecto,
-                    coordenadas: coords.length > 0 ? coords : coordenadasDefecto
-                };
-            }
-        } catch (e) {
-            console.warn("Aviso: No se pudo parsear las columnas del Excel, usando estructura estándar:", e);
-        }
-    }
-
-    return {
-        columnas: columnasDefecto,
-        coordenadas: coordenadasDefecto
-    };
+  let arrastrando = false, ultimoToque = {x:0,y:0};
+  lienzo.addEventListener('touchstart', e => { if (e.touches.length===1) {arrastrando=true; ultimoToque={x:e.touches[0].clientX,y:e.touches[0].clientY};} }, {passive:false});
+  lienzo.addEventListener('touchmove', e => { e.preventDefault(); if (!arrastrando||e.touches.length!==1) return; desplazamiento.x+=e.touches[0].clientX-ultimoToque.x; desplazamiento.y+=e.touches[0].clientY-ultimoToque.y; ultimoToque={x:e.touches[0].clientX,y:e.touches[0].clientY}; dibujarTodo(); }, {passive:false});
+  lienzo.addEventListener('touchend', () => arrastrando=false);
+  log('✅ Eventos conectados', 'exito');
 }
 
-function renderizarCabeceraDinamica(columnas) {
-    const thead = document.querySelector('#tabla-resultados thead');
-    if (!thead) return;
-    
-    let html = '<tr style="background: #222;"><th>#</th>';
-    columnas.forEach(col => {
-        html += `<th style="font-size: 10px; padding: 6px; white-space: nowrap;">${col}</th>`;
+async function inicializarOCR() {
+  log('📖 Cargando Tesseract — TODO LOCAL...', 'info');
+  try {
+    trabajadorOCR = await Tesseract.createWorker(CONFIG.IDIOMAS, 1, {
+      langPath: CONFIG.RUTA_TESSDATA,
+      corePath: CONFIG.RUTA_TESSDATA + CONFIG.ARCHIVO_CORE,
+      logger: m => { if (m.status==='recognizing text') log(`📖 OCR: ${Math.round(m.progress*100)}%`); }
     });
-    html += '<th>Estado</th></tr>';
-    thead.innerHTML = html;
+    ocrListo = true;
+    log('✅ ✅ Tesseract LISTO — 100% LOCAL', 'exito');
+  } catch (e) {
+    log(`❌ ERROR OCR: ${e.message}`, 'error');
+    ocrListo = false;
+  }
 }
 
-function renderizarCuerpoTablaDinamica(datos) {
-    const tbody = document.querySelector('#tabla-resultados tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    datos.forEach((row) => {
-        const tr = document.createElement('tr');
-        let html = `<td><b>${row.id}</b></td>`;
-        
-        row.columnas.forEach(val => {
-            html += `<td style="font-family: monospace; font-size: 11px; color: #00ffcc; white-space: nowrap;">${val}</td>`;
-        });
-
-        html += `<td style="font-size:9px; color:#aaa;">Y:${row.cordYAsignada}px</td>`;
-        tr.innerHTML = html;
-        tbody.appendChild(tr);
-    });
-}
-
-function aplicarFiltroOpticoSeguro(ctx, width, height) {
-    try {
-        const imgData = ctx.getImageData(0, 0, width, height);
-        const data = imgData.data;
-        const factor = 1.2;
-        const offset = -15;
-
-        for (let i = 0; i < data.length; i += 4) {
-            let r = data[i];
-            let g = data[i + 1];
-            let b = data[i + 2];
-            let v = 0.299 * r + 0.587 * g + 0.114 * b;
-
-            let newVal = v * factor + offset;
-            if (newVal < 0) newVal = 0;
-            if (newVal > 255) newVal = 255;
-
-            data[i] = newVal;
-            data[i + 1] = newVal;
-            data[i + 2] = newVal;
-        }
-        ctx.putImageData(imgData, 0, 0);
-    } catch (e) {
-        console.warn('Filtro óptico omitido:', e);
-    }
-}
-
-function exportarLogAprendizajeJSON() {
-    try {
-        const historial = localStorage.getItem('mar_caribe_learning_log');
-        if (!historial || JSON.parse(historial).length === 0) {
-            alert('Aún no hay registros guardados.');
-            return;
-        }
-
-        const blob = new Blob([historial], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `mar_caribe_learning_log_${new Date().toISOString().slice(0,10)}.json`;
-        document.body.appendChild(a);
-        a.click();
-        
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 100);
-
-        alert('¡Log exportado con éxito!');
-    } catch (e) {
-        console.error('Error al exportar log:', e);
-        alert('No se pudo exportar el archivo.');
-    }
-}
-
-function registrarLogAprendizaje(nuevosDatos) {
-    try {
-        let historial = JSON.parse(localStorage.getItem('mar_caribe_learning_log') || '[]');
-        historial.push({
-            fecha: new Date().toISOString(),
-            registros: nuevosDatos
-        });
-        localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historial));
-    } catch(e) {
-        console.error('Error guardando log:', e);
-    }
-}
-
-function importarLogAprendizaje(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const contenido = e.target.result;
-            JSON.parse(contenido);
-            localStorage.setItem('mar_caribe_learning_log', contenido);
-            alert('Log importado exitosamente.');
-        } catch(err) {
-            alert('El archivo JSON no es válido.');
-        }
+function cargarImagen(e) {
+  const archivo = e.target.files[0];
+  if (!archivo) return;
+  log(`🖼️ ${archivo.name} (${Math.round(archivo.size/1024)} KB)`);
+  const lector = new FileReader();
+  lector.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      imagenActual = img;
+      lienzo.width = img.width; lienzo.height = img.height;
+      zoom=1; desplazamiento={x:0,y:0}; lineasH=[]; lineasV=[];
+      log(`✅ ${img.width}×${img.height}`, 'exito');
+      dibujarTodo();
     };
-    reader.readAsText(file);
+    img.src = ev.target.result;
+  };
+  lector.readAsDataURL(archivo);
 }
+
+function analizarEspectroTriple() {
+  if (!imagenActual) return;
+  ctx.drawImage(imagenActual,0,0);
+  const datos = ctx.getImageData(0,0,lienzo.width,lienzo.height).data;
+  const ancho = lienzo.width, alto = lienzo.height;
+
+  const brillo = [];
+  for (let y=0; y<alto; y++) { brillo[y]=[]; for (let x=0; x<ancho; x++) { const i=(y*ancho+x)*4; brillo[y][x]=Math.round((datos[i]+datos[i+1]+datos[i+2])/3); }}
+
+  const ecoH = [];
+  for (let y=0; y<alto; y++) { let s=0,c=0; const v1=Math.max(0,y-3),v2=Math.min(alto-1,y+3); for (let x=0; x<ancho; x++) {let m=0; for(let yy=v1;yy<=v2;yy++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x])); s+=m;c++;} ecoH[y]=c?s/c:0; }
+
+  const ecoV = [];
+  for (let x=0; x<ancho; x++) { let s=0,c=0; const h1=Math.max(0,x-3),h2=Math.min(ancho-1,x+3); for (let y=0; y<alto; y++) {let m=0; for(let xx=h1;xx<=h2;xx++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx])); s+=m;c++;} ecoV[x]=c?s/c:0; }
+
+  lineasH=[]; let ult=-9999;
+  for (let y=0; y<alto; y++) if (ecoH[y]>25 && y-ult>=24) { let f=0; for(let x=0;x<ancho;x++){let m=0;for(let yy=Math.max(0,y-2);yy<=Math.min(alto-1,y+2);yy++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x]));if(m>12.5)f++;} if(f/ancho>=0.55){lineasH.push(y);ult=y;} }
+
+  lineasV=[]; ult=-9999;
+  for (let x=0; x<ancho; x++) if (ecoV[x]>25 && x-ult>=22) { let f=0; for(let y=0;y<alto;y++){let m=0;for(let xx=Math.max(0,x-2);xx<=Math.min(ancho-1,x+2);xx++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx]));if(m>12.5)f++;} if(f/alto>=0.55){lineasV.push(x);ult=x;} }
+
+  log(`✅ ✅ Líneas: ${lineasH.length} filas × ${lineasV.length} columnas`, 'exito');
+  dibujarTodo();
+}
+
+function dibujarTodo() {
+  if (!imagenActual) return;
+  ctx.clearRect(0,0,lienzo.width,lienzo.height);
+  ctx.save();
+  ctx.translate(desplazamiento.x, desplazamiento.y);
+  ctx.scale(zoom,zoom);
+  ctx.drawImage(imagenActual,0,0);
+  ctx.strokeStyle='#ff0000'; ctx.lineWidth=2.2/zoom;
+  lineasH.forEach(y=>{ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(imagenActual.width,y);ctx.stroke();});
+  ctx.strokeStyle='#0088ff';
+  lineasV.forEach(x=>{ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,imagenActual.height);ctx.stroke();});
+  ctx.restore();
+}
+
+function aplicarZoom(z) { zoom=Math.max(1,Math.min(5,z)); log(`🔍 Zoom ${Math.round(zoom*100)}%`); dibujarTodo(); }
+function limpiarTodo() { imagenActual=null; lineasH=[]; lineasV=[]; zoom=1; desplazamiento={x:0,y:0}; ctx.clearRect(0,0,lienzo.width,lienzo.height); logsElement.innerHTML=''; contenidoTablaElement.innerHTML=''; log('🗑️ Limpio', 'sistema'); }
+
+async function procesarCeldas() {
+  log('📖 Leyendo celdas...', 'info');
+  lineasH.sort((a,b)=>a-b); lineasV.sort((a,b)=>a-b);
+  const filas=[]; const total=(lineasH.length-1)*(lineasV.length-1); let textoCnt=0;
+  const datosImg = ctx.getImageData(0,0,lienzo.width,lienzo.height).data;
+
+  for (let f=0; f<lineasH.length-1; f++) {
+    const y1=lineasH[f], y2=lineasH[f+1], ah=y2-y1;
+    const fila=[];
+    for (let c=0; c<lineasV.length-1; c++) {
+      const x1=lineasV[c], x2=lineasV[c+1], an=x2-x1;
+      if (an<8 || ah<6) { fila.push({color:'#fff',texto:''}); continue; }
+
+      let r=0,g=0,b=0,n=0;
+      for (let yy=y1; yy<y2; yy+=4) for (let xx=x1; xx<x2; xx+=4) { if(yy>=0&&yy<lienzo.height&&xx>=0&&xx<lienzo.width){const i=(yy*lienzo.width+xx)*4;r+=datosImg[i];g+=datosImg[i+1];b+=datosImg[i+2];n++;} }
+      const color = n ? `rgb(${Math.round(r/n)},${Math.round(g/n)},${Math.round(b/n)})` : '#fff';
+
+      let texto='';
+      if (ocrListo && trabajadorOCR) {
+        try {
+          const cv=document.createElement('canvas'); cv.width=an*2; cv.height=ah*2;
+          const cc=cv.getContext('2d');
+          cc.drawImage(imagenActual,x1,y1,an,ah,0,0,cv.width,cv.height);
+          const imgD=cc.getImageData(0,0,cv.width,cv.height);
+          for(let i=0;i<imgD.data.length;i+=4){const g=(imgD.data[i]+imgD.data[i+1]+imgD.data[i+2])/3;const bn=g>180?255:0;imgD.data[i]=imgD.data[i+1]=imgD.data[i+2]=bn;}
+          cc.putImageData(imgD,0,0);
+          const res=await trabajadorOCR.recognize(cv);
+          texto=res?.data?.text?.trim().replace(/\s+/g,' ')||'';
+          if(texto) textoCnt++;
+        } catch(e) { texto=''; }
+      }
+      fila.push({color,texto});
+    }
+    filas.push(fila);
+  }
+
+  log(`✅ ✅ ${total} celdas — Texto: ${textoCnt} celdas`, 'exito');
+  let html='<table style="border-collapse:collapse;width:100%;font-size:0.7rem;">';
+  html+='<tr style="background:#334155;"><th>#</th>';
+  for(let c=0;c<filas[0]?.length;c++)html+=`<th>C${c+1}</th>`;
+  html+='</tr>';
+  for(let f=0;f<filas.length;f++){html+=`<tr><td>${f+1}</td>`;
+    for(let c=0;c<filas[f].length;c++){
+      const cel=filas[f][c];
+      const [r,g,b]=cel.color.match(/\d+/g)?.map(Number)||[255,255,255];
+      const tx=(r*299+g*587+b*114)/1000>128?'#000':'#fff';
+      html+=`<td style="background:${cel.color};color:${tx};border:1px solid #475569;padding:3px;max-width:80px;word-break:break-all;">${cel.texto||'&nbsp;'}</td>`;
+    }
+    html+='</tr>';
+  }
+  html+='</table>';
+  contenidoTablaElement.innerHTML=html;
+}
+
+document.addEventListener('DOMContentLoaded', inicializar);
