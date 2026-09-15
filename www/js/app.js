@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR multiconcepto guiado por plantilla...');
+    alert('Iniciando OCR con columnas dinámicas desde Excel...');
     try {
         const inputs = document.querySelectorAll('input[type="file"]');
         let imageFile = null;
@@ -29,17 +29,15 @@ async function ejecutarCalibracionDual() {
             return;
         }
 
-        const tbody = document.querySelector('#tabla-resultados tbody');
-        const thead = document.querySelector('#tabla-resultados thead');
-        
-        if (tbody && thead) {
-            thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Columna 1</th><th>Columna 2</th><th>Columna 3</th><th>Estado</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ffeb3b;" id="ocr-status">Procesando y segmentando columnas...</td></tr>';
-        }
+        const statusEl = document.getElementById('ocr-status-global') || document.getElementById('ocr-status');
 
-        const statusEl = document.getElementById('ocr-status');
+        // 1. Obtener estructura y columnas reales directamente del Excel
+        const plantillaData = await obtenerEstructuraPlantillaExcel(excelFile);
+        const coordenadasBase = plantillaData.coordenadas;
+        const nombresColumnas = plantillaData.columnas;
 
-        const coordenadasBase = await obtenerCoordenadasDePlantillaExcelDirecto(excelFile);
+        // Renderizar cabecera dinámica basada 100% en el Excel
+        renderizarCabeceraDinamica(nombresColumnas);
 
         const objectUrl = URL.createObjectURL(imageFile);
         const imgElement = await new Promise((resolve, reject) => {
@@ -55,19 +53,16 @@ async function ejecutarCalibracionDual() {
             img.src = objectUrl;
         });
 
-        if (statusEl) statusEl.innerText = 'Inicializando worker de Tesseract...';
-        
         const worker = await Tesseract.createWorker({
             logger: m => {
                 console.log(m);
-                if (statusEl && m.status) {
+                if (m.status) {
                     let progreso = (m.progress !== undefined && m.progress !== null) ? ` (${Math.round(m.progress * 100)}%)` : '';
-                    statusEl.innerText = `${m.status}${progreso}`;
+                    console.log(`${m.status}${progreso}`);
                 }
             }
         });
 
-        if (statusEl) statusEl.innerText = 'Cargando idioma español...';
         await worker.loadLanguage('spa');
         await worker.initialize('spa');
 
@@ -93,8 +88,6 @@ async function ejecutarCalibracionDual() {
             aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
 
             const dataURL = subCanvas.toDataURL('image/png');
-            if (statusEl) statusEl.innerText = `Reconociendo bloque ${i + 1} de ${coordenadasBase.length}...`;
-            
             const ret = await worker.recognize(dataURL);
             
             let textoCrudo = '';
@@ -102,35 +95,30 @@ async function ejecutarCalibracionDual() {
                 textoCrudo = ret.data.text.trim().replace(/\s+/g, ' ');
             }
 
-            // Segmentar inteligentemente el texto en 3 columnas basadas en espacios amplios o separadores
-            let partes = textoCrudo.split('|');
-            if (partes.length < 3) {
-                // Si no hay tuberías, dividimos el texto por espacios largos o palabras clave aproximadas
+            // Distribuir el texto reconocido equitativamente entre el total de columnas detectadas en el Excel
+            let tokens = textoCrudo.split('|').map(t => t.trim()).filter(t => t.length > 0);
+            if (tokens.length < nombresColumnas.length) {
                 let palabras = textoCrudo.split(' ');
-                let tercio = Math.ceil(palabras.length / 3);
-                partes = [
-                    palabras.slice(0, tercio).join(' ') || '(Vacío)',
-                    palabras.slice(tercio, tercio * 2).join(' ') || '(Vacío)',
-                    palabras.slice(tercio * 2).join(' ') || '(Vacío)'
-                ];
+                let chunkSz = Math.max(1, Math.floor(palabras.length / nombresColumnas.length));
+                tokens = [];
+                for (let c = 0; c < nombresColumnas.length; c++) {
+                    let slice = palabras.slice(c * chunkSz, (c + 1) * chunkSz).join(' ');
+                    tokens.push(slice !== '' ? slice : '(Vacío)');
+                }
             }
 
             filasExtraidas.push({
                 id: i + 1,
-                columnas: [
-                    partes[0] ? partes[0].trim() : '(Vacío)',
-                    partes[1] ? partes[1].trim() : '(Vacío)',
-                    partes[2] ? partes[2].trim() : '(Vacío)'
-                ],
+                columnas: tokens,
                 cordYAsignada: yInicio,
                 calibracionEstado: 'OK'
             });
         }
 
         await worker.terminate();
-        renderizarTablaDinamica(filasExtraidas);
+        renderizarCuerpoTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡Extracción por columnas finalizada con éxito!');
+        alert('¡Extracción adaptada a todas las columnas finalizada!');
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
@@ -138,12 +126,22 @@ async function ejecutarCalibracionDual() {
         alert('Error en ejecución: ' + mensajeError);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
-            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
         }
     }
 }
 
-async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
+// Leer estructura completa y nombres de columnas del Excel
+async function obtenerEstructuraPlantillaExcel(excelFile) {
+    let columnasDefecto = Array.from({length: 21}, (_, i) => `Col ${i + 1}`);
+    let coordenadasDefecto = [
+        { y: 0, alto: 45 },
+        { y: 45, alto: 45 },
+        { y: 90, alto: 45 },
+        { y: 135, alto: 45 },
+        { y: 180, alto: 45 }
+    ];
+
     if (excelFile && typeof XLSX !== 'undefined') {
         try {
             const data = await excelFile.arrayBuffer();
@@ -153,23 +151,62 @@ async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
             const json = XLSX.utils.sheet_to_json(worksheet);
             
             if (json && json.length > 0) {
-                return json.map((row, idx) => ({
+                // Extraer las llaves reales (nombres de columnas) de la primera fila del Excel
+                const keys = Object.keys(json[0]).filter(k => k.toLowerCase() !== 'y' && k.toLowerCase() !== 'cordyasignada' && k.toLowerCase() !== 'alto');
+                if (keys.length > 0) {
+                    columnasDefecto = keys;
+                }
+
+                const coords = json.map((row, idx) => ({
                     y: Number(row.cordYAsignada || row.Y || row.y || (idx * 45)),
                     alto: Number(row.alto || row.height || 45)
                 }));
+
+                return {
+                    columnas: columnasDefecto,
+                    coordenadas: coords.length > 0 ? coords : coordenadasDefecto
+                };
             }
         } catch (e) {
-            console.warn("Aviso: No se pudo leer el archivo Excel, usando respaldo:", e);
+            console.warn("Aviso: No se pudo parsear las columnas del Excel, usando estructura estándar:", e);
         }
     }
 
-    return [
-        { y: 0, alto: 45 },
-        { y: 45, alto: 45 },
-        { y: 90, alto: 45 },
-        { y: 135, alto: 45 },
-        { y: 180, alto: 45 }
-    ];
+    return {
+        columnas: columnasDefecto,
+        coordenadas: coordenadasDefecto
+    };
+}
+
+function renderizarCabeceraDinamica(columnas) {
+    const thead = document.querySelector('#tabla-resultados thead');
+    if (!thead) return;
+    
+    let html = '<tr style="background: #222;"><th>#</th>';
+    columnas.forEach(col => {
+        html += `<th style="font-size: 10px; padding: 6px; white-space: nowrap;">${col}</th>`;
+    });
+    html += '<th>Estado</th></tr>';
+    thead.innerHTML = html;
+}
+
+function renderizarCuerpoTablaDinamica(datos) {
+    const tbody = document.querySelector('#tabla-resultados tbody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    datos.forEach((row) => {
+        const tr = document.createElement('tr');
+        let html = `<td><b>${row.id}</b></td>`;
+        
+        row.columnas.forEach(val => {
+            html += `<td style="font-family: monospace; font-size: 11px; color: #00ffcc; white-space: nowrap;">${val}</td>`;
+        });
+
+        html += `<td style="font-size:9px; color:#aaa;">Y:${row.cordYAsignada}px</td>`;
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+    });
 }
 
 function aplicarFiltroOpticoSeguro(ctx, width, height) {
@@ -199,29 +236,11 @@ function aplicarFiltroOpticoSeguro(ctx, width, height) {
     }
 }
 
-function renderizarTablaDinamica(datos) {
-    const tbody = document.querySelector('#tabla-resultados tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-
-    datos.forEach((row) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><b>${row.id}</b></td>
-            <td style="font-family: monospace; font-size: 11px; color: #00ffcc;">${row.columnas[0]}</td>
-            <td style="font-family: monospace; font-size: 11px; color: #ffeb3b;">${row.columnas[1]}</td>
-            <td style="font-family: monospace; font-size: 11px; color: #00bcd4;">${row.columnas[2]}</td>
-            <td style="font-size:10px; color:#aaa;">Y:${row.cordYAsignada}px</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
 function exportarLogAprendizajeJSON() {
     try {
         const historial = localStorage.getItem('mar_caribe_learning_log');
         if (!historial || JSON.parse(historial).length === 0) {
-            alert('Aún no hay registros de aprendizaje guardados.');
+            alert('Aún no hay registros guardados.');
             return;
         }
 
@@ -238,7 +257,7 @@ function exportarLogAprendizajeJSON() {
             URL.revokeObjectURL(url);
         }, 100);
 
-        alert('¡Log de aprendizaje exportado con éxito!');
+        alert('¡Log exportado con éxito!');
     } catch (e) {
         console.error('Error al exportar log:', e);
         alert('No se pudo exportar el archivo.');
@@ -253,9 +272,6 @@ function registrarLogAprendizaje(nuevosDatos) {
             registros: nuevosDatos
         });
         localStorage.setItem('mar_caribe_learning_log', JSON.stringify(historial));
-        if (typeof mostrarLogEnPantalla === 'function') {
-            mostrarLogEnPantalla();
-        }
     } catch(e) {
         console.error('Error guardando log:', e);
     }
@@ -270,9 +286,6 @@ function importarLogAprendizaje(event) {
             const contenido = e.target.result;
             JSON.parse(contenido);
             localStorage.setItem('mar_caribe_learning_log', contenido);
-            if (typeof mostrarLogEnPantalla === 'function') {
-                mostrarLogEnPantalla();
-            }
             alert('Log importado exitosamente.');
         } catch(err) {
             alert('El archivo JSON no es válido.');
