@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR con Tesseract y filtro óptico avanzado...');
+    alert('Iniciando OCR con Tesseract y filtro óptico seguro...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,7 +13,7 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Inicializando motor óptico...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Iniciando worker...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
@@ -58,18 +58,17 @@ async function ejecutarCalibracionDual() {
         for (let i = 0; i < 5; i++) {
             let yInicio = i * 45;
             let alto = 45;
-            
             const subCanvas = document.createElement('canvas');
             subCanvas.width = canvas.width;
             subCanvas.height = alto;
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            // Aplicar filtro óptico de realce local (Binarización tardía y estiramiento de contraste seguro)
-            aplicarFiltroOpticoLocal(subCtx, subCanvas.width, subCanvas.height);
+            // Capa óptica segura: Aplica binarización tardía y realce local sin destruir el contexto
+            aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
 
             const dataURL = subCanvas.toDataURL('image/png');
-            if (statusEl) statusEl.innerText = `Procesando bloque óptico ${i + 1} de 5...`;
+            if (statusEl) statusEl.innerText = `Reconociendo bloque óptico ${i + 1} de 5...`;
             
             const ret = await worker.recognize(dataURL);
             
@@ -82,19 +81,19 @@ async function ejecutarCalibracionDual() {
                 id: i + 1,
                 columnas: [texto !== '' ? texto : '(Vacío / Sin texto detectado)'],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Óptica Avanzada OK'
+                calibracionEstado: 'Óptica Segura OK'
             });
         }
 
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡OCR con filtro óptico finalizado con éxito!');
+        alert('¡OCR óptico finalizado con éxito!');
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
         const mensajeError = error && error.message ? error.message : JSON.stringify(error);
-        alert('Error en proceso óptico: ' + mensajeError);
+        alert('Error real de Tesseract: ' + mensajeError);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
@@ -102,37 +101,32 @@ async function ejecutarCalibracionDual() {
     }
 }
 
-// Filtro óptico seguro: Realza los bordes y el contraste local sin destruir las escalas de grises (antialiasing)
-function aplicarFiltroOpticoLocal(ctx, width, height) {
+// Función defensiva de óptica local (Binarización tardía y estiramiento de contraste)
+function aplicarFiltroOpticoSeguro(ctx, width, height) {
     try {
         const imgData = ctx.getImageData(0, 0, width, height);
         const data = imgData.data;
-        
-        // Factor de estiramiento de contraste inteligente (simulando umbral dinámico de densidad)
-        const factor = 1.2; 
-        const offset = -15; // Oscurece ligeramente los fondos grises y satura el texto blanco o claro
+        const factor = 1.2; // Ganancia de contraste controlada
+        const offset = -15; // Ajuste de luminancia para fondos oscuros
 
         for (let i = 0; i < data.length; i += 4) {
-            // Promedio ponderado de luminancia (escala de grises óptica)
             let r = data[i];
             let g = data[i + 1];
             let b = data[i + 2];
-            let v = 0.299 * r + 0.587 * g + 0.114 * b;
+            let v = 0.299 * r + 0.587 * g + 0.114 * b; // Luminancia óptica
 
-            // Aplicar ganancia de contraste local conservando la transición suave de bordes
             let newVal = v * factor + offset;
             if (newVal < 0) newVal = 0;
             if (newVal > 255) newVal = 255;
 
-            data[i] = newVal;     // R
-            data[i + 1] = newVal; // G
-            data[i + 2] = newVal; // B
-            // Canal Alfa (data[i+3]) se mantiene intacto para preservar transparencia y bordes limpios
+            data[i] = newVal;
+            data[i + 1] = newVal;
+            data[i + 2] = newVal;
         }
-        
         ctx.putImageData(imgData, 0, 0);
     } catch (e) {
-        console.warn('El filtro óptico local omitió un bloque por seguridad, usando datos nativos:', e);
+        // Fallback defensivo: si algo falla en el canvas, se omite silenciosamente dejando la imagen original intacta
+        console.warn('Filtro óptico omitido por seguridad en este bloque:', e);
     }
 }
 
