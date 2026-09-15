@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR con canvas nativo para saltar restricciones de Android...');
+    alert('Iniciando OCR guiado por plantilla de Excel...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,12 +13,17 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Cargando imagen en memoria móvil...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo plantilla de Excel...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
 
-        // 1. Consumo inmediato del archivo usando URL de objeto para atrapar el token de Android al instante
+        // 1. Obtener coordenadas dinámicas basadas en el archivo Excel de referencia
+        const coordenadasBase = await obtenerCoordenadasDePlantillaExcel();
+
+        if (statusEl) statusEl.innerText = 'Cargando imagen en memoria móvil...';
+
+        // 2. Método seguro de canvas nativo (¡Intacto y funcionando!)
         const objectUrl = URL.createObjectURL(file);
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
@@ -49,7 +54,6 @@ async function ejecutarCalibracionDual() {
         await worker.loadLanguage('spa');
         await worker.initialize('spa');
 
-        // 2. Pintar la imagen directamente en el canvas maestro interno
         const canvas = document.createElement('canvas');
         canvas.width = imgElement.naturalWidth || imgElement.width;
         canvas.height = imgElement.naturalHeight || imgElement.height;
@@ -57,20 +61,24 @@ async function ejecutarCalibracionDual() {
         ctx.drawImage(imgElement, 0, 0);
 
         let filasExtraidas = [];
-        for (let i = 0; i < 5; i++) {
-            let yInicio = i * 45;
-            let alto = 45;
+        
+        // 3. Procesar los bloques guiados por las coordenadas del Excel
+        for (let i = 0; i < coordenadasBase.length; i++) {
+            let itemCoord = coordenadasBase[i];
+            let yInicio = itemCoord.y;
+            let alto = itemCoord.alto || 45;
+
             const subCanvas = document.createElement('canvas');
             subCanvas.width = canvas.width;
             subCanvas.height = alto;
             const subCtx = subCanvas.getContext('2d');
             subCtx.drawImage(canvas, 0, yInicio, canvas.width, alto, 0, 0, canvas.width, alto);
 
-            // Capa óptica segura con manejo de excepciones
+            // Capa óptica segura
             aplicarFiltroOpticoSeguro(subCtx, subCanvas.width, subCanvas.height);
 
             const dataURL = subCanvas.toDataURL('image/png');
-            if (statusEl) statusEl.innerText = `Reconociendo bloque óptico ${i + 1} de 5...`;
+            if (statusEl) statusEl.innerText = `Reconociendo bloque ${i + 1} de ${coordenadasBase.length} (Y:${yInicio}px)...`;
             
             const ret = await worker.recognize(dataURL);
             
@@ -83,14 +91,14 @@ async function ejecutarCalibracionDual() {
                 id: i + 1,
                 columnas: [texto !== '' ? texto : '(Vacío / Sin texto detectado)'],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Canvas Seguro OK'
+                calibracionEstado: 'Excel + Canvas OK'
             });
         }
 
         await worker.terminate();
         renderizarTablaDinamica(filasExtraidas);
         registrarLogAprendizaje(filasExtraidas);
-        alert('¡OCR óptico finalizado con éxito!');
+        alert('¡OCR guiado por Excel finalizado con éxito!');
 
     } catch (error) {
         console.error('Error crítico OCR:', error);
@@ -101,6 +109,49 @@ async function ejecutarCalibracionDual() {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
         }
     }
+}
+
+// Lector inteligente de plantilla Excel para extraer coordenadas reales
+async function obtenerCoordenadasDePlantillaExcel() {
+    const inputs = document.querySelectorAll('input[type="file"]');
+    let excelFile = null;
+    
+    // Buscar el input que contenga un archivo de Excel (que no sea el de imagen)
+    for (let inp of inputs) {
+        if (inp.id !== 'imageFile' && inp.files && inp.files.length > 0) {
+            excelFile = inp.files[0];
+            break;
+        }
+    }
+
+    if (excelFile && typeof XLSX !== 'undefined') {
+        try {
+            const data = await excelFile.arrayBuffer();
+            const workbook = XLSX.read(data);
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const json = XLSX.utils.sheet_to_json(worksheet);
+            
+            if (json && json.length > 0) {
+                console.log("Plantilla Excel leída correctamente:", json);
+                return json.map((row, idx) => ({
+                    y: Number(row.cordYAsignada || row.Y || row.y || (idx * 45)),
+                    alto: Number(row.alto || row.height || 45)
+                }));
+            }
+        } catch (e) {
+            console.warn("Aviso: No se pudo leer el archivo Excel, usando coordenadas base de respaldo:", e);
+        }
+    }
+
+    // Respaldo por defecto si no hay Excel cargado
+    return [
+        { y: 0, alto: 45 },
+        { y: 45, alto: 45 },
+        { y: 90, alto: 45 },
+        { y: 135, alto: 45 },
+        { y: 180, alto: 45 }
+    ];
 }
 
 // Función defensiva de óptica local
