@@ -1,30 +1,53 @@
 async function ejecutarCalibracionDual() {
     alert('Iniciando OCR guiado por plantilla de Excel...');
     try {
-        const imageInput = document.getElementById('imageFile');
-        if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
-            alert('Por favor selecciona una Imagen de WhatsApp obligatoriamente.');
+        const inputs = document.querySelectorAll('input[type="file"]');
+        let imageFile = null;
+        let excelFile = null;
+
+        // Identificar inteligentemente cuál input tiene la imagen y cuál el Excel
+        for (let inp of inputs) {
+            if (inp.files && inp.files.length > 0) {
+                let f = inp.files[0];
+                let name = f.name.toLowerCase();
+                if (name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png') || name.includes('image')) {
+                    imageFile = f;
+                } else if (name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.json')) {
+                    excelFile = f;
+                }
+            }
+        }
+
+        // Fallback al ID tradicional si no se detectó por extensión
+        if (!imageFile) {
+            const imgInputEl = document.getElementById('imageFile');
+            if (imgInputEl && imgInputEl.files && imgInputEl.files.length > 0) {
+                imageFile = imgInputEl.files[0];
+            }
+        }
+
+        if (!imageFile) {
+            alert('Por favor selecciona obligatoriamente una Imagen de WhatsApp válida.');
             return;
         }
 
-        const file = imageInput.files[0];
         const tbody = document.querySelector('#tabla-resultados tbody');
         const thead = document.querySelector('#tabla-resultados thead');
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo plantilla de Excel...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo plantilla de referencia...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
 
-        // 1. Obtener coordenadas dinámicas basadas en el archivo Excel de referencia
-        const coordenadasBase = await obtenerCoordenadasDePlantillaExcel();
+        // 1. Obtener coordenadas dinámicas usando el archivo Excel detectado
+        const coordenadasBase = await obtenerCoordenadasDePlantillaExcelDirecto(excelFile);
 
         if (statusEl) statusEl.innerText = 'Cargando imagen en memoria móvil...';
 
-        // 2. Método seguro de canvas nativo (¡Intacto y funcionando!)
-        const objectUrl = URL.createObjectURL(file);
+        // 2. Método seguro de canvas nativo con la imagen correcta
+        const objectUrl = URL.createObjectURL(imageFile);
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
             img.onload = () => {
@@ -111,19 +134,8 @@ async function ejecutarCalibracionDual() {
     }
 }
 
-// Lector inteligente de plantilla Excel para extraer coordenadas reales
-async function obtenerCoordenadasDePlantillaExcel() {
-    const inputs = document.querySelectorAll('input[type="file"]');
-    let excelFile = null;
-    
-    // Buscar el input que contenga un archivo de Excel (que no sea el de imagen)
-    for (let inp of inputs) {
-        if (inp.id !== 'imageFile' && inp.files && inp.files.length > 0) {
-            excelFile = inp.files[0];
-            break;
-        }
-    }
-
+// Lector directo de la plantilla Excel validada
+async function obtenerCoordenadasDePlantillaExcelDirecto(excelFile) {
     if (excelFile && typeof XLSX !== 'undefined') {
         try {
             const data = await excelFile.arrayBuffer();
