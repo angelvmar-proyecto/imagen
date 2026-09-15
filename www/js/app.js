@@ -1,5 +1,5 @@
 async function ejecutarCalibracionDual() {
-    alert('Iniciando OCR con Tesseract y conversión Base64 para Android...');
+    alert('Iniciando OCR con canvas nativo para saltar restricciones de Android...');
     try {
         const imageInput = document.getElementById('imageFile');
         if (!imageInput || !imageInput.files || imageInput.files.length === 0) {
@@ -13,27 +13,27 @@ async function ejecutarCalibracionDual() {
         
         if (tbody && thead) {
             thead.innerHTML = '<tr style="background: #333;"><th>#</th><th>Texto Detectado</th><th>Estado / Acción</th></tr>';
-            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Leyendo archivo como Base64...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ffeb3b;" id="ocr-status">Cargando imagen en memoria móvil...</td></tr>';
         }
 
         const statusEl = document.getElementById('ocr-status');
 
-        // Conversión segura a Base64 para saltar restricciones de Android WebView
-        const base64Data = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.onerror = (err) => reject(new Error('Error al leer bytes de imagen: ' + (err.target && err.target.error ? err.target.error.message : 'desconocido')));
-            reader.readAsDataURL(file);
-        });
-
+        // 1. Consumo inmediato del archivo usando URL de objeto para atrapar el token de Android al instante
+        const objectUrl = URL.createObjectURL(file);
         const imgElement = await new Promise((resolve, reject) => {
             const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = (err) => reject(new Error('Error al decodificar objeto Image desde Base64'));
-            img.src = base64Data;
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                resolve(img);
+            };
+            img.onerror = (err) => {
+                URL.revokeObjectURL(objectUrl);
+                reject(new Error('Error al cargar la imagen en el WebView móvil'));
+            };
+            img.src = objectUrl;
         });
 
-        if (statusEl) statusEl.innerText = 'Creando worker de Tesseract...';
+        if (statusEl) statusEl.innerText = 'Inicializando worker de Tesseract...';
         
         const worker = await Tesseract.createWorker({
             logger: m => {
@@ -49,6 +49,7 @@ async function ejecutarCalibracionDual() {
         await worker.loadLanguage('spa');
         await worker.initialize('spa');
 
+        // 2. Pintar la imagen directamente en el canvas maestro interno
         const canvas = document.createElement('canvas');
         canvas.width = imgElement.naturalWidth || imgElement.width;
         canvas.height = imgElement.naturalHeight || imgElement.height;
@@ -82,7 +83,7 @@ async function ejecutarCalibracionDual() {
                 id: i + 1,
                 columnas: [texto !== '' ? texto : '(Vacío / Sin texto detectado)'],
                 cordYAsignada: yInicio,
-                calibracionEstado: 'Óptica Segura OK'
+                calibracionEstado: 'Canvas Seguro OK'
             });
         }
 
@@ -94,7 +95,7 @@ async function ejecutarCalibracionDual() {
     } catch (error) {
         console.error('Error crítico OCR:', error);
         const mensajeError = error && error.message ? error.message : JSON.stringify(error);
-        alert('Error real de Tesseract: ' + mensajeError);
+        alert('Error en ejecución: ' + mensajeError);
         const tbody = document.querySelector('#tabla-resultados tbody');
         if (tbody) {
             tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#ff5252;">Falla: ' + mensajeError + '</td></tr>';
