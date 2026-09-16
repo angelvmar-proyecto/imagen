@@ -105,9 +105,6 @@ jobs:
           distribution: 'zulu'
           java-version: '21'
 
-      - name: Configurar Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Compilar APK
         run: |
           cd android
