@@ -1,5 +1,6 @@
 // ============================================
-// MAR Caribe v3.2 - Tesseract.js v5 LOCAL
+// MAR Caribe v3.3 - Tesseract.js v5 LOCAL
+// 100% Offline · Detección por coordenadas
 // ============================================
 
 let rutaImagenActual = null;
@@ -12,7 +13,7 @@ let procesando = false;
 let workerTesseract = null;
 
 // ============================================
-// DETECCIÓN DE TIPOS
+// DETECCIÓN DE TIPOS DE DATOS
 // ============================================
 function detectarTipoColumna(valores) {
   if (!valores || valores.length === 0) return 'texto';
@@ -208,24 +209,31 @@ function asignarYActualizarClusters(datos, clusters) {
 // ============================================
 async function inicializarTesseract() {
   if (workerTesseract) return workerTesseract;
-  
+
   console.log('🔧 Inicializando Tesseract.js v5 LOCAL...');
-  
+
   try {
-    // Rutas relativas desde index.html
-    const basePath = window.location.href.replace(/\/[^\/]*$/, '/');
-    
+    // Detectar la ruta base (funciona en http://localhost y en file://)
+    let basePath = window.location.href;
+    // Quitar el nombre del archivo (index.html)
+    basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+
+    console.log('🔗 Base path:', basePath);
+
     workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
-      // Worker local
+      // Ruta del worker
       workerPath: basePath + 'tesseract/worker.min.js',
-      // Idiomas locales
+      // Ruta de los idiomas
       langPath: basePath + 'tesseract/lang-data',
-      // Core WASM local
+      // Ruta del core WASM
       corePath: basePath + 'tesseract/',
-      // IMPORTANTE: desactivar blob para que funcione en WebView Android
+      // Desactivar blob para WebView Android
       workerBlobURL: false,
-      // Cachear los idiomas
+      // Sin caché (carga desde archivos locales)
       cacheMethod: 'none',
+      // Los archivos NO están comprimidos (.traineddata sin .gz)
+      gzip: false,
+      // Logs de progreso
       logger: (m) => {
         console.log('Tesseract:', m.status, Math.round((m.progress || 0) * 100) + '%');
         if (m.status === 'recognizing text') {
@@ -240,7 +248,7 @@ async function inicializarTesseract() {
         }
       }
     });
-    
+
     console.log('✅ Tesseract v5 local listo');
     return workerTesseract;
   } catch (e) {
@@ -292,7 +300,7 @@ async function ejecutarEscaneoCompleto() {
     palabrasDetectadas = palabras;
     console.log(`📝 Palabras: ${palabras.length}`);
 
-    // CLUSTERING EN X
+    // CLUSTERING EN X (COLUMNAS)
     setProgreso(75, 'Detectando columnas...');
     const xs = palabras.map(p => p.x);
     const numClustersX = Math.min(Math.max(Math.round(Math.sqrt(palabras.length / 2)), 3), 30);
@@ -385,7 +393,7 @@ function renderizarMatriz() {
   let html = '<div class="tabla-wrapper"><table class="tabla-resultado"><thead><tr>';
   for (let j = 0; j < numCols; j++) {
     const tipo = tiposColumnas[j] || 'texto';
-    html += `<th>Col ${j+1} <span class="col-badge">${tipo}</span></th>`;
+    html += `<th>Col ${j + 1} <span class="col-badge">${tipo}</span></th>`;
   }
   html += '</tr></thead><tbody>';
   for (let i = 0; i < matrizDatos.length; i++) {
@@ -400,7 +408,7 @@ function renderizarMatriz() {
   wrapper.innerHTML = html;
 
   wrapper.querySelectorAll('td[contenteditable="true"]').forEach(td => {
-    td.addEventListener('input', function() {
+    td.addEventListener('input', function () {
       const r = parseInt(this.dataset.row);
       const c = parseInt(this.dataset.col);
       if (matrizDatos[r] && matrizDatos[r][c] !== undefined) {
@@ -506,7 +514,7 @@ function renderizarHistorial() {
     if (!h.length) { c.innerHTML = '<div class="empty-state">📋 Sin historial</div>'; return; }
     c.innerHTML = h.map(item => `
       <div style="background:white;border-radius:8px;padding:10px;margin-bottom:8px;border:1px solid #e0e0e0;">
-        <p style="font-size:0.75rem;color:#636e72;margin-bottom:4px;">🕐 ${item.fecha} · ${item.filas||0} filas · ${item.columnas||0} columnas</p>
+        <p style="font-size:0.75rem;color:#636e72;margin-bottom:4px;">🕐 ${item.fecha} · ${item.filas || 0} filas · ${item.columnas || 0} columnas</p>
         <p style="font-size:0.8rem;white-space:pre-wrap;line-height:1.4;">${item.texto}</p>
       </div>
     `).join('');
@@ -575,7 +583,7 @@ async function recibirCompartir() {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 MAR Caribe v3.2 - Tesseract.js v5 LOCAL');
+  console.log('🚀 MAR Caribe v3.3 - Tesseract.js v5 LOCAL');
   document.getElementById('dropZone').addEventListener('click', capturarImagen);
   document.getElementById('fileInput').addEventListener('change', cargarDesdeInput);
   document.getElementById('btnCamera').addEventListener('click', capturarImagen);
