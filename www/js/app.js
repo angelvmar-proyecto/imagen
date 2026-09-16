@@ -1,6 +1,5 @@
 // ============================================
-// MAR Caribe v3.0 - Tesseract.js v4
-// Detección por coordenadas X/Y + Clustering
+// MAR Caribe v3.2 - Tesseract.js v5 LOCAL
 // ============================================
 
 let rutaImagenActual = null;
@@ -13,7 +12,7 @@ let procesando = false;
 let workerTesseract = null;
 
 // ============================================
-// TIPOS DE DATOS
+// DETECCIÓN DE TIPOS
 // ============================================
 function detectarTipoColumna(valores) {
   if (!valores || valores.length === 0) return 'texto';
@@ -205,24 +204,49 @@ function asignarYActualizarClusters(datos, clusters) {
 }
 
 // ============================================
-// TESSERACT.JS v4
+// TESSERACT.JS v5 - LOCAL Y OFFLINE
 // ============================================
 async function inicializarTesseract() {
   if (workerTesseract) return workerTesseract;
-  console.log('🔧 Inicializando Tesseract.js v4...');
-  workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
-    workerPath: './tesseract/worker.min.js',
-    langPath: './tesseract/lang-data',
-    corePath: './tesseract/tesseract.min.js',
-    logger: (m) => {
-      if (m.status === 'recognizing text') {
-        const pct = Math.round(m.progress * 100);
-        setProgreso(30 + Math.round(pct * 0.4), `Reconociendo texto: ${pct}%`);
+  
+  console.log('🔧 Inicializando Tesseract.js v5 LOCAL...');
+  
+  try {
+    // Rutas relativas desde index.html
+    const basePath = window.location.href.replace(/\/[^\/]*$/, '/');
+    
+    workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
+      // Worker local
+      workerPath: basePath + 'tesseract/worker.min.js',
+      // Idiomas locales
+      langPath: basePath + 'tesseract/lang-data',
+      // Core WASM local
+      corePath: basePath + 'tesseract/',
+      // IMPORTANTE: desactivar blob para que funcione en WebView Android
+      workerBlobURL: false,
+      // Cachear los idiomas
+      cacheMethod: 'none',
+      logger: (m) => {
+        console.log('Tesseract:', m.status, Math.round((m.progress || 0) * 100) + '%');
+        if (m.status === 'recognizing text') {
+          const pct = Math.round(m.progress * 100);
+          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo texto: ${pct}%`);
+        } else if (m.status === 'loading language traineddata') {
+          setProgreso(20, 'Cargando idiomas...');
+        } else if (m.status === 'initializing api') {
+          setProgreso(25, 'Inicializando API...');
+        } else if (m.status === 'loading tesseract core') {
+          setProgreso(15, 'Cargando motor...');
+        }
       }
-    }
-  });
-  console.log('✅ Tesseract listo');
-  return workerTesseract;
+    });
+    
+    console.log('✅ Tesseract v5 local listo');
+    return workerTesseract;
+  } catch (e) {
+    console.error('❌ Error inicializando Tesseract:', e);
+    throw new Error('No se pudo iniciar Tesseract: ' + e.message);
+  }
 }
 
 async function ejecutarOCR(canvasElement) {
@@ -244,7 +268,7 @@ async function ejecutarEscaneoCompleto() {
     const canvasElement = obtenerCanvasDeImagen();
     if (!canvasElement) throw new Error('No se pudo obtener el canvas');
 
-    setProgreso(20, 'Inicializando motor OCR...');
+    setProgreso(15, 'Inicializando motor OCR...');
     const data = await ejecutarOCR(canvasElement);
 
     if (!data || !data.words || data.words.length < 5) {
@@ -278,7 +302,6 @@ async function ejecutarEscaneoCompleto() {
     numColumnasDetectadas = centrosX.length;
     console.log(`📊 Columnas: ${numColumnasDetectadas}`);
 
-    // CORTES
     const nuevosCortes = [];
     for (let i = 0; i < centrosX.length - 1; i++) {
       nuevosCortes.push((centrosX[i] + centrosX[i + 1]) / 2);
@@ -552,12 +575,11 @@ async function recibirCompartir() {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 MAR Caribe v3.0 - Tesseract.js v4');
+  console.log('🚀 MAR Caribe v3.2 - Tesseract.js v5 LOCAL');
   document.getElementById('dropZone').addEventListener('click', capturarImagen);
   document.getElementById('fileInput').addEventListener('change', cargarDesdeInput);
   document.getElementById('btnCamera').addEventListener('click', capturarImagen);
   document.getElementById('btnOCR').addEventListener('click', ejecutarEscaneoCompleto);
-  document.getElementById('btnAlinear').addEventListener('click', ejecutarEscaneoCompleto);
   document.getElementById('btnLimpiar').addEventListener('click', limpiarTodo);
   document.getElementById('btnCopiarTabla').addEventListener('click', copiarAlPortapapeles);
   document.getElementById('btnExportarCSV').addEventListener('click', exportarCSV);
