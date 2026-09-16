@@ -1,0 +1,83 @@
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+body { background: #f0f4f8; max-width: 100%; min-height: 100vh; padding-bottom: 70px; }
+header { background: linear-gradient(135deg, #0a3d62, #3c6382); color: white; padding: 16px; text-align: center; }
+h1 { font-size: 1.2rem; }
+
+.tabs { display: flex; background: white; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.tab { flex: 1; padding: 12px 8px; text-align: center; color: #636e72; font-weight: 600; font-size: 0.85rem; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+.tab.active { color: #3c6382; border-bottom-color: #3c6382; background: #f8f9fa; }
+.tab-content { display: none; padding: 12px; }
+.tab-content.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.upload-box { border: 3px dashed #3c6382; border-radius: 16px; padding: 30px 20px; text-align: center; background: white; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; }
+.upload-box:active { background: #e8f0f5; transform: scale(0.98); }
+.upload-icon { font-size: 2rem; margin-bottom: 8px; }
+.upload-text { font-size: 1rem; color: #3c6382; margin-bottom: 4px; }
+.upload-sub { color: #636e72; font-size: 0.8rem; }
+input[type="file"] { display: none; }
+
+.preview-container { background: white; border-radius: 12px; padding: 12px; margin-bottom: 12px; display: none; position: relative; }
+.preview-img { max-width: 100%; border-radius: 8px; display: block; margin: 0 auto; max-height: 400px; }
+.grid-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.btn { background: #3c6382; color: white; border: none; padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; font-weight: 600; cursor: pointer; width: 100%; margin: 6px 0; transition: all 0.2s; }
+.btn:disabled { background: #b2bec3; cursor: not-allowed; }
+.btn:active { transform: scale(0.98); }
+.btn-success { background: #00C853; }
+.btn-whatsapp { background: #25D366; }
+.btn-danger { background: #e53935; }
+.btn-primary { background: #3c6382; }
+.btn-excel { background: #217346; }
+.btn-csv { background: #f39c12; }
+.btn-warning { background: #d97706; }
+.btn-sm { padding: 6px 12px; font-size: 0.75rem; width: auto; margin: 0; }
+
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.toolbar .btn { flex: 0 1 auto; padding: 6px 12px; font-size: 0.75rem; width: auto; margin: 0; }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.btn-group .btn { flex: 1; min-width: 70px; font-size: 0.8rem; padding: 8px 12px; margin: 0; }
+
+.progress-container { width: 100%; height: 28px; background: #e0e0e0; border-radius: 14px; overflow: hidden; margin: 12px 0 4px; display: none; }
+.progress-bar { height: 100%; background: linear-gradient(90deg, #3c6382, #60a3bc); width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: white; font-size: 0.75rem; font-weight: bold; }
+.progress-step { font-size: 0.75rem; color: #636e72; text-align: center; margin-bottom: 8px; }
+
+.status { padding: 10px; border-radius: 8px; margin: 10px 0; text-align: center; font-weight: 600; display: none; font-size: 0.85rem; }
+.status.info { background: #e3f2fd; color: #0d47a1; display: block; }
+.status.success { background: #e8f5e9; color: #2e7d32; display: block; }
+.status.error { background: #ffebee; color: #c62828; display: block; }
+.status.warning { background: #fff3e0; color: #e65100; display: block; }
+
+.result-section { background: white; border-radius: 12px; padding: 12px; margin-top: 12px; display: none; }
+.result-section.show { display: block; }
+.result-title { font-size: 0.95rem; font-weight: bold; color: #0a3d62; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.badge-info { font-size: 0.65rem; font-weight: normal; color: #636e72; background: #f0f4f8; padding: 2px 10px; border-radius: 12px; }
+.texto-ocr { white-space: pre-wrap; font-family: monospace; font-size: 0.75rem; line-height: 1.4; color: #2d3436; max-height: 300px; overflow-y: auto; padding: 10px; background: #f8f9fa; border-radius: 8px; }
+
+.badge { display: inline-block; background: #00C853; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.65rem; margin-left: 6px; }
+
+.search-box { display: flex; gap: 6px; margin: 8px 0; }
+.search-box input { flex: 1; padding: 6px 10px; border: 1px solid #d1d8e0; border-radius: 6px; font-size: 0.8rem; }
+.search-box .btn { flex: 0 1 auto; padding: 6px 12px; font-size: 0.75rem; width: auto; margin: 0; }
+
+.empty-state { text-align: center; padding: 30px; color: #636e72; }
+
+.notificacion-compartir { background: #e3f2fd; border: 2px solid #3c6382; border-radius: 12px; padding: 12px; margin-bottom: 12px; text-align: center; display: none; }
+.notificacion-compartir .icono { font-size: 1.5rem; margin-bottom: 4px; }
+.notificacion-compartir .texto { color: #0a3d62; font-weight: bold; font-size: 0.9rem; }
+.notificacion-compartir .sub { font-size: 0.8rem; color: #636e72; margin-top: 2px; }
+
+.info-extra { background: #f8f9fa; border-radius: 8px; padding: 8px 12px; margin-top: 6px; font-size: 0.75rem; color: #636e72; }
+
+.tabla-wrapper { max-height: 450px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
+.tabla-resultado { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+.tabla-resultado th, .tabla-resultado td { border: 1px solid #d1d8e0; padding: 3px 4px; text-align: left; min-width: 50px; }
+.tabla-resultado th { background: #3c6382; color: white; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+.tabla-resultado tr:nth-child(even) { background: #f8f9fa; }
+.tabla-resultado tr:hover { background: #e3f2fd; }
+.tabla-resultado td[contenteditable="true"]:focus { outline: 2px solid #3c6382; background: #fff8e1; }
+.tabla-resultado td.vacio { color: #b2bec3; font-style: italic; }
+.col-badge { display: inline-block; background: #3c6382; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.55rem; margin-left: 4px; }
+
+footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; }
