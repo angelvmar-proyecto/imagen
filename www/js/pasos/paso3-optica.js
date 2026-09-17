@@ -6,7 +6,7 @@ const PARAMS_PASO3 = {
 };
 
 window.MAR = window.MAR || {};
-window.MAR.paso3 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
+window.MAR.paso3 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0, fuente: 'original' };
 
 function suavizar3(arr, ventana) {
   const r = new Array(arr.length);
@@ -38,10 +38,16 @@ function detectarValles3(arr, umbral, distanciaMin) {
 }
 
 async function ejecutarPaso3() {
-  if (!window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 3...');
+  if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 3: Óptica...');
   const t0 = performance.now();
-  const grises = window.MAR.paso2.grises;
+
+  const fuente = (window.MAR.fuentes && window.MAR.fuentes.paso3) || 'original';
+  window.MAR.paso3.fuente = fuente;
+
+  // Usar la imagen fuente elegida
+  const imgFuente = obtenerImagenFuente(3);
+  const grises = rgbAGrises2(imgFuente);
   const w = grises.width, h = grises.height, data = grises.data;
 
   const perfilV = new Array(w).fill(0);
@@ -64,8 +70,10 @@ async function ejecutarPaso3() {
   window.MAR.paso3.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso3.ejecutado = true;
 
-  dibujarLineasPaso(3, verticales, horizontales);
-  actualizarContadores(verticales.length, horizontales.length);
+  if (typeof dibujarLineasPaso === 'function') {
+    dibujarLineasPaso(3, verticales, horizontales);
+    actualizarContadores(verticales.length, horizontales.length);
+  }
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 3!');
   return window.MAR.paso3;
@@ -75,6 +83,7 @@ function debugPaso3() {
   const p = window.MAR.paso3;
   return `PASO 3: ÓPTICA AÉREA
 ⏱️ ${p.tiempoMs} ms
+📊 Fuente: ${p.fuente === 'original' ? '⚪ Original' : '⚫ Filtrada'}
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
 ⚙️ Umbral: ${PARAMS_PASO3.UMBRAL_DENSIDAD}, DistV: ${PARAMS_PASO3.DISTANCIA_MIN_V}, DistH: ${PARAMS_PASO3.DISTANCIA_MIN_H}`;

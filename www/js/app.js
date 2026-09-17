@@ -1,14 +1,32 @@
 // ============================================
-// MAR Caribe v6.1 - App principal
+// MAR Caribe v8.0 - Doble versión + Zoom + Pan
 // ============================================
+
+// ============================================
+// ESTADO GLOBAL
+// ============================================
+window.MAR = window.MAR || {};
+window.MAR.imagenOriginal = null;       // ImageData original
+window.MAR.imagenOriginalCanvas = null; // Canvas original
+window.MAR.imagenFiltrada = null;       // ImageData filtrada
+window.MAR.imagenFiltradaCanvas = null; // Canvas filtrada
+window.MAR.fuentes = {};                // Fuente elegida por paso
+window.MAR.lineas = {};                 // Líneas detectadas por paso
 
 let rutaImagenActual = null;
 let matrizDatos = [];
 let procesando = false;
 let workerTesseract = null;
 
+// Zoom + Pan
+let zoomActual = 1.0;
+let panX = 0, panY = 0;
+const ZOOM_MIN = 1.0, ZOOM_MAX = 15.0;
+let verVersion = 'original'; // 'original' o 'filtrada'
+let lineasOcultas = false;
+
 // ============================================
-// UI - PROGRESO Y ESTADO
+// UI
 // ============================================
 function setProgreso(pct, msg) {
   const w = document.getElementById('progressWrapper');
@@ -72,55 +90,59 @@ function cargarEnCanvas(src) {
   const img = document.getElementById('imgPreview');
   if (!img) return;
   img.src = src;
-  img.onload = () => {
+  img.onload = async () => {
     document.getElementById('previewContainer').style.display = 'block';
-    if (typeof resetearZoom === 'function') resetearZoom();
-    mostrarStatus('✅ Imagen cargada. Ve a "🔧 Proceso" para ejecutar los pasos.', 'success');
+    document.getElementById('procesoContainer').style.display = 'block';
+    document.getElementById('btnAjustes').style.display = 'flex';
+    resetearZoom();
+
+    // Guardar imagen original
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    
+    window.MAR.imagenOriginalCanvas = canvas;
+    window.MAR.imagenOriginal = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    
+    // Resetear filtrada
+    window.MAR.imagenFiltrada = null;
+    window.MAR.imagenFiltradaCanvas = null;
+    window.MAR.fuentes = {};
+    window.MAR.lineas = {};
+    
+    // Resetear toggle
+    verVersion = 'original';
+    actualizarToggleVer();
+    
+    // Resetear estados de pasos
+    for (let i = 1; i <= 9; i++) {
+      const est = document.getElementById('estado-paso' + i);
+      if (est) est.textContent = '⏳';
+      const item = document.getElementById('btn-paso' + i);
+      if (item) item.classList.remove('paso-ejecutado', 'paso-ejecutando', 'paso-error');
+    }
+
+    // Analizar imagen
+    if (typeof analizarImagen === 'function') {
+      try {
+        setProgreso(50, 'Analizando imagen...');
+        const analisis = await analizarImagen(window.MAR.imagenOriginal);
+        mostrarAnalisis(analisis);
+        ocultarProgreso();
+      } catch (e) {
+        console.error('Error análisis:', e);
+        ocultarProgreso();
+      }
+    }
+
+    mostrarStatus('✅ Imagen cargada. Revisa los ajustes.', 'success');
   };
 }
 
 // ============================================
-// TESSERACT
+// ZOOM + PAN
 // ============================================
-async function inicializarTesseract() {
-  if (workerTesseract) return workerTesseract;
-  console.log('🔧 Inicializando Tesseract...');
-  try {
-    let basePath = window.location.href;
-    basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-    workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
-      workerPath: basePath + 'tesseract/worker.min.js',
-      langPath: basePath + 'tesseract/lang-data',
-      corePath: basePath + 'tesseract/',
-      workerBlobURL: false,
-      cacheMethod: 'none',
-      gzip: false,
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round(m.progress * 100);
-          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo: ${pct}%`);
-        } else if (m.status === 'loading language traineddata') {
-          setProgreso(20, 'Cargando idiomas...');
-        } else if (m.status === 'initializing api') {
-          setProgreso(25, 'Inicializando API...');
-        }
-      }
-    });
-    console.log('✅ Tesseract listo');
-    return workerTesseract;
-  } catch (e) {
-    console.error('❌ Error:', e);
-    throw new Error('No se pudo iniciar Tesseract: ' + e.message);
-  }
-}
-
-// ============================================
-// ZOOM (simplificado)
-// ============================================
-let zoomActual = 1.0;
-let panX = 0, panY = 0;
-const ZOOM_MIN = 1.0, ZOOM_MAX = 15.0;
-
 function aplicarTransform() {
   const content = document.getElementById('zoomContent');
   if (!content) return;
@@ -150,7 +172,141 @@ function zoomOut() {
 function toggleLineas() {
   const canvas = document.getElementById('deteccionCanvas');
   if (!canvas) return;
-  canvas.style.opacity = canvas.style.opacity === '0' ? '1' : '0';
+  lineasOcultas = !lineasOcultas;
+  canvas.style.opacity = lineasOcultas ? '0' : '1';
+  const btn = document.getElementById('btnToggleLineas');
+  if (btn) btn.textContent = lineasOcultas ? '🚫' : '👁️';
+}
+
+// ============================================
+// TOGGLE VER (ORIGINAL / FILTRADA)
+// ============================================
+function actualizarToggleVer() {
+  const btnOrig = document.getElementById('btnVerOriginal');
+  const btnFilt = document.getElementById('btnVerFiltrada');
+  if (btnOrig) btnOrig.classList.toggle('activo', verVersion === 'original');
+  if (btnFilt) btnFilt.classList.toggle('activo', verVersion === 'filtrada');
+}
+
+function cambiarVersionVer(version) {
+  if (version === 'filtrada' && !window.MAR.imagenFiltradaCanvas) {
+    alert('⚠️ Primero aplica la mediana');
+    return;
+  }
+  verVersion = version;
+  actualizarToggleVer();
+  
+  const canvas = version === 'original' 
+    ? window.MAR.imagenOriginalCanvas 
+    : window.MAR.imagenFiltradaCanvas;
+  
+  if (canvas) {
+    document.getElementById('imgPreview').src = canvas.toDataURL('image/png');
+  }
+}
+
+// ============================================
+// GESTOS TÁCTILES
+// ============================================
+let touchStartDist = 0;
+let touchStartZoom = 1.0;
+let touchStartX = 0, touchStartY = 0;
+let touchStartPanX = 0, touchStartPanY = 0;
+let lastTap = 0;
+let isPanning = false;
+
+function inicializarGestos() {
+  const wrapper = document.getElementById('zoomWrapper');
+  if (!wrapper) return;
+
+  wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0], t2 = e.touches[1];
+      touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchStartZoom = zoomActual;
+      isPanning = false;
+    } else if (e.touches.length === 1) {
+      const ahora = Date.now();
+      if (ahora - lastTap < 300) {
+        resetearZoom();
+        lastTap = 0;
+        return;
+      }
+      lastTap = ahora;
+      // Pan siempre si zoom > 1
+      if (zoomActual > 1.05) {
+        isPanning = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartPanX = panX;
+        touchStartPanY = panY;
+      }
+    }
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t1 = e.touches[0], t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = dist / touchStartDist;
+      zoomActual = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, touchStartZoom * ratio));
+      aplicarTransform();
+    } else if (e.touches.length === 1 && isPanning) {
+      e.preventDefault();
+      panX = touchStartPanX + (e.touches[0].clientX - touchStartX);
+      panY = touchStartPanY + (e.touches[0].clientY - touchStartY);
+      aplicarTransform();
+    }
+  }, { passive: false });
+
+  wrapper.addEventListener('touchend', () => {
+    isPanning = false;
+    touchStartDist = 0;
+  }, { passive: true });
+}
+
+// ============================================
+// PANEL DE AJUSTES (BOTTOM SHEET)
+// ============================================
+function abrirAjustes() {
+  const panel = document.getElementById('panelAjustes');
+  if (panel) panel.classList.add('abierto');
+}
+
+function cerrarAjustes() {
+  const panel = document.getElementById('panelAjustes');
+  if (panel) panel.classList.remove('abierto');
+}
+
+// ============================================
+// TESSERACT
+// ============================================
+async function inicializarTesseract() {
+  if (workerTesseract) return workerTesseract;
+  console.log('🔧 Inicializando Tesseract...');
+  try {
+    let basePath = window.location.href;
+    basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+    workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
+      workerPath: basePath + 'tesseract/worker.min.js',
+      langPath: basePath + 'tesseract/lang-data',
+      corePath: basePath + 'tesseract/',
+      workerBlobURL: false,
+      cacheMethod: 'none',
+      gzip: false,
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round(m.progress * 100);
+          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo: ${pct}%`);
+        }
+      }
+    });
+    console.log('✅ Tesseract listo');
+    return workerTesseract;
+  } catch (e) {
+    throw new Error('No se pudo iniciar Tesseract: ' + e.message);
+  }
 }
 
 // ============================================
@@ -159,22 +315,30 @@ function toggleLineas() {
 function limpiarTodo() {
   rutaImagenActual = null;
   matrizDatos = [];
-  window.MAR = {};
+  window.MAR = window.MAR || {};
+  window.MAR.imagenOriginal = null;
+  window.MAR.imagenOriginalCanvas = null;
+  window.MAR.imagenFiltrada = null;
+  window.MAR.imagenFiltradaCanvas = null;
+  window.MAR.fuentes = {};
+  window.MAR.lineas = {};
+  
   document.getElementById('imgPreview').src = '';
   document.getElementById('previewContainer').style.display = 'none';
+  document.getElementById('procesoContainer').style.display = 'none';
   document.getElementById('fileInput').value = '';
-  document.getElementById('tableWrapper').innerHTML = '<div class="empty-state">📊 Sin datos</div>';
+  document.getElementById('tableWrapper').innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
+  document.getElementById('btnAjustes').style.display = 'none';
+  document.getElementById('analisisAuto').style.display = 'none';
   resetearZoom();
-  mostrarStatus('🗑️ Limpiado', 'info');
-  // Resetear estados de pasos
-  for (let i = 1; i <= 10; i++) {
+  
+  for (let i = 1; i <= 9; i++) {
     const est = document.getElementById('estado-paso' + i);
     if (est) est.textContent = '⏳';
-    const item = document.getElementById('paso-' + i);
-    if (item) item.classList.remove('paso-ejecutado');
   }
-  const dbg = document.getElementById('debugPanel');
-  if (dbg) dbg.style.display = 'none';
+  
+  cerrarAjustes();
+  mostrarStatus('🗑️ Limpiado', 'info');
 }
 
 // ============================================
@@ -227,7 +391,7 @@ function exportarExcel() {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 MAR Caribe v6.1');
+  console.log('🚀 MAR Caribe v8.0');
 
   document.getElementById('dropZone')?.addEventListener('click', capturarImagen);
   document.getElementById('fileInput')?.addEventListener('change', cargarDesdeInput);
@@ -242,79 +406,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btnToggleLineas')?.addEventListener('click', toggleLineas);
   document.getElementById('btnZoomReset')?.addEventListener('click', resetearZoom);
 
+  document.getElementById('btnVerOriginal')?.addEventListener('click', () => cambiarVersionVer('original'));
+  document.getElementById('btnVerFiltrada')?.addEventListener('click', () => cambiarVersionVer('filtrada'));
+
+  document.getElementById('btnAjustes')?.addEventListener('click', abrirAjustes);
+  document.getElementById('btnCerrarAjustes')?.addEventListener('click', cerrarAjustes);
+
+  inicializarGestos();
   mostrarStatus('📷 Carga una imagen', 'info');
 });
-
-// Sobrescribir cargarEnCanvas para mostrar botones y params
-const _cargarEnCanvasOriginal = cargarEnCanvas;
-cargarEnCanvas = function(src) {
-  rutaImagenActual = src;
-  const img = document.getElementById('imgPreview');
-  if (!img) return;
-  img.src = src;
-  img.onload = () => {
-    document.getElementById('previewContainer').style.display = 'block';
-    document.getElementById('procesoContainer').style.display = 'block';
-    document.getElementById('paramsContainer').style.display = 'block';
-    document.getElementById('debugContainer').style.display = 'block';
-    if (typeof resetearZoom === 'function') resetearZoom();
-    mostrarStatus('✅ Imagen cargada. Toca los botones del proceso.', 'success');
-  };
-};
-
-// ============================================
-// ANÁLISIS AUTOMÁTICO AL CARGAR IMAGEN
-// ============================================
-const _cargarOriginal = cargarEnCanvas;
-cargarEnCanvas = function(src) {
-  rutaImagenActual = src;
-  const img = document.getElementById('imgPreview');
-  if (!img) return;
-  img.src = src;
-  img.onload = async () => {
-    document.getElementById('previewContainer').style.display = 'block';
-    document.getElementById('procesoContainer').style.display = 'block';
-    document.getElementById('paramsContainer').style.display = 'block';
-    document.getElementById('debugContainer').style.display = 'block';
-    if (typeof resetearZoom === 'function') resetearZoom();
-
-    // Guardar imagen original
-    window.MAR = window.MAR || {};
-    window.MAR.imagenOriginalGuardada = null;
-
-    // Analizar imagen
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
-      
-      window.MAR.imagenOriginalGuardada = imageData;
-
-      if (typeof analizarImagen === 'function') {
-        setProgreso(50, 'Analizando imagen...');
-        const analisis = await analizarImagen(imageData);
-        mostrarAnalisis(analisis);
-        ocultarProgreso();
-
-        // Auto-ajustar mediana si el usuario no ha guardado params
-        const saved = localStorage.getItem('marCaribeParams');
-        if (!saved) {
-          PARAMS_PASO1.INDICE_VENTANA = analisis.indiceVentanaRecomendado;
-          PARAMS_PASO1.TAMANO_VENTANA = VENTANAS_MEDIANA[analisis.indiceVentanaRecomendado];
-          const slider = document.getElementById('param-mediana-ventana');
-          if (slider) {
-            slider.value = analisis.indiceVentanaRecomendado;
-            document.getElementById('val-mediana-ventana').textContent = 
-              NOMBRES_MEDIANA[analisis.indiceVentanaRecomendado] + ' (' + VENTANAS_MEDIANA[analisis.indiceVentanaRecomendado] + ')';
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error analizando:', e);
-    }
-
-    mostrarStatus('✅ Imagen cargada. Revisa la recomendación.', 'success');
-  };
-};
