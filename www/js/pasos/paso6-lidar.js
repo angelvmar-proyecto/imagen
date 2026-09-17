@@ -1,21 +1,19 @@
 // ============================================
-// PASO 6: LIDAR (v9.3)
-// - Votos mínimos 1
-// - Sin validación de patrón regular
-// - Cobertura mínima 50%
-// - Prioriza líneas con 2+ algoritmos
+// PASO 6: LIDAR
+// Parámetros ORIGINALES del usuario
 // ============================================
 
 const PARAMS_PASO6 = {
+  TOLERANCIA_ALINEACION: 12,
   DISTANCIA_AGRUPACION: 8,
-  VOTOS_MINIMOS: 1,
-  COBERTURA_MIN: 0.50
+  RECORRIDO_BORDE: true,
+  PESO_PATRON_REGULAR: 0.70
 };
 
 window.MAR = window.MAR || {};
 window.MAR.paso6 = { ejecutado: false, verticales: [], horizontales: [], votosV: [], votosH: [], tiempoMs: 0 };
 
-function votar(algoritmos, distAgrup, votosMin) {
+function votar(algoritmos, distAgrup) {
   const todos = [];
   for (let i = 0; i < algoritmos.length; i++) {
     for (const c of algoritmos[i]) {
@@ -42,16 +40,40 @@ function votar(algoritmos, distAgrup, votosMin) {
   for (const g of grupos) {
     const promedio = Math.round(g.reduce((s, x) => s + x.pos, 0) / g.length);
     const algs = new Set(g.map(x => x.alg));
-    if (algs.size >= votosMin) {
-      confirmados.push({ posicion: promedio, votos: algs.size });
-    }
+    confirmados.push({ posicion: promedio, votos: algs.size });
   }
   return confirmados;
 }
 
-// Ordenar por votos descendente (más votos = más confiable)
-function ordenarPorVotos(cortes) {
-  return cortes.sort((a, b) => b.votos - a.votos);
+function validarPatronRegular(cortes, tolerancia) {
+  if (cortes.length < 3) return cortes;
+
+  const distancias = [];
+  for (let i = 1; i < cortes.length; i++) {
+    distancias.push(cortes[i].posicion - cortes[i-1].posicion);
+  }
+
+  const conteo = {};
+  for (const d of distancias) {
+    const key = Math.round(d / 5) * 5;
+    conteo[key] = (conteo[key] || 0) + 1;
+  }
+
+  let distanciaComun = 0, maxRep = 0;
+  for (const [k, c] of Object.entries(conteo)) {
+    if (c > maxRep) { maxRep = c; distanciaComun = parseInt(k); }
+  }
+
+  const filtrados = [cortes[0]];
+  for (let i = 1; i < cortes.length; i++) {
+    const d = cortes[i].posicion - filtrados[filtrados.length-1].posicion;
+    const ratio = d / distanciaComun;
+    const desviacion = Math.abs(ratio - Math.round(ratio));
+    if (desviacion < tolerancia || cortes[i].votos >= 2) {
+      filtrados.push(cortes[i]);
+    }
+  }
+  return filtrados;
 }
 
 async function ejecutarPaso6() {
@@ -72,25 +94,19 @@ async function ejecutarPaso6() {
     window.MAR.paso5.horizontales
   ];
 
-  const votosV = votar(algV, PARAMS_PASO6.DISTANCIA_AGRUPACION, PARAMS_PASO6.VOTOS_MINIMOS);
-  const votosH = votar(algH, PARAMS_PASO6.DISTANCIA_AGRUPACION, PARAMS_PASO6.VOTOS_MINIMOS);
+  const votosV = votar(algV, PARAMS_PASO6.DISTANCIA_AGRUPACION);
+  const votosH = votar(algH, PARAMS_PASO6.DISTANCIA_AGRUPACION);
 
-  // Ordenar por votos (más votos primero)
-  const verticalesOrdenadas = ordenarPorVotos([...votosV]);
-  const horizontalesOrdenadas = ordenarPorVotos([...votosH]);
+  const verticales = validarPatronRegular(votosV, PARAMS_PASO6.TOLERANCIA_ALINEACION / 10);
+  const horizontales = validarPatronRegular(votosH, PARAMS_PASO6.TOLERANCIA_ALINEACION / 10);
 
-  console.log('🗳️ Votos V:', votosV.length, 'H:', votosH.length);
-  console.log('📊 Distribución V:', votosV.map(v => v.votos).join(','));
-  console.log('📊 Distribución H:', votosH.map(v => v.votos).join(','));
-
-  window.MAR.paso6.verticales = verticalesOrdenadas.sort((a, b) => a.posicion - b.posicion);
-  window.MAR.paso6.horizontales = horizontalesOrdenadas.sort((a, b) => a.posicion - b.posicion);
+  window.MAR.paso6.verticales = verticales.sort((a, b) => a.posicion - b.posicion);
+  window.MAR.paso6.horizontales = horizontales.sort((a, b) => a.posicion - b.posicion);
   window.MAR.paso6.votosV = votosV;
   window.MAR.paso6.votosH = votosH;
   window.MAR.paso6.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso6.ejecutado = true;
 
-  // Limpiar canvas y dibujar SOLO las finales
   const img = document.getElementById('imgPreview');
   const canvas = document.getElementById('deteccionCanvas');
   if (img && canvas) {
@@ -116,12 +132,8 @@ function debugPaso6() {
   return `PASO 6: LIDAR
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales FINALES: ${p.verticales.length}
-   3 votos: ${v3}, 2 votos: ${v2}, 1 voto: ${v1}
+   Votos: 3v=${v3}, 2v=${v2}, 1v=${v1}
 📊 Horizontales FINALES: ${p.horizontales.length}
-   3 votos: ${h3}, 2 votos: ${h2}, 1 voto: ${h1}
-
-💡 Los votos indican cuántos algoritmos coinciden:
-   - 3 votos: Óptica + Ecografía + Espectro (muy confiable)
-   - 2 votos: al menos 2 coinciden (confiable)
-   - 1 voto: solo 1 algoritmo lo detectó (posible pero menos seguro)`;
+   Votos: 3v=${h3}, 2v=${h2}, 1v=${h1}
+⚙️ Tolerancia: ${PARAMS_PASO6.TOLERANCIA_ALINEACION}px, Peso: ${PARAMS_PASO6.PESO_PATRON_REGULAR}`;
 }
