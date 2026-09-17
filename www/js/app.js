@@ -1,28 +1,29 @@
 // ============================================
-// MAR Caribe v8.0 - Doble versión + Zoom + Pan
+// MAR Caribe v8.1 - Imagen base separada
+// imgPreview = solo visual
+// window.MAR.* = fuente real para los pasos
 // ============================================
 
-// ============================================
-// ESTADO GLOBAL
-// ============================================
 window.MAR = window.MAR || {};
-window.MAR.imagenOriginal = null;       // ImageData original
-window.MAR.imagenOriginalCanvas = null; // Canvas original
-window.MAR.imagenFiltrada = null;       // ImageData filtrada
-window.MAR.imagenFiltradaCanvas = null; // Canvas filtrada
-window.MAR.fuentes = {};                // Fuente elegida por paso
-window.MAR.lineas = {};                 // Líneas detectadas por paso
+window.MAR.imagenOriginal = null;
+window.MAR.imagenOriginalCanvas = null;
+window.MAR.imagenFiltrada = null;
+window.MAR.imagenFiltradaCanvas = null;
+window.MAR.fuentes = {};
+window.MAR.lineas = {};
+window.MAR.lineasPaso3 = [];
+window.MAR.lineasPaso4 = [];
+window.MAR.lineasPaso5 = [];
 
 let rutaImagenActual = null;
 let matrizDatos = [];
 let procesando = false;
 let workerTesseract = null;
 
-// Zoom + Pan
 let zoomActual = 1.0;
 let panX = 0, panY = 0;
 const ZOOM_MIN = 1.0, ZOOM_MAX = 15.0;
-let verVersion = 'original'; // 'original' o 'filtrada'
+let verVersion = 'original';
 let lineasOcultas = false;
 
 // ============================================
@@ -96,7 +97,7 @@ function cargarEnCanvas(src) {
     document.getElementById('btnAjustes').style.display = 'flex';
     resetearZoom();
 
-    // Guardar imagen original
+    // Guardar imagen original en el "cajón"
     const canvas = document.createElement('canvas');
     canvas.width = img.naturalWidth;
     canvas.height = img.naturalHeight;
@@ -108,14 +109,23 @@ function cargarEnCanvas(src) {
     // Resetear filtrada
     window.MAR.imagenFiltrada = null;
     window.MAR.imagenFiltradaCanvas = null;
-    window.MAR.fuentes = {};
     window.MAR.lineas = {};
+    window.MAR.lineasPaso3 = [];
+    window.MAR.lineasPaso4 = [];
+    window.MAR.lineasPaso5 = [];
     
     // Resetear toggle
     verVersion = 'original';
     actualizarToggleVer();
     
-    // Resetear estados de pasos
+    // Deshabilitar toggle filtrada hasta que se aplique mediana
+    const btnFilt = document.getElementById('btnVerFiltrada');
+    if (btnFilt) {
+      btnFilt.disabled = true;
+      btnFilt.classList.add('disabled');
+    }
+    
+    // Resetear estados
     for (let i = 1; i <= 9; i++) {
       const est = document.getElementById('estado-paso' + i);
       if (est) est.textContent = '⏳';
@@ -123,7 +133,7 @@ function cargarEnCanvas(src) {
       if (item) item.classList.remove('paso-ejecutado', 'paso-ejecutando', 'paso-error');
     }
 
-    // Analizar imagen
+    // Análisis
     if (typeof analizarImagen === 'function') {
       try {
         setProgreso(50, 'Analizando imagen...');
@@ -131,12 +141,12 @@ function cargarEnCanvas(src) {
         mostrarAnalisis(analisis);
         ocultarProgreso();
       } catch (e) {
-        console.error('Error análisis:', e);
+        console.error(e);
         ocultarProgreso();
       }
     }
 
-    mostrarStatus('✅ Imagen cargada. Revisa los ajustes.', 'success');
+    mostrarStatus('✅ Imagen cargada. Ajusta la mediana si es necesario.', 'success');
   };
 }
 
@@ -179,7 +189,7 @@ function toggleLineas() {
 }
 
 // ============================================
-// TOGGLE VER (ORIGINAL / FILTRADA)
+// TOGGLE VER - SOLO VISUAL
 // ============================================
 function actualizarToggleVer() {
   const btnOrig = document.getElementById('btnVerOriginal');
@@ -189,13 +199,24 @@ function actualizarToggleVer() {
 }
 
 function cambiarVersionVer(version) {
+  // Si piden filtrada y no existe, avisar
   if (version === 'filtrada' && !window.MAR.imagenFiltradaCanvas) {
-    alert('⚠️ Primero aplica la mediana');
+    alert('⚠️ Primero aplica la mediana para ver la versión filtrada.\n\nToca el botón "🧹 1. Mediana" o ajusta el slider.');
     return;
   }
+
+  // Si ya estamos en esa versión, no hacer nada
+  if (verVersion === version) return;
+
+  // Guardar zoom y pan actuales
+  const zoomGuardado = zoomActual;
+  const panXGuardado = panX;
+  const panYGuardado = panY;
+
   verVersion = version;
   actualizarToggleVer();
-  
+
+  // SOLO cambiar lo visual, NUNCA window.MAR.*
   const canvas = version === 'original' 
     ? window.MAR.imagenOriginalCanvas 
     : window.MAR.imagenFiltradaCanvas;
@@ -203,10 +224,21 @@ function cambiarVersionVer(version) {
   if (canvas) {
     document.getElementById('imgPreview').src = canvas.toDataURL('image/png');
   }
+
+  // Restaurar zoom y pan
+  zoomActual = zoomGuardado;
+  panX = panXGuardado;
+  panY = panYGuardado;
+  
+  setTimeout(() => {
+    aplicarTransform();
+  }, 50);
+
+  console.log('👁️ Ver:', version, '(solo visual)');
 }
 
 // ============================================
-// GESTOS TÁCTILES
+// GESTOS
 // ============================================
 let touchStartDist = 0;
 let touchStartZoom = 1.0;
@@ -233,7 +265,6 @@ function inicializarGestos() {
         return;
       }
       lastTap = ahora;
-      // Pan siempre si zoom > 1
       if (zoomActual > 1.05) {
         isPanning = true;
         touchStartX = e.touches[0].clientX;
@@ -267,16 +298,13 @@ function inicializarGestos() {
 }
 
 // ============================================
-// PANEL DE AJUSTES (BOTTOM SHEET)
+// PANEL AJUSTES
 // ============================================
 function abrirAjustes() {
-  const panel = document.getElementById('panelAjustes');
-  if (panel) panel.classList.add('abierto');
+  document.getElementById('panelAjustes')?.classList.add('abierto');
 }
-
 function cerrarAjustes() {
-  const panel = document.getElementById('panelAjustes');
-  if (panel) panel.classList.remove('abierto');
+  document.getElementById('panelAjustes')?.classList.remove('abierto');
 }
 
 // ============================================
@@ -284,29 +312,35 @@ function cerrarAjustes() {
 // ============================================
 async function inicializarTesseract() {
   if (workerTesseract) return workerTesseract;
-  console.log('🔧 Inicializando Tesseract...');
-  try {
-    let basePath = window.location.href;
-    basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
-    workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
-      workerPath: basePath + 'tesseract/worker.min.js',
-      langPath: basePath + 'tesseract/lang-data',
-      corePath: basePath + 'tesseract/',
-      workerBlobURL: false,
-      cacheMethod: 'none',
-      gzip: false,
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round(m.progress * 100);
-          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo: ${pct}%`);
-        }
+  let basePath = window.location.href;
+  basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+  workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
+    workerPath: basePath + 'tesseract/worker.min.js',
+    langPath: basePath + 'tesseract/lang-data',
+    corePath: basePath + 'tesseract/',
+    workerBlobURL: false,
+    cacheMethod: 'none',
+    gzip: false,
+    logger: (m) => {
+      if (m.status === 'recognizing text') {
+        const pct = Math.round(m.progress * 100);
+        setProgreso(30 + Math.round(pct * 0.4), `Reconociendo: ${pct}%`);
       }
-    });
-    console.log('✅ Tesseract listo');
-    return workerTesseract;
-  } catch (e) {
-    throw new Error('No se pudo iniciar Tesseract: ' + e.message);
+    }
+  });
+  return workerTesseract;
+}
+
+// ============================================
+// HELPER: Obtener imagen fuente por paso
+// ============================================
+function obtenerImagenFuente(paso) {
+  const fuente = (window.MAR.fuentes && window.MAR.fuentes['paso' + paso]) || 'original';
+  console.log('📦 Paso', paso, 'lee de:', fuente);
+  if (fuente === 'filtrada' && window.MAR.imagenFiltrada) {
+    return window.MAR.imagenFiltrada;
   }
+  return window.MAR.imagenOriginal;
 }
 
 // ============================================
@@ -315,13 +349,15 @@ async function inicializarTesseract() {
 function limpiarTodo() {
   rutaImagenActual = null;
   matrizDatos = [];
-  window.MAR = window.MAR || {};
   window.MAR.imagenOriginal = null;
   window.MAR.imagenOriginalCanvas = null;
   window.MAR.imagenFiltrada = null;
   window.MAR.imagenFiltradaCanvas = null;
   window.MAR.fuentes = {};
   window.MAR.lineas = {};
+  window.MAR.lineasPaso3 = [];
+  window.MAR.lineasPaso4 = [];
+  window.MAR.lineasPaso5 = [];
   
   document.getElementById('imgPreview').src = '';
   document.getElementById('previewContainer').style.display = 'none';
@@ -330,11 +366,17 @@ function limpiarTodo() {
   document.getElementById('tableWrapper').innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
   document.getElementById('btnAjustes').style.display = 'none';
   document.getElementById('analisisAuto').style.display = 'none';
+  
+  const canvas = document.getElementById('deteccionCanvas');
+  if (canvas) { canvas.width = 0; canvas.height = 0; }
+  
   resetearZoom();
   
   for (let i = 1; i <= 9; i++) {
     const est = document.getElementById('estado-paso' + i);
     if (est) est.textContent = '⏳';
+    const item = document.getElementById('btn-paso' + i);
+    if (item) item.classList.remove('paso-ejecutado', 'paso-ejecutando', 'paso-error');
   }
   
   cerrarAjustes();
@@ -363,9 +405,7 @@ function exportarCSV() {
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'tabla.csv';
-  a.click();
+  a.href = url; a.download = 'tabla.csv'; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -381,9 +421,7 @@ function exportarExcel() {
   const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = 'tabla.xls';
-  a.click();
+  a.href = url; a.download = 'tabla.xls'; a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -391,7 +429,7 @@ function exportarExcel() {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 MAR Caribe v8.0');
+  console.log('🚀 MAR Caribe v8.1 - Imagen base separada');
 
   document.getElementById('dropZone')?.addEventListener('click', capturarImagen);
   document.getElementById('fileInput')?.addEventListener('change', cargarDesdeInput);

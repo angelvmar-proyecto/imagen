@@ -255,3 +255,18 @@ input[type="file"] { display: none; }
 .tabla-resultado td[contenteditable="true"]:focus { outline: 2px solid #3c6382; background: #fff8e1; }
 
 footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; }
+
+/* Toggle deshabilitado */
+.toggle-btn.disabled,
+.toggle-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #f0f4f8;
+  color: #b2bec3;
+}
+
+.toggle-btn.disabled.activo,
+.toggle-btn:disabled.activo {
+  background: #b2bec3;
+  color: white;
+}

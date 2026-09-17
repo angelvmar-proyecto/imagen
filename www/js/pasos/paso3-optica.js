@@ -45,7 +45,7 @@ async function ejecutarPaso3() {
   const fuente = (window.MAR.fuentes && window.MAR.fuentes.paso3) || 'original';
   window.MAR.paso3.fuente = fuente;
 
-  // Usar la imagen fuente elegida
+  // Leer del CAJÓN
   const imgFuente = obtenerImagenFuente(3);
   const grises = rgbAGrises2(imgFuente);
   const w = grises.width, h = grises.height, data = grises.data;
@@ -67,10 +67,18 @@ async function ejecutarPaso3() {
 
   window.MAR.paso3.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
   window.MAR.paso3.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
+  window.MAR.lineasPaso3 = { verticales: verticales, horizontales: horizontales };
   window.MAR.paso3.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso3.ejecutado = true;
 
   if (typeof dibujarLineasPaso === 'function') {
+    // Limpiar canvas si es el primero en dibujar
+    const img = document.getElementById('imgPreview');
+    const canvas = document.getElementById('deteccionCanvas');
+    if (canvas && img) {
+      canvas.width = img.clientWidth;
+      canvas.height = img.clientHeight;
+    }
     dibujarLineasPaso(3, verticales, horizontales);
     actualizarContadores(verticales.length, horizontales.length);
   }

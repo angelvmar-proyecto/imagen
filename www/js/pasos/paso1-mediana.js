@@ -1,3 +1,7 @@
+// ============================================
+// PASO 1: MEDIANA
+// ============================================
+
 const VENTANAS_MEDIANA_P1 = [1, 3, 5, 7];
 
 const PARAMS_PASO1 = {
@@ -52,11 +56,11 @@ async function ejecutarPaso1() {
   const ventana = PARAMS_PASO1.TAMANO_VENTANA;
 
   if (ventana <= 1) {
-    // Sin filtro: copiar original
+    // Sin filtro: la filtrada es igual a la original
     window.MAR.imagenFiltrada = window.MAR.imagenOriginal;
     window.MAR.imagenFiltradaCanvas = window.MAR.imagenOriginalCanvas;
   } else {
-    if (typeof setProgreso === 'function') setProgreso(50, `Aplicando mediana ${ventana}×${ventana}...`);
+    if (typeof setProgreso === 'function') setProgreso(50, `Mediana ${ventana}×${ventana}...`);
     const filtrada = aplicarMediana(window.MAR.imagenOriginal, ventana);
     window.MAR.imagenFiltrada = filtrada;
     
@@ -70,9 +74,12 @@ async function ejecutarPaso1() {
   window.MAR.paso1.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso1.ejecutado = true;
 
-  // Actualizar toggle Ver
+  // Habilitar botón "Ver Filtrada"
   const btnFilt = document.getElementById('btnVerFiltrada');
-  if (btnFilt) btnFilt.disabled = false;
+  if (btnFilt) {
+    btnFilt.disabled = false;
+    btnFilt.classList.remove('disabled');
+  }
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 1!');
   return window.MAR.paso1;
@@ -85,6 +92,6 @@ function debugPaso1() {
   return `PASO 1: MEDIANA
 ⏱️ ${p.tiempoMs} ms
 📊 Ventana: ${v}×${v} (${nombres[v]})
-✅ Ambas versiones listas: Original + Filtrada
-🔀 Los siguientes pasos pueden elegir su fuente`;
+✅ Ambas versiones listas
+🔀 Los pasos 2,3,4,5,8,9 eligen su fuente`;
 }

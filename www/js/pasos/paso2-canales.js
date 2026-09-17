@@ -1,14 +1,6 @@
 window.MAR = window.MAR || {};
 window.MAR.paso2 = { ejecutado: false, tiempoMs: 0, fuente: 'original' };
 
-function obtenerImagenFuente(paso) {
-  const fuente = (window.MAR.fuentes && window.MAR.fuentes['paso' + paso]) || 'original';
-  if (fuente === 'filtrada' && window.MAR.imagenFiltrada) {
-    return window.MAR.imagenFiltrada;
-  }
-  return window.MAR.imagenOriginal;
-}
-
 function rgbAGrises2(imageData) {
   const w = imageData.width, h = imageData.height;
   const src = imageData.data;
@@ -51,6 +43,7 @@ async function ejecutarPaso2() {
   const fuente = (window.MAR.fuentes && window.MAR.fuentes.paso2) || 'original';
   window.MAR.paso2.fuente = fuente;
 
+  // Leer del CAJÓN, no de imgPreview
   const imageData = obtenerImagenFuente(2);
   if (!imageData) throw new Error('No hay imagen fuente');
 
