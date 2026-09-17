@@ -1,19 +1,30 @@
 // ============================================
-// MAR Caribe v3.3 - Tesseract.js v5 LOCAL
-// 100% Offline · Detección por coordenadas
+// MAR Caribe v5.0 - Zoom + Preparar OCR + Tesseract
 // ============================================
 
 let rutaImagenActual = null;
 let matrizDatos = [];
-let porcentajesCorte = [];
 let palabrasDetectadas = [];
 let numColumnasDetectadas = 0;
 let tiposColumnas = [];
 let procesando = false;
 let workerTesseract = null;
+let lineasVerticales = [];
+let lineasHorizontales = [];
+
+// Zoom
+let zoomActual = 1.0;
+let panX = 0;
+let panY = 0;
+const ZOOM_MIN = 1.0;
+const ZOOM_MAX = 15.0;
+let lineasOcultas = false;
+
+// Imagen limpia para OCR
+let canvasLimpio = null;
 
 // ============================================
-// DETECCIÓN DE TIPOS DE DATOS
+// TIPOS DE DATOS
 // ============================================
 function detectarTipoColumna(valores) {
   if (!valores || valores.length === 0) return 'texto';
@@ -34,26 +45,6 @@ function detectarTipoColumna(valores) {
   if (esHora / total > 0.6) return 'hora';
   if (esMoneda / total > 0.6) return 'moneda';
   return 'texto';
-}
-
-function aplicarReglasFuzzy(valRaw, tipo) {
-  if (!valRaw) return '';
-  let t = valRaw.replace(/[|¦\\]/g, '').trim();
-  switch (tipo) {
-    case 'numero': return t.replace(/[^0-9]/g, '');
-    case 'decimal': return t.replace(/[^0-9.]/g, '');
-    case 'fecha':
-      const fm = t.match(/(\d{1,2})[\/\-](\d{1,2})/);
-      return fm ? fm[0] : t;
-    case 'hora':
-      const hm = t.match(/(\d{1,2})[:\.](\d{2})/);
-      return hm ? hm[0] : t;
-    case 'moneda':
-      if (/USD|US|\$/i.test(t)) return 'USD';
-      if (/MXN|MX|PESO/i.test(t)) return 'MXN';
-      return t;
-    default: return t;
-  }
 }
 
 // ============================================
@@ -123,238 +114,493 @@ function cargarEnCanvas(src) {
   img.src = src;
   img.onload = () => {
     document.getElementById('previewContainer').style.display = 'block';
-    inicializarRejilla();
-    mostrarStatus('✅ Imagen cargada. Toca "Escanear".', 'success');
+    // Resetear zoom
+    zoomActual = 1.0;
+    panX = 0;
+    panY = 0;
+    aplicarTransform();
+    // Limpiar canvas de detección previa
+    const canvas = document.getElementById('deteccionCanvas');
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    lineasVerticales = [];
+    lineasHorizontales = [];
+    document.getElementById('contadorLineas').style.display = 'none';
+    mostrarStatus('✅ Imagen cargada. Toca "Detectar Líneas".', 'success');
   };
 }
 
 // ============================================
-// REJILLA
+// ZOOM Y PAN
 // ============================================
-function inicializarRejilla() {
-  const img = document.getElementById('imgPreview');
-  const canvas = document.getElementById('gridCanvas');
-  if (!img || !canvas || !img.clientWidth) return;
-  canvas.width = img.clientWidth;
-  canvas.height = img.clientHeight;
-  if (porcentajesCorte.length === 0) {
-    for (let i = 1; i <= 19; i++) porcentajesCorte.push(Number((i / 20).toFixed(3)));
-  }
-  dibujarLineas();
+function aplicarTransform() {
+  const content = document.getElementById('zoomContent');
+  if (!content) return;
+  content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomActual})`;
+  const zoomLabel = document.getElementById('zoomLevel');
+  if (zoomLabel) zoomLabel.textContent = zoomActual.toFixed(1) + 'x';
 }
 
-function dibujarLineas() {
-  const canvas = document.getElementById('gridCanvas');
+function resetearZoom() {
+  zoomActual = 1.0;
+  panX = 0;
+  panY = 0;
+  aplicarTransform();
+}
+
+function zoomIn() {
+  const nuevoZoom = Math.min(zoomActual + 1.0, ZOOM_MAX);
+  if (nuevoZoom !== zoomActual) {
+    zoomActual = nuevoZoom;
+    aplicarTransform();
+  }
+}
+
+function zoomOut() {
+  const nuevoZoom = Math.max(zoomActual - 1.0, ZOOM_MIN);
+  if (nuevoZoom !== zoomActual) {
+    zoomActual = nuevoZoom;
+    if (zoomActual === 1.0) { panX = 0; panY = 0; }
+    aplicarTransform();
+  }
+}
+
+function toggleLineas() {
+  const canvas = document.getElementById('deteccionCanvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = '#d97706';
-  ctx.setLineDash([4, 4]);
-  porcentajesCorte.forEach(pct => {
-    const x = Math.floor(pct * canvas.width) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
-  });
-  ctx.setLineDash([]);
-}
-
-function obtenerCanvasDeImagen() {
-  const imgElement = document.getElementById('imgPreview');
-  if (!imgElement || !imgElement.naturalWidth) return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = imgElement.naturalWidth;
-  canvas.height = imgElement.naturalHeight;
-  canvas.getContext('2d').drawImage(imgElement, 0, 0);
-  return canvas;
+  lineasOcultas = !lineasOcultas;
+  canvas.style.opacity = lineasOcultas ? '0' : '1';
+  const btn = document.getElementById('btnToggleLineas');
+  if (btn) btn.textContent = lineasOcultas ? '🚫' : '👁️';
 }
 
 // ============================================
-// CLUSTERING
+// GESTOS TÁCTILES
 // ============================================
-function inicializarClusters(datos, k) {
-  if (datos.length === 0) return [];
-  datos.sort((a, b) => a - b);
-  const clusters = [];
-  const step = Math.floor(datos.length / Math.min(k, datos.length));
-  for (let i = 0; i < Math.min(k, datos.length); i++) {
-    clusters.push({ centro: datos[Math.min(i * step, datos.length - 1)], puntos: [] });
-  }
-  return clusters;
-}
+let touchStartDist = 0;
+let touchStartZoom = 1.0;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartPanX = 0;
+let touchStartPanY = 0;
+let lastTap = 0;
+let isPanning = false;
 
-function asignarYActualizarClusters(datos, clusters) {
-  if (clusters.length === 0 || datos.length === 0) return clusters;
-  clusters.forEach(c => c.puntos = []);
-  datos.forEach(d => {
-    let cercano = clusters[0];
-    let minDist = Math.abs(d - clusters[0].centro);
-    for (let i = 1; i < clusters.length; i++) {
-      const dist = Math.abs(d - clusters[i].centro);
-      if (dist < minDist) { minDist = dist; cercano = clusters[i]; }
+function inicializarGestos() {
+  const wrapper = document.getElementById('zoomWrapper');
+  if (!wrapper) return;
+
+  wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchStartZoom = zoomActual;
+      isPanning = false;
+    } else if (e.touches.length === 1) {
+      const ahora = Date.now();
+      if (ahora - lastTap < 300) {
+        resetearZoom();
+        lastTap = 0;
+        return;
+      }
+      lastTap = ahora;
+      if (zoomActual > 1.05) {
+        isPanning = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartPanX = panX;
+        touchStartPanY = panY;
+      }
     }
-    cercano.puntos.push(d);
-  });
-  return clusters.map(c => {
-    if (c.puntos.length === 0) return c;
-    const suma = c.puntos.reduce((a, b) => a + b, 0);
-    return { centro: suma / c.puntos.length, puntos: [] };
-  });
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = dist / touchStartDist;
+      let nuevoZoom = touchStartZoom * ratio;
+      nuevoZoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nuevoZoom));
+      zoomActual = nuevoZoom;
+      aplicarTransform();
+    } else if (e.touches.length === 1 && isPanning) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      panX = touchStartPanX + dx;
+      panY = touchStartPanY + dy;
+      aplicarTransform();
+    }
+  }, { passive: false });
+
+  wrapper.addEventListener('touchend', () => {
+    isPanning = false;
+    touchStartDist = 0;
+  }, { passive: true });
+
+  wrapper.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) zoomIn();
+    else zoomOut();
+  }, { passive: false });
 }
 
 // ============================================
-// TESSERACT.JS v5 - LOCAL Y OFFLINE
+// TESSERACT.JS v5 - LOCAL
 // ============================================
 async function inicializarTesseract() {
   if (workerTesseract) return workerTesseract;
-
   console.log('🔧 Inicializando Tesseract.js v5 LOCAL...');
-
   try {
-    // Detectar la ruta base (funciona en http://localhost y en file://)
     let basePath = window.location.href;
-    // Quitar el nombre del archivo (index.html)
     basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
 
-    console.log('🔗 Base path:', basePath);
-
     workerTesseract = await Tesseract.createWorker('spa+eng', 1, {
-      // Ruta del worker
       workerPath: basePath + 'tesseract/worker.min.js',
-      // Ruta de los idiomas
       langPath: basePath + 'tesseract/lang-data',
-      // Ruta del core WASM
       corePath: basePath + 'tesseract/',
-      // Desactivar blob para WebView Android
       workerBlobURL: false,
-      // Sin caché (carga desde archivos locales)
       cacheMethod: 'none',
-      // Los archivos NO están comprimidos (.traineddata sin .gz)
       gzip: false,
-      // Logs de progreso
       logger: (m) => {
-        console.log('Tesseract:', m.status, Math.round((m.progress || 0) * 100) + '%');
         if (m.status === 'recognizing text') {
           const pct = Math.round(m.progress * 100);
-          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo texto: ${pct}%`);
+          setProgreso(30 + Math.round(pct * 0.4), `Reconociendo: ${pct}%`);
         } else if (m.status === 'loading language traineddata') {
           setProgreso(20, 'Cargando idiomas...');
         } else if (m.status === 'initializing api') {
           setProgreso(25, 'Inicializando API...');
-        } else if (m.status === 'loading tesseract core') {
-          setProgreso(15, 'Cargando motor...');
         }
       }
     });
-
-    console.log('✅ Tesseract v5 local listo');
+    console.log('✅ Tesseract listo');
     return workerTesseract;
   } catch (e) {
-    console.error('❌ Error inicializando Tesseract:', e);
+    console.error('❌ Error:', e);
     throw new Error('No se pudo iniciar Tesseract: ' + e.message);
   }
 }
 
-async function ejecutarOCR(canvasElement) {
-  const worker = await inicializarTesseract();
-  const { data } = await worker.recognize(canvasElement);
-  return data;
-}
-
 // ============================================
-// ESCANEO PRINCIPAL
+// DETECTAR LÍNEAS (4 ALGORITMOS)
 // ============================================
-async function ejecutarEscaneoCompleto() {
+async function onDetectarLineas() {
   if (!rutaImagenActual) { alert('📷 Carga una imagen primero.'); return; }
   if (procesando) return;
   procesando = true;
 
   try {
     setProgreso(10, 'Preparando imagen...');
-    const canvasElement = obtenerCanvasDeImagen();
-    if (!canvasElement) throw new Error('No se pudo obtener el canvas');
+    const img = document.getElementById('imgPreview');
+    const canvasOriginal = document.createElement('canvas');
+    canvasOriginal.width = img.naturalWidth;
+    canvasOriginal.height = img.naturalHeight;
+    canvasOriginal.getContext('2d').drawImage(img, 0, 0);
 
-    setProgreso(15, 'Inicializando motor OCR...');
-    const data = await ejecutarOCR(canvasElement);
+    setProgreso(30, 'Ejecutando 4 algoritmos...');
+    const resultado = await detectarLineasConAlgoritmos(canvasOriginal);
+
+    lineasVerticales = resultado.verticales;
+    lineasHorizontales = resultado.horizontales;
+
+    setProgreso(80, 'Dibujando líneas...');
+
+    const canvasDeteccion = document.getElementById('deteccionCanvas');
+    canvasDeteccion.width = img.clientWidth;
+    canvasDeteccion.height = img.clientHeight;
+
+    const escalaX = img.clientWidth / img.naturalWidth;
+    const escalaY = img.clientHeight / img.naturalHeight;
+
+    const verticalesEscaladas = lineasVerticales.map(v => ({
+      posicion: v.posicion * escalaX,
+      votos: v.votos
+    }));
+    const horizontalesEscaladas = lineasHorizontales.map(h => ({
+      posicion: h.posicion * escalaY,
+      votos: h.votos
+    }));
+
+    dibujarLineasDeteccion(canvasDeteccion, verticalesEscaladas, horizontalesEscaladas);
+
+    document.getElementById('contadorVerticales').textContent = `${lineasVerticales.length} verticales`;
+    document.getElementById('contadorHorizontales').textContent = `${lineasHorizontales.length} horizontales`;
+    document.getElementById('contadorLineas').style.display = 'flex';
+
+    setProgreso(100, '¡Detección completada!');
+    mostrarStatus(`✅ ${lineasVerticales.length} verticales, ${lineasHorizontales.length} horizontales`, 'success');
+    setTimeout(ocultarProgreso, 1500);
+    procesando = false;
+
+  } catch (err) {
+    console.error('❌ Error:', err);
+    mostrarStatus('❌ Error: ' + (err.message || err), 'error');
+    ocultarProgreso();
+    procesando = false;
+  }
+}
+
+// ============================================
+// PREPARAR OCR - Convertir líneas a negro + limpieza
+// ============================================
+async function onPrepararOCR() {
+  if (!rutaImagenActual) { alert('📷 Carga una imagen primero.'); return; }
+  if (lineasVerticales.length === 0 && lineasHorizontales.length === 0) {
+    alert('⚠️ Primero toca "Detectar Líneas".');
+    return;
+  }
+  if (procesando) return;
+  procesando = true;
+
+  try {
+    setProgreso(10, 'Creando imagen limpia...');
+
+    const img = document.getElementById('imgPreview');
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    setProgreso(30, 'Dibujando líneas en negro...');
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 2;
+
+    // Líneas verticales
+    for (const v of lineasVerticales) {
+      const x = v.posicion;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+
+    // Líneas horizontales
+    for (const h of lineasHorizontales) {
+      const y = h.posicion;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    setProgreso(50, 'Aplicando binarización...');
+
+    // Binarización: píxeles claros → blanco, oscuros → negro
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const luminancia = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (luminancia > 180) {
+        data[i] = 255; data[i + 1] = 255; data[i + 2] = 255;
+      } else {
+        data[i] = 0; data[i + 1] = 0; data[i + 2] = 0;
+      }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+
+    setProgreso(70, 'Eliminando manchas pequeñas...');
+    eliminarBlobsPequeños(canvas, 4);
+
+    // Guardar canvas limpio
+    canvasLimpio = canvas;
+
+    setProgreso(90, 'Mostrando resultado...');
+
+    // Mostrar la imagen limpia en el preview
+    const imgPreview = document.getElementById('imgPreview');
+    imgPreview.src = canvas.toDataURL('image/png');
+
+    // Ocultar el canvas de detección (ya no aplica)
+    const canvasDeteccion = document.getElementById('deteccionCanvas');
+    if (canvasDeteccion) {
+      canvasDeteccion.width = 0;
+      canvasDeteccion.height = 0;
+    }
+
+    // Resetear zoom
+    zoomActual = 1.0;
+    panX = 0;
+    panY = 0;
+    aplicarTransform();
+
+    setProgreso(100, '¡Imagen lista!');
+    mostrarStatus('✅ Imagen limpia lista. Toca "Escanear".', 'success');
+    setTimeout(ocultarProgreso, 1500);
+    procesando = false;
+
+  } catch (err) {
+    console.error('❌ Error:', err);
+    mostrarStatus('❌ Error: ' + (err.message || err), 'error');
+    ocultarProgreso();
+    procesando = false;
+  }
+}
+
+// Eliminar blobs pequeños (manchas)
+function eliminarBlobsPequeños(canvas, tamanoMinimo) {
+  const ctx = canvas.getContext('2d');
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+  const width = canvas.width;
+  const height = canvas.height;
+  const visitado = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (visitado[idx]) continue;
+
+      const pIdx = idx * 4;
+      if (data[pIdx] > 128) {
+        visitado[idx] = 1;
+        continue;
+      }
+
+      // BFS para encontrar todos los píxeles del mismo blob
+      const cola = [[x, y]];
+      const blob = [];
+      visitado[idx] = 1;
+
+      while (cola.length > 0) {
+        const [cx, cy] = cola.shift();
+        blob.push([cx, cy]);
+
+        const vecinos = [[cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]];
+        for (const [nx, ny] of vecinos) {
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+          const nIdx = ny * width + nx;
+          if (visitado[nIdx]) continue;
+          visitado[nIdx] = 1;
+          const nPIdx = nIdx * 4;
+          if (data[nPIdx] <= 128) {
+            cola.push([nx, ny]);
+          }
+        }
+      }
+
+      // Si el blob es muy pequeño, eliminarlo
+      if (blob.length < tamanoMinimo) {
+        for (const [bx, by] of blob) {
+          const bIdx = (by * width + bx) * 4;
+          data[bIdx] = 255;
+          data[bIdx + 1] = 255;
+          data[bIdx + 2] = 255;
+        }
+      }
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+// ============================================
+// ESCANEAR - Tesseract sobre imagen limpia
+// ============================================
+async function ejecutarEscaneoCompleto() {
+  if (!canvasLimpio && !rutaImagenActual) {
+    alert('📷 Carga una imagen primero.');
+    return;
+  }
+  if (procesando) return;
+  procesando = true;
+
+  try {
+    let canvasParaOCR;
+    if (canvasLimpio) {
+      // Usar la imagen limpia
+      canvasParaOCR = canvasLimpio;
+    } else {
+      // Usar la imagen original
+      const img = document.getElementById('imgPreview');
+      canvasParaOCR = document.createElement('canvas');
+      canvasParaOCR.width = img.naturalWidth;
+      canvasParaOCR.height = img.naturalHeight;
+      canvasParaOCR.getContext('2d').drawImage(img, 0, 0);
+    }
+
+    setProgreso(15, 'Inicializando Tesseract...');
+    const worker = await inicializarTesseract();
+
+    setProgreso(30, 'Reconociendo texto...');
+    const { data } = await worker.recognize(canvasParaOCR);
 
     if (!data || !data.words || data.words.length < 5) {
-      alert('⚠️ No se detectó suficiente texto en la imagen.');
+      alert('⚠️ No se detectó suficiente texto.');
       ocultarProgreso();
       procesando = false;
       return;
     }
 
-    setProgreso(70, 'Procesando coordenadas...');
-    const widthImg = canvasElement.width;
+    setProgreso(75, 'Asignando a celdas...');
 
-    let palabras = data.words
-      .filter(w => w.confidence > 30 && w.text.trim().length > 0)
-      .map(w => ({
-        text: w.text.trim(),
-        x: (w.bbox.x0 + w.bbox.x1) / 2,
-        y: (w.bbox.y0 + w.bbox.y1) / 2
-      }));
+    // Asignar palabras a celdas usando las líneas detectadas
+    const widthImg = canvasParaOCR.width;
+    const heightImg = canvasParaOCR.height;
 
-    palabrasDetectadas = palabras;
-    console.log(`📝 Palabras: ${palabras.length}`);
+    if (lineasVerticales.length > 0 && lineasHorizontales.length > 0) {
+      // Usar las líneas detectadas
+      const cortesX = lineasVerticales.map(v => v.posicion).sort((a, b) => a - b);
+      const cortesY = lineasHorizontales.map(h => h.posicion).sort((a, b) => a - b);
 
-    // CLUSTERING EN X (COLUMNAS)
-    setProgreso(75, 'Detectando columnas...');
-    const xs = palabras.map(p => p.x);
-    const numClustersX = Math.min(Math.max(Math.round(Math.sqrt(palabras.length / 2)), 3), 30);
-    let clustersX = inicializarClusters(xs, numClustersX);
-    for (let i = 0; i < 12; i++) clustersX = asignarYActualizarClusters(xs, clustersX);
-    let centrosX = clustersX.filter(c => c.puntos.length > 0).map(c => c.centro).sort((a, b) => a - b);
-    numColumnasDetectadas = centrosX.length;
-    console.log(`📊 Columnas: ${numColumnasDetectadas}`);
+      const numCols = cortesX.length + 1;
+      const numFilas = cortesY.length + 1;
 
-    const nuevosCortes = [];
-    for (let i = 0; i < centrosX.length - 1; i++) {
-      nuevosCortes.push((centrosX[i] + centrosX[i + 1]) / 2);
+      // Crear matriz vacía
+      matrizDatos = [];
+      for (let i = 0; i < numFilas; i++) {
+        matrizDatos.push(new Array(numCols).fill(''));
+      }
+
+      // Asignar palabras
+      for (const word of data.words) {
+        if (!word.text || word.text.trim() === '') continue;
+        const cx = (word.bbox.x0 + word.bbox.x1) / 2;
+        const cy = (word.bbox.y0 + word.bbox.y1) / 2;
+
+        // Encontrar columna
+        let colIdx = 0;
+        for (let i = 0; i < cortesX.length; i++) {
+          if (cx > cortesX[i]) colIdx = i + 1;
+        }
+
+        // Encontrar fila
+        let rowIdx = 0;
+        for (let i = 0; i < cortesY.length; i++) {
+          if (cy > cortesY[i]) rowIdx = i + 1;
+        }
+
+        if (rowIdx < matrizDatos.length && colIdx < matrizDatos[rowIdx].length) {
+          const actual = matrizDatos[rowIdx][colIdx];
+          matrizDatos[rowIdx][colIdx] = actual ? actual + ' ' + word.text : word.text;
+        }
+      }
+
+      numColumnasDetectadas = numCols;
+    } else {
+      // Fallback: 1 columna
+      matrizDatos = data.text.split('\n').filter(l => l.trim()).map(l => [l.trim()]);
+      numColumnasDetectadas = 1;
     }
-    porcentajesCorte = nuevosCortes.map(c => Number((c / widthImg).toFixed(3)));
-    dibujarLineas();
 
-    // AGRUPAR POR FILAS
-    setProgreso(85, 'Agrupando filas...');
-    palabras.sort((a, b) => a.y - b.y);
-    const filas = [];
-    palabras.forEach(p => {
-      let fila = filas.find(f => Math.abs(f.yCentro - p.y) < 18);
-      if (fila) fila.palabras.push(p);
-      else filas.push({ yCentro: p.y, palabras: [p] });
-    });
-
-    // CONSTRUIR MATRIZ
-    setProgreso(90, 'Construyendo tabla...');
-    const limitesX = [0, ...porcentajesCorte.map(p => p * widthImg), widthImg];
-    matrizDatos = filas.map(fila => {
-      const filaCols = new Array(numColumnasDetectadas).fill('');
-      fila.palabras.forEach(p => {
-        let colIdx = limitesX.findIndex((lim, i) => i > 0 && p.x <= lim) - 1;
-        if (colIdx < 0) colIdx = 0;
-        if (colIdx >= numColumnasDetectadas) colIdx = numColumnasDetectadas - 1;
-        filaCols[colIdx] = filaCols[colIdx] ? filaCols[colIdx] + ' ' + p.text : p.text;
-      });
-      return filaCols;
-    });
-
-    // TIPOS Y LIMPIEZA
-    setProgreso(95, 'Limpiando datos...');
+    // Detectar tipos
     tiposColumnas = [];
     for (let j = 0; j < numColumnasDetectadas; j++) {
       const colValues = matrizDatos.map(row => row[j]).filter(v => v && v.trim());
       tiposColumnas.push(detectarTipoColumna(colValues));
     }
-    for (let i = 0; i < matrizDatos.length; i++) {
-      for (let j = 0; j < matrizDatos[i].length; j++) {
-        matrizDatos[i][j] = aplicarReglasFuzzy(matrizDatos[i][j], tiposColumnas[j] || 'texto');
-      }
-    }
 
-    // MOSTRAR
+    // Mostrar
     const textoExtraido = matrizDatos.map(row => row.join('\t')).join('\n');
     document.getElementById('textoOCR').textContent = textoExtraido;
     document.getElementById('resultadoTexto').classList.add('show');
@@ -366,7 +612,6 @@ async function ejecutarEscaneoCompleto() {
 
     setProgreso(100, '¡Completado!');
     mostrarStatus(`✅ ${matrizDatos.length} filas, ${numColumnasDetectadas} columnas`, 'success');
-
     setTimeout(() => cambiarPestania('tabla'), 800);
     setTimeout(ocultarProgreso, 1500);
     procesando = false;
@@ -408,7 +653,7 @@ function renderizarMatriz() {
   wrapper.innerHTML = html;
 
   wrapper.querySelectorAll('td[contenteditable="true"]').forEach(td => {
-    td.addEventListener('input', function () {
+    td.addEventListener('input', function() {
       const r = parseInt(this.dataset.row);
       const c = parseInt(this.dataset.col);
       if (matrizDatos[r] && matrizDatos[r][c] !== undefined) {
@@ -527,10 +772,13 @@ function renderizarHistorial() {
 function limpiarTodo() {
   rutaImagenActual = null;
   matrizDatos = [];
-  porcentajesCorte = [];
   palabrasDetectadas = [];
   numColumnasDetectadas = 0;
   tiposColumnas = [];
+  lineasVerticales = [];
+  lineasHorizontales = [];
+  canvasLimpio = null;
+
   document.getElementById('imgPreview').src = '';
   document.getElementById('previewContainer').style.display = 'none';
   document.getElementById('fileInput').value = '';
@@ -538,6 +786,18 @@ function limpiarTodo() {
   document.getElementById('resultadoTexto').classList.remove('show');
   document.getElementById('badgeTabla').style.display = 'none';
   document.getElementById('searchInput').value = '';
+  document.getElementById('contadorLineas').style.display = 'none';
+  document.getElementById('contadorVerticales').textContent = '0 verticales';
+  document.getElementById('contadorHorizontales').textContent = '0 horizontales';
+
+  const canvas = document.getElementById('deteccionCanvas');
+  if (canvas) { canvas.width = 0; canvas.height = 0; }
+
+  zoomActual = 1.0;
+  panX = 0;
+  panY = 0;
+  aplicarTransform();
+
   actualizarInfo();
   mostrarStatus('🗑️ Limpiado', 'info');
 }
@@ -570,7 +830,7 @@ async function recibirCompartir() {
             cargarEnCanvas(base64);
             setTimeout(() => {
               document.getElementById('notificacionCompartir').style.display = 'none';
-              ejecutarEscaneoCompleto();
+              onDetectarLineas();
             }, 1500);
           }
         }
@@ -583,10 +843,13 @@ async function recibirCompartir() {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('🚀 MAR Caribe v3.3 - Tesseract.js v5 LOCAL');
+  console.log('🚀 MAR Caribe v5.0 - Zoom + Preparar OCR');
+
   document.getElementById('dropZone').addEventListener('click', capturarImagen);
   document.getElementById('fileInput').addEventListener('change', cargarDesdeInput);
   document.getElementById('btnCamera').addEventListener('click', capturarImagen);
+  document.getElementById('btnDetectar').addEventListener('click', onDetectarLineas);
+  document.getElementById('btnPreparar').addEventListener('click', onPrepararOCR);
   document.getElementById('btnOCR').addEventListener('click', ejecutarEscaneoCompleto);
   document.getElementById('btnLimpiar').addEventListener('click', limpiarTodo);
   document.getElementById('btnCopiarTabla').addEventListener('click', copiarAlPortapapeles);
@@ -603,268 +866,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', () => cambiarPestania(tab.dataset.tab));
   });
+
+  // Zoom
+  document.getElementById('btnZoomIn').addEventListener('click', zoomIn);
+  document.getElementById('btnZoomOut').addEventListener('click', zoomOut);
+  document.getElementById('btnToggleLineas').addEventListener('click', toggleLineas);
+  document.getElementById('btnZoomReset').addEventListener('click', resetearZoom);
+  inicializarGestos();
+
   renderizarHistorial();
   if (window.Capacitor?.isNativePlatform?.()) setTimeout(recibirCompartir, 500);
   mostrarStatus('📷 Carga una imagen o comparte desde WhatsApp', 'info');
-});
-
-// ============================================
-// v4.0 - BOTONES DE DETECCIÓN DE LÍNEAS
-// ============================================
-
-let lineasVerticales = [];
-let lineasHorizontales = [];
-
-// Botón: Detectar Líneas
-async function onDetectarLineas() {
-  if (!rutaImagenActual) {
-    alert('📷 Carga una imagen primero.');
-    return;
-  }
-  if (procesando) return;
-  procesando = true;
-
-  try {
-    setProgreso(10, 'Preparando imagen...');
-
-    // Crear canvas con la imagen original
-    const img = document.getElementById('imgPreview');
-    const canvasOriginal = document.createElement('canvas');
-    canvasOriginal.width = img.naturalWidth;
-    canvasOriginal.height = img.naturalHeight;
-    canvasOriginal.getContext('2d').drawImage(img, 0, 0);
-
-    setProgreso(30, 'Ejecutando 4 algoritmos...');
-
-    // Ejecutar detección
-    const resultado = await detectarLineasConAlgoritmos(canvasOriginal);
-
-    lineasVerticales = resultado.verticales;
-    lineasHorizontales = resultado.horizontales;
-
-    setProgreso(80, 'Dibujando líneas...');
-
-    // Dibujar sobre el canvas de detección
-    const canvasDeteccion = document.getElementById('deteccionCanvas');
-    canvasDeteccion.width = img.clientWidth;
-    canvasDeteccion.height = img.clientHeight;
-
-    // Escalar las líneas al tamaño mostrado
-    const escalaX = img.clientWidth / img.naturalWidth;
-    const escalaY = img.clientHeight / img.naturalHeight;
-
-    const verticalesEscaladas = lineasVerticales.map(v => ({
-      posicion: v.posicion * escalaX,
-      votos: v.votos
-    }));
-    const horizontalesEscaladas = lineasHorizontales.map(h => ({
-      posicion: h.posicion * escalaY,
-      votos: h.votos
-    }));
-
-    dibujarLineasDeteccion(canvasDeteccion, verticalesEscaladas, horizontalesEscaladas);
-
-    // Actualizar contador
-    document.getElementById('contadorVerticales').textContent =
-      `${lineasVerticales.length} verticales`;
-    document.getElementById('contadorHorizontales').textContent =
-      `${lineasHorizontales.length} horizontales`;
-    document.getElementById('contadorLineas').style.display = 'flex';
-
-    setProgreso(100, '¡Detección completada!');
-    mostrarStatus(
-      `✅ ${lineasVerticales.length} verticales, ${lineasHorizontales.length} horizontales`,
-      'success'
-    );
-
-    setTimeout(ocultarProgreso, 1500);
-    procesando = false;
-
-  } catch (err) {
-    console.error('❌ Error en detección:', err);
-    mostrarStatus('❌ Error: ' + (err.message || err), 'error');
-    ocultarProgreso();
-    procesando = false;
-  }
-}
-
-// Botón: Preparar OCR (placeholder para siguiente fase)
-async function onPrepararOCR() {
-  if (lineasVerticales.length === 0 && lineasHorizontales.length === 0) {
-    alert('⚠️ Primero toca "Detectar Líneas".');
-    return;
-  }
-  mostrarStatus('🧹 Preparación para OCR (siguiente fase)...', 'info');
-  alert('🎯 Detección lista. La conversión a negro + limpieza será la siguiente fase.');
-}
-
-// Registrar eventos (solo si los botones existen)
-document.addEventListener('DOMContentLoaded', () => {
-  const btnDetectar = document.getElementById('btnDetectar');
-  const btnPreparar = document.getElementById('btnPreparar');
-  if (btnDetectar) btnDetectar.addEventListener('click', onDetectarLineas);
-  if (btnPreparar) btnPreparar.addEventListener('click', onPrepararOCR);
-});
-
-// ============================================
-// v4.1 - ZOOM Y PAN
-// ============================================
-
-let zoomActual = 1.0;
-let panX = 0;
-let panY = 0;
-let zoomMin = 1.0;
-let zoomMax = 6.0;
-let lineasOcultas = false;
-
-// Actualizar transform del contenido
-function aplicarTransform() {
-  const content = document.getElementById('zoomContent');
-  if (!content) return;
-  content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomActual})`;
-
-  const zoomLabel = document.getElementById('zoomLevel');
-  if (zoomLabel) zoomLabel.textContent = zoomActual.toFixed(1) + 'x';
-}
-
-// Resetear zoom y posición
-function resetearZoom() {
-  zoomActual = 1.0;
-  panX = 0;
-  panY = 0;
-  aplicarTransform();
-}
-
-// Zoom in (+0.5)
-function zoomIn() {
-  const nuevoZoom = Math.min(zoomActual + 0.5, zoomMax);
-  if (nuevoZoom !== zoomActual) {
-    zoomActual = nuevoZoom;
-    aplicarTransform();
-  }
-}
-
-// Zoom out (-0.5)
-function zoomOut() {
-  const nuevoZoom = Math.max(zoomActual - 0.5, zoomMin);
-  if (nuevoZoom !== zoomActual) {
-    zoomActual = nuevoZoom;
-    if (zoomActual === 1.0) {
-      panX = 0;
-      panY = 0;
-    }
-    aplicarTransform();
-  }
-}
-
-// Toggle líneas de detección
-function toggleLineas() {
-  const canvas = document.getElementById('deteccionCanvas');
-  if (!canvas) return;
-  lineasOcultas = !lineasOcultas;
-  canvas.style.opacity = lineasOcultas ? '0' : '1';
-  const btn = document.getElementById('btnToggleLineas');
-  if (btn) btn.textContent = lineasOcultas ? '👁️‍🗨️' : '👁️';
-}
-
-// ============================================
-// GESTOS TÁCTILES
-// ============================================
-let touchStartDist = 0;
-let touchStartZoom = 1.0;
-let touchStartX = 0;
-let touchStartY = 0;
-let touchStartPanX = 0;
-let touchStartPanY = 0;
-let lastTap = 0;
-let isPanning = false;
-
-function inicializarGestos() {
-  const wrapper = document.getElementById('zoomWrapper');
-  if (!wrapper) return;
-
-  wrapper.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      // Pellizco
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-      touchStartZoom = zoomActual;
-      isPanning = false;
-    } else if (e.touches.length === 1) {
-      // Detectar doble toque
-      const ahora = Date.now();
-      if (ahora - lastTap < 300) {
-        // Doble toque detectado
-        resetearZoom();
-        lastTap = 0;
-        return;
-      }
-      lastTap = ahora;
-
-      // Pan
-      if (zoomActual > 1.05) {
-        isPanning = true;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        touchStartPanX = panX;
-        touchStartPanY = panY;
-      }
-    }
-  }, { passive: true });
-
-  wrapper.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2) {
-      // Pellizco activo
-      e.preventDefault();
-      const t1 = e.touches[0];
-      const t2 = e.touches[1];
-      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
-      const ratio = dist / touchStartDist;
-      let nuevoZoom = touchStartZoom * ratio;
-      nuevoZoom = Math.max(zoomMin, Math.min(zoomMax, nuevoZoom));
-      zoomActual = nuevoZoom;
-      aplicarTransform();
-    } else if (e.touches.length === 1 && isPanning) {
-      // Pan activo
-      e.preventDefault();
-      const dx = e.touches[0].clientX - touchStartX;
-      const dy = e.touches[0].clientY - touchStartY;
-      panX = touchStartPanX + dx;
-      panY = touchStartPanY + dy;
-      aplicarTransform();
-    }
-  }, { passive: false });
-
-  wrapper.addEventListener('touchend', () => {
-    isPanning = false;
-    touchStartDist = 0;
-  }, { passive: true });
-
-  // Zoom con rueda del ratón (para pruebas en navegador)
-  wrapper.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    if (e.deltaY < 0) {
-      zoomIn();
-    } else {
-      zoomOut();
-    }
-  }, { passive: false });
-}
-
-// ============================================
-// INICIALIZACIÓN
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-  const btnZoomIn = document.getElementById('btnZoomIn');
-  const btnZoomOut = document.getElementById('btnZoomOut');
-  const btnToggleLineas = document.getElementById('btnToggleLineas');
-  const btnZoomReset = document.getElementById('btnZoomReset');
-
-  if (btnZoomIn) btnZoomIn.addEventListener('click', zoomIn);
-  if (btnZoomOut) btnZoomOut.addEventListener('click', zoomOut);
-  if (btnToggleLineas) btnToggleLineas.addEventListener('click', toggleLineas);
-  if (btnZoomReset) btnZoomReset.addEventListener('click', resetearZoom);
-
-  inicializarGestos();
 });
