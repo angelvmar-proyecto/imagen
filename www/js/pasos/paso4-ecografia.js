@@ -1,8 +1,3 @@
-// ============================================
-// PASO 4: ECOGRAFÍA - Detección de Bordes
-// Cambios bruscos de tono = bordes
-// ============================================
-
 const PARAMS_PASO4 = {
   UMBRAL_CONTRASTE: 38,
   UMBRAL_CONTRASTE_V: 42,
@@ -10,113 +5,70 @@ const PARAMS_PASO4 = {
 };
 
 window.MAR = window.MAR || {};
-window.MAR.paso4 = {
-  ejecutado: false,
-  verticales: [],
-  horizontales: [],
-  tiempoMs: 0
-};
+window.MAR.paso4 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
 
 async function ejecutarPaso4() {
-  if (!window.MAR.paso2.ejecutado) {
-    alert('⚠️ Primero ejecuta el Paso 2 (Canales).');
-    return null;
-  }
-
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 4: Ecografía...');
+  if (!window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 4...');
   const t0 = performance.now();
-
   const grises = window.MAR.paso2.grises;
-  const w = grises.width;
-  const h = grises.height;
-  const data = grises.data;
+  const w = grises.width, h = grises.height, data = grises.data;
 
-  if (typeof setProgreso === 'function') setProgreso(30, 'Calculando gradientes...');
-
-  // Gradiente horizontal (bordes verticales)
   const gradX = new Array(w).fill(0);
-  for (let x = 1; x < w - 1; x++) {
-    let suma = 0;
+  for (let x = 1; x < w-1; x++) {
+    let s = 0;
     for (let y = 0; y < h; y++) {
-      const dif = Math.abs(data[y * w + (x + 1)] - data[y * w + (x - 1)]);
-      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE_V) suma++;
+      const dif = Math.abs(data[y*w+(x+1)] - data[y*w+(x-1)]);
+      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE_V) s++;
     }
-    gradX[x] = suma;
+    gradX[x] = s;
   }
-
-  // Gradiente vertical (bordes horizontales)
   const gradY = new Array(h).fill(0);
-  for (let y = 1; y < h - 1; y++) {
-    let suma = 0;
+  for (let y = 1; y < h-1; y++) {
+    let s = 0;
     for (let x = 0; x < w; x++) {
-      const dif = Math.abs(data[(y + 1) * w + x] - data[(y - 1) * w + x]);
-      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE) suma++;
+      const dif = Math.abs(data[(y+1)*w+x] - data[(y-1)*w+x]);
+      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE) s++;
     }
-    gradY[y] = suma;
+    gradY[y] = s;
   }
 
-  const gradXSuave = suavizar3(gradX, 3);
-  const gradYSuave = suavizar3(gradY, 3);
+  const gx = suavizar3(gradX, 3);
+  const gy = suavizar3(gradY, 3);
 
-  if (typeof setProgreso === 'function') setProgreso(70, 'Detectando picos...');
-
-  // Longitud mínima de borde
   const umbralX = h * PARAMS_PASO4.LONGITUD_MIN_BORDE;
   const umbralY = w * PARAMS_PASO4.LONGITUD_MIN_BORDE;
 
-  const detectarPicos4 = (arr, umbral, distanciaMin) => {
-    const picos = [];
-    for (let i = 2; i < arr.length - 2; i++) {
-      if (arr[i] > umbral &&
-          arr[i] >= arr[i - 1] && arr[i] >= arr[i + 1] &&
-          arr[i] > arr[i - 2] && arr[i] > arr[i + 2]) {
-        if (picos.length === 0 || i - picos[picos.length - 1] >= distanciaMin) {
-          picos.push(i);
-        }
+  const picos = (arr, umbral, distMin) => {
+    const p = [];
+    for (let i = 2; i < arr.length-2; i++) {
+      if (arr[i] > umbral && arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
+        if (p.length === 0 || i - p[p.length-1] >= distMin) p.push(i);
       }
     }
-    return picos;
+    return p;
   };
 
-  const verticales = detectarPicos4(gradXSuave, umbralX, PARAMS_PASO3.DISTANCIA_MIN_V);
-  const horizontales = detectarPicos4(gradYSuave, umbralY, PARAMS_PASO3.DISTANCIA_MIN_H);
+  const verticales = picos(gx, umbralX, PARAMS_PASO3.DISTANCIA_MIN_V);
+  const horizontales = picos(gy, umbralY, PARAMS_PASO3.DISTANCIA_MIN_H);
 
-  window.MAR.paso4.verticales = verticales;
-  window.MAR.paso4.horizontales = horizontales;
-
-  const t1 = performance.now();
-  window.MAR.paso4.tiempoMs = Math.round(t1 - t0);
+  window.MAR.paso4.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
+  window.MAR.paso4.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
+  window.MAR.paso4.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso4.ejecutado = true;
 
-  if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 4 completado!');
-  if (typeof mostrarStatus === 'function') mostrarStatus(`✅ Paso 4: ${verticales.length}V, ${horizontales.length}H`, 'success');
+  dibujarLineasPaso(4, verticales, horizontales);
+  actualizarContadores(verticales.length, horizontales.length);
 
-  actualizarEstadoBoton('paso4', true);
+  if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 4!');
   return window.MAR.paso4;
 }
 
 function debugPaso4() {
   const p = window.MAR.paso4;
-  if (!p.ejecutado) return '⚠️ Paso 4 no ejecutado aún';
-
-  return `
-═══════════════════════════════════════
-PASO 4: ECOGRAFÍA (Bordes)
-═══════════════════════════════════════
-
-📊 ENTRADA:
-   - Canal: Grises
-
-⚙️ PARÁMETROS:
-   - Umbral contraste V: ${PARAMS_PASO4.UMBRAL_CONTRASTE_V}
-   - Umbral contraste H: ${PARAMS_PASO4.UMBRAL_CONTRASTE}
-   - Longitud mín borde: ${PARAMS_PASO4.LONGITUD_MIN_BORDE * 100}%
-
-⏱️ TIEMPO:
-   - Ejecución: ${p.tiempoMs} ms
-
-📈 RESULTADO:
-   - Verticales detectadas: ${p.verticales.length}
-   - Horizontales detectadas: ${p.horizontales.length}
-═══════════════════════════════════════`;
+  return `PASO 4: ECOGRAFÍA
+⏱️ ${p.tiempoMs} ms
+📊 Verticales: ${p.verticales.length}
+📊 Horizontales: ${p.horizontales.length}
+⚙️ Contraste V: ${PARAMS_PASO4.UMBRAL_CONTRASTE_V}, H: ${PARAMS_PASO4.UMBRAL_CONTRASTE}`;
 }

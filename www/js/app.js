@@ -244,3 +244,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
   mostrarStatus('📷 Carga una imagen', 'info');
 });
+
+// Sobrescribir cargarEnCanvas para mostrar botones y params
+const _cargarEnCanvasOriginal = cargarEnCanvas;
+cargarEnCanvas = function(src) {
+  rutaImagenActual = src;
+  const img = document.getElementById('imgPreview');
+  if (!img) return;
+  img.src = src;
+  img.onload = () => {
+    document.getElementById('previewContainer').style.display = 'block';
+    document.getElementById('procesoContainer').style.display = 'block';
+    document.getElementById('paramsContainer').style.display = 'block';
+    document.getElementById('debugContainer').style.display = 'block';
+    if (typeof resetearZoom === 'function') resetearZoom();
+    mostrarStatus('✅ Imagen cargada. Toca los botones del proceso.', 'success');
+  };
+};
