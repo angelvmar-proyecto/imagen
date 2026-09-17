@@ -1,12 +1,13 @@
 // ============================================
 // PASO 6: LIDAR
-// Parámetros ORIGINALES del usuario
+// Votación simple: acepta líneas con 1+ votos
+// Mantiene bordes superior e inferior
 // ============================================
 
 const PARAMS_PASO6 = {
-  TOLERANCIA_ALINEACION: 12,
   DISTANCIA_AGRUPACION: 8,
-  RECORRIDO_BORDE: true,
+  VOTOS_MINIMOS: 1,
+  TOLERANCIA_ALINEACION: 12,
   PESO_PATRON_REGULAR: 0.70
 };
 
@@ -45,37 +46,6 @@ function votar(algoritmos, distAgrup) {
   return confirmados;
 }
 
-function validarPatronRegular(cortes, tolerancia) {
-  if (cortes.length < 3) return cortes;
-
-  const distancias = [];
-  for (let i = 1; i < cortes.length; i++) {
-    distancias.push(cortes[i].posicion - cortes[i-1].posicion);
-  }
-
-  const conteo = {};
-  for (const d of distancias) {
-    const key = Math.round(d / 5) * 5;
-    conteo[key] = (conteo[key] || 0) + 1;
-  }
-
-  let distanciaComun = 0, maxRep = 0;
-  for (const [k, c] of Object.entries(conteo)) {
-    if (c > maxRep) { maxRep = c; distanciaComun = parseInt(k); }
-  }
-
-  const filtrados = [cortes[0]];
-  for (let i = 1; i < cortes.length; i++) {
-    const d = cortes[i].posicion - filtrados[filtrados.length-1].posicion;
-    const ratio = d / distanciaComun;
-    const desviacion = Math.abs(ratio - Math.round(ratio));
-    if (desviacion < tolerancia || cortes[i].votos >= 2) {
-      filtrados.push(cortes[i]);
-    }
-  }
-  return filtrados;
-}
-
 async function ejecutarPaso6() {
   if (!window.MAR.paso3.ejecutado || !window.MAR.paso4.ejecutado || !window.MAR.paso5.ejecutado) {
     throw new Error('Ejecuta Pasos 3, 4 y 5 primero');
@@ -97,11 +67,12 @@ async function ejecutarPaso6() {
   const votosV = votar(algV, PARAMS_PASO6.DISTANCIA_AGRUPACION);
   const votosH = votar(algH, PARAMS_PASO6.DISTANCIA_AGRUPACION);
 
-  const verticales = validarPatronRegular(votosV, PARAMS_PASO6.TOLERANCIA_ALINEACION / 10);
-  const horizontales = validarPatronRegular(votosH, PARAMS_PASO6.TOLERANCIA_ALINEACION / 10);
+  // Mantener todas las líneas con 1+ votos
+  const verticales = votosV.sort((a, b) => a.posicion - b.posicion);
+  const horizontales = votosH.sort((a, b) => a.posicion - b.posicion);
 
-  window.MAR.paso6.verticales = verticales.sort((a, b) => a.posicion - b.posicion);
-  window.MAR.paso6.horizontales = horizontales.sort((a, b) => a.posicion - b.posicion);
+  window.MAR.paso6.verticales = verticales;
+  window.MAR.paso6.horizontales = horizontales;
   window.MAR.paso6.votosV = votosV;
   window.MAR.paso6.votosH = votosH;
   window.MAR.paso6.tiempoMs = Math.round(performance.now() - t0);
@@ -112,9 +83,9 @@ async function ejecutarPaso6() {
   if (img && canvas) {
     canvas.width = img.clientWidth;
     canvas.height = img.clientHeight;
-    dibujarLineasPaso(6, window.MAR.paso6.verticales, window.MAR.paso6.horizontales);
+    dibujarLineasPaso(6, verticales, horizontales);
   }
-  actualizarContadores(window.MAR.paso6.verticales.length, window.MAR.paso6.horizontales.length);
+  actualizarContadores(verticales.length, horizontales.length);
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 6!');
   return window.MAR.paso6;
@@ -135,5 +106,7 @@ function debugPaso6() {
    Votos: 3v=${v3}, 2v=${v2}, 1v=${v1}
 📊 Horizontales FINALES: ${p.horizontales.length}
    Votos: 3v=${h3}, 2v=${h2}, 1v=${h1}
-⚙️ Tolerancia: ${PARAMS_PASO6.TOLERANCIA_ALINEACION}px, Peso: ${PARAMS_PASO6.PESO_PATRON_REGULAR}`;
+
+📋 Verticales X: ${p.verticales.map(v => v.posicion).join(', ')}
+📋 Horizontales Y: ${p.horizontales.map(h => h.posicion).join(', ')}`;
 }

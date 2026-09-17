@@ -1,12 +1,13 @@
 // ============================================
 // PASO 4: ECOGRAFÍA
-// Parámetros ORIGINALES del usuario
+// Cambios bruscos de tono con validación de cobertura
 // ============================================
 
 const PARAMS_PASO4 = {
   UMBRAL_CONTRASTE: 38,
   UMBRAL_CONTRASTE_V: 42,
-  LONGITUD_MIN_BORDE: 0.15
+  LONGITUD_MIN_BORDE: 0.15,
+  COBERTURA_MIN: 0.50
 };
 
 window.MAR = window.MAR || {};
@@ -22,6 +23,7 @@ async function ejecutarPaso4() {
   const grises = window.MAR.paso2.grises;
   const w = grises.width, h = grises.height, data = grises.data;
 
+  // Gradiente horizontal (bordes verticales)
   const gradX = new Array(w).fill(0);
   for (let x = 1; x < w-1; x++) {
     let s = 0;
@@ -31,6 +33,8 @@ async function ejecutarPaso4() {
     }
     gradX[x] = s;
   }
+
+  // Gradiente vertical (bordes horizontales)
   const gradY = new Array(h).fill(0);
   for (let y = 1; y < h-1; y++) {
     let s = 0;
@@ -44,21 +48,22 @@ async function ejecutarPaso4() {
   const gx = suavizar3(gradX, 3);
   const gy = suavizar3(gradY, 3);
 
-  const umbralX = h * PARAMS_PASO4.LONGITUD_MIN_BORDE;
-  const umbralY = w * PARAMS_PASO4.LONGITUD_MIN_BORDE;
-
-  const picos = (arr, umbral, distMin) => {
+  // Detectar picos con validación de cobertura
+  const picos = (arr, distMin, total) => {
     const p = [];
     for (let i = 2; i < arr.length-2; i++) {
-      if (arr[i] > umbral && arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
-        if (p.length === 0 || i - p[p.length-1] >= distMin) p.push(i);
+      if (arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
+        const cobertura = arr[i] / total;
+        if (cobertura >= PARAMS_PASO4.COBERTURA_MIN) {
+          if (p.length === 0 || i - p[p.length-1] >= distMin) p.push(i);
+        }
       }
     }
     return p;
   };
 
-  const verticales = picos(gx, umbralX, PARAMS_PASO3.DISTANCIA_MIN_V);
-  const horizontales = picos(gy, umbralY, PARAMS_PASO3.DISTANCIA_MIN_H);
+  const verticales = picos(gx, PARAMS_PASO3.DISTANCIA_MIN_V, h);
+  const horizontales = picos(gy, PARAMS_PASO3.DISTANCIA_MIN_H, w);
 
   window.MAR.paso4.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
   window.MAR.paso4.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
@@ -80,5 +85,5 @@ function debugPaso4() {
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
-⚙️ Contraste V: ${PARAMS_PASO4.UMBRAL_CONTRASTE_V}, H: ${PARAMS_PASO4.UMBRAL_CONTRASTE}`;
+⚙️ Cobertura mín: ${PARAMS_PASO4.COBERTURA_MIN * 100}%`;
 }
