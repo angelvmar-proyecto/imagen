@@ -81,3 +81,30 @@ input[type="file"] { display: none; }
 .col-badge { display: inline-block; background: #3c6382; color: white; padding: 1px 6px; border-radius: 3px; font-size: 0.55rem; margin-left: 4px; }
 
 footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; }
+
+/* Contadores de líneas detectadas */
+.contador-lineas {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  padding: 12px;
+  background: white;
+  border-radius: 10px;
+  margin: 12px 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+.contador-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.punto {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.punto.rojo { background: #FF0000; }
+.punto.azul { background: #0000FF; }

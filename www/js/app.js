@@ -607,3 +607,101 @@ document.addEventListener('DOMContentLoaded', () => {
   if (window.Capacitor?.isNativePlatform?.()) setTimeout(recibirCompartir, 500);
   mostrarStatus('📷 Carga una imagen o comparte desde WhatsApp', 'info');
 });
+
+// ============================================
+// v4.0 - BOTONES DE DETECCIÓN DE LÍNEAS
+// ============================================
+
+let lineasVerticales = [];
+let lineasHorizontales = [];
+
+// Botón: Detectar Líneas
+async function onDetectarLineas() {
+  if (!rutaImagenActual) {
+    alert('📷 Carga una imagen primero.');
+    return;
+  }
+  if (procesando) return;
+  procesando = true;
+
+  try {
+    setProgreso(10, 'Preparando imagen...');
+
+    // Crear canvas con la imagen original
+    const img = document.getElementById('imgPreview');
+    const canvasOriginal = document.createElement('canvas');
+    canvasOriginal.width = img.naturalWidth;
+    canvasOriginal.height = img.naturalHeight;
+    canvasOriginal.getContext('2d').drawImage(img, 0, 0);
+
+    setProgreso(30, 'Ejecutando 4 algoritmos...');
+
+    // Ejecutar detección
+    const resultado = await detectarLineasConAlgoritmos(canvasOriginal);
+
+    lineasVerticales = resultado.verticales;
+    lineasHorizontales = resultado.horizontales;
+
+    setProgreso(80, 'Dibujando líneas...');
+
+    // Dibujar sobre el canvas de detección
+    const canvasDeteccion = document.getElementById('deteccionCanvas');
+    canvasDeteccion.width = img.clientWidth;
+    canvasDeteccion.height = img.clientHeight;
+
+    // Escalar las líneas al tamaño mostrado
+    const escalaX = img.clientWidth / img.naturalWidth;
+    const escalaY = img.clientHeight / img.naturalHeight;
+
+    const verticalesEscaladas = lineasVerticales.map(v => ({
+      posicion: v.posicion * escalaX,
+      votos: v.votos
+    }));
+    const horizontalesEscaladas = lineasHorizontales.map(h => ({
+      posicion: h.posicion * escalaY,
+      votos: h.votos
+    }));
+
+    dibujarLineasDeteccion(canvasDeteccion, verticalesEscaladas, horizontalesEscaladas);
+
+    // Actualizar contador
+    document.getElementById('contadorVerticales').textContent =
+      `${lineasVerticales.length} verticales`;
+    document.getElementById('contadorHorizontales').textContent =
+      `${lineasHorizontales.length} horizontales`;
+    document.getElementById('contadorLineas').style.display = 'flex';
+
+    setProgreso(100, '¡Detección completada!');
+    mostrarStatus(
+      `✅ ${lineasVerticales.length} verticales, ${lineasHorizontales.length} horizontales`,
+      'success'
+    );
+
+    setTimeout(ocultarProgreso, 1500);
+    procesando = false;
+
+  } catch (err) {
+    console.error('❌ Error en detección:', err);
+    mostrarStatus('❌ Error: ' + (err.message || err), 'error');
+    ocultarProgreso();
+    procesando = false;
+  }
+}
+
+// Botón: Preparar OCR (placeholder para siguiente fase)
+async function onPrepararOCR() {
+  if (lineasVerticales.length === 0 && lineasHorizontales.length === 0) {
+    alert('⚠️ Primero toca "Detectar Líneas".');
+    return;
+  }
+  mostrarStatus('🧹 Preparación para OCR (siguiente fase)...', 'info');
+  alert('🎯 Detección lista. La conversión a negro + limpieza será la siguiente fase.');
+}
+
+// Registrar eventos (solo si los botones existen)
+document.addEventListener('DOMContentLoaded', () => {
+  const btnDetectar = document.getElementById('btnDetectar');
+  const btnPreparar = document.getElementById('btnPreparar');
+  if (btnDetectar) btnDetectar.addEventListener('click', onDetectarLineas);
+  if (btnPreparar) btnPreparar.addEventListener('click', onPrepararOCR);
+});
