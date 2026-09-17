@@ -34,8 +34,18 @@
   </div>
 
   <div class="preview-container" id="previewContainer">
-    <img id="imgPreview" class="preview-img" alt="Vista previa">
-    <canvas id="deteccionCanvas" class="grid-canvas"></canvas>
+    <div class="zoom-wrapper" id="zoomWrapper">
+      <div class="zoom-content" id="zoomContent">
+        <img id="imgPreview" class="preview-img" alt="Vista previa">
+        <canvas id="deteccionCanvas" class="grid-canvas"></canvas>
+      </div>
+    </div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="btnZoomIn" title="Acercar">+</button>
+      <button class="zoom-btn" id="btnZoomOut" title="Alejar">−</button>
+      <button class="zoom-btn" id="btnToggleLineas" title="Ocultar líneas">👁️</button>
+      <button class="zoom-btn" id="btnZoomReset" title="Resetear">↺</button>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -61,6 +71,10 @@
     <div class="contador-item">
       <span class="punto azul"></span>
       <span id="contadorHorizontales">0 horizontales</span>
+    </div>
+    <div class="contador-item">
+      <span style="color:#636e72;">Zoom:</span>
+      <span id="zoomLevel">1.0x</span>
     </div>
   </div>
 
@@ -95,7 +109,7 @@
   <div id="listaHistorial"></div>
 </div>
 
-<footer>MAR Caribe v4.0 · 4 Algoritmos · Tesseract.js v5</footer>
+<footer>MAR Caribe v4.1 · Zoom + 4 Algoritmos</footer>
 
 <script src="tesseract/tesseract.min.js"></script>
 <script src="js/deteccion.js"></script>

@@ -705,3 +705,166 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnDetectar) btnDetectar.addEventListener('click', onDetectarLineas);
   if (btnPreparar) btnPreparar.addEventListener('click', onPrepararOCR);
 });
+
+// ============================================
+// v4.1 - ZOOM Y PAN
+// ============================================
+
+let zoomActual = 1.0;
+let panX = 0;
+let panY = 0;
+let zoomMin = 1.0;
+let zoomMax = 6.0;
+let lineasOcultas = false;
+
+// Actualizar transform del contenido
+function aplicarTransform() {
+  const content = document.getElementById('zoomContent');
+  if (!content) return;
+  content.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomActual})`;
+
+  const zoomLabel = document.getElementById('zoomLevel');
+  if (zoomLabel) zoomLabel.textContent = zoomActual.toFixed(1) + 'x';
+}
+
+// Resetear zoom y posición
+function resetearZoom() {
+  zoomActual = 1.0;
+  panX = 0;
+  panY = 0;
+  aplicarTransform();
+}
+
+// Zoom in (+0.5)
+function zoomIn() {
+  const nuevoZoom = Math.min(zoomActual + 0.5, zoomMax);
+  if (nuevoZoom !== zoomActual) {
+    zoomActual = nuevoZoom;
+    aplicarTransform();
+  }
+}
+
+// Zoom out (-0.5)
+function zoomOut() {
+  const nuevoZoom = Math.max(zoomActual - 0.5, zoomMin);
+  if (nuevoZoom !== zoomActual) {
+    zoomActual = nuevoZoom;
+    if (zoomActual === 1.0) {
+      panX = 0;
+      panY = 0;
+    }
+    aplicarTransform();
+  }
+}
+
+// Toggle líneas de detección
+function toggleLineas() {
+  const canvas = document.getElementById('deteccionCanvas');
+  if (!canvas) return;
+  lineasOcultas = !lineasOcultas;
+  canvas.style.opacity = lineasOcultas ? '0' : '1';
+  const btn = document.getElementById('btnToggleLineas');
+  if (btn) btn.textContent = lineasOcultas ? '👁️‍🗨️' : '👁️';
+}
+
+// ============================================
+// GESTOS TÁCTILES
+// ============================================
+let touchStartDist = 0;
+let touchStartZoom = 1.0;
+let touchStartX = 0;
+let touchStartY = 0;
+let touchStartPanX = 0;
+let touchStartPanY = 0;
+let lastTap = 0;
+let isPanning = false;
+
+function inicializarGestos() {
+  const wrapper = document.getElementById('zoomWrapper');
+  if (!wrapper) return;
+
+  wrapper.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      // Pellizco
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      touchStartDist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      touchStartZoom = zoomActual;
+      isPanning = false;
+    } else if (e.touches.length === 1) {
+      // Detectar doble toque
+      const ahora = Date.now();
+      if (ahora - lastTap < 300) {
+        // Doble toque detectado
+        resetearZoom();
+        lastTap = 0;
+        return;
+      }
+      lastTap = ahora;
+
+      // Pan
+      if (zoomActual > 1.05) {
+        isPanning = true;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchStartPanX = panX;
+        touchStartPanY = panY;
+      }
+    }
+  }, { passive: true });
+
+  wrapper.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+      // Pellizco activo
+      e.preventDefault();
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const ratio = dist / touchStartDist;
+      let nuevoZoom = touchStartZoom * ratio;
+      nuevoZoom = Math.max(zoomMin, Math.min(zoomMax, nuevoZoom));
+      zoomActual = nuevoZoom;
+      aplicarTransform();
+    } else if (e.touches.length === 1 && isPanning) {
+      // Pan activo
+      e.preventDefault();
+      const dx = e.touches[0].clientX - touchStartX;
+      const dy = e.touches[0].clientY - touchStartY;
+      panX = touchStartPanX + dx;
+      panY = touchStartPanY + dy;
+      aplicarTransform();
+    }
+  }, { passive: false });
+
+  wrapper.addEventListener('touchend', () => {
+    isPanning = false;
+    touchStartDist = 0;
+  }, { passive: true });
+
+  // Zoom con rueda del ratón (para pruebas en navegador)
+  wrapper.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      zoomIn();
+    } else {
+      zoomOut();
+    }
+  }, { passive: false });
+}
+
+// ============================================
+// INICIALIZACIÓN
+// ============================================
+document.addEventListener('DOMContentLoaded', () => {
+  const btnZoomIn = document.getElementById('btnZoomIn');
+  const btnZoomOut = document.getElementById('btnZoomOut');
+  const btnToggleLineas = document.getElementById('btnToggleLineas');
+  const btnZoomReset = document.getElementById('btnZoomReset');
+
+  if (btnZoomIn) btnZoomIn.addEventListener('click', zoomIn);
+  if (btnZoomOut) btnZoomOut.addEventListener('click', zoomOut);
+  if (btnToggleLineas) btnToggleLineas.addEventListener('click', toggleLineas);
+  if (btnZoomReset) btnZoomReset.addEventListener('click', resetearZoom);
+
+  inicializarGestos();
+});
