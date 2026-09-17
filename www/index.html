@@ -58,47 +58,46 @@
 
 <!-- TAB PROCESO -->
 <div class="tab-content" id="tab-proceso">
-
   <div class="pasos-container">
-    <div class="paso-item" id="paso-1">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso1">🧹 1. Mediana</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso1">⏳</span>
     </div>
-    <div class="paso-item" id="paso-2">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso2">🎨 2. Canales</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso2">⏳</span>
     </div>
-    <div class="paso-item" id="paso-3">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso3">🔭 3. Óptica Aérea</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso3">⏳</span>
     </div>
-    <div class="paso-item" id="paso-4">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso4">🔊 4. Ecografía</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso4">⏳</span>
     </div>
-    <div class="paso-item" id="paso-5">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso5">📡 5. Espectro</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso5">⏳</span>
     </div>
-    <div class="paso-item" id="paso-6">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso6">📐 6. LIDAR</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso6">⏳</span>
     </div>
-    <div class="paso-item" id="paso-7">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso7">✏️ 7. Edición</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso7">⏳</span>
     </div>
-    <div class="paso-item" id="paso-8">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso8">✂️ 8. Recorte</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso8">⏳</span>
     </div>
-    <div class="paso-item" id="paso-9">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso9">📄 9. OCR</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso9">⏳</span>
     </div>
-    <div class="paso-item" id="paso-10">
+    <div class="paso-item">
       <button class="btn-paso" id="btn-paso10">🎓 10. Aprendizaje</button>
-      <span class="estado">⏳</span>
+      <span class="estado" id="estado-paso10">⏳</span>
     </div>
   </div>
 
@@ -131,9 +130,10 @@
   <div id="listaHistorial"></div>
 </div>
 
-<footer>MAR Caribe v6.0 · 10 Pasos · Tesseract.js v5</footer>
+<footer>MAR Caribe v6.1 · 10 Pasos · Tesseract.js v5</footer>
 
 <script src="tesseract/tesseract.min.js"></script>
+<script src="js/tabs.js"></script>
 <script src="js/app.js"></script>
 <script src="js/pasos/debug.js"></script>
 <script src="js/pasos/paso1-mediana.js"></script>
