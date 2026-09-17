@@ -1,11 +1,67 @@
 const PARAMS_PASO4 = {
   UMBRAL_CONTRASTE: 38,
   UMBRAL_CONTRASTE_V: 42,
-  LONGITUD_MIN_BORDE: 0.15
+  LONGITUD_MIN_BORDE: 0.15,
+  COBERTURA_MIN: 0.55
 };
 
 window.MAR = window.MAR || {};
 window.MAR.paso4 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
+
+// Detectar cambios bruscos (bordes verticales reales)
+function detectarBordesVerticales(grises) {
+  const w = grises.width, h = grises.height;
+  const data = grises.data;
+  const bordes = [];
+
+  for (let x = 2; x < w - 2; x++) {
+    let contador = 0;
+    for (let y = 0; y < h; y++) {
+      const dif = Math.abs(data[y*w+(x+1)] - data[y*w+(x-1)]);
+      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE_V) contador++;
+    }
+    const cobertura = contador / h;
+    if (cobertura > PARAMS_PASO4.COBERTURA_MIN) {
+      bordes.push({ posicion: x, cobertura });
+    }
+  }
+
+  // Agrupar
+  const agrupados = [];
+  for (const b of bordes) {
+    if (agrupados.length === 0 || b.posicion - agrupados[agrupados.length-1].posicion > 3) {
+      agrupados.push(b);
+    }
+  }
+  return agrupados;
+}
+
+// Detectar cambios bruscos (bordes horizontales reales)
+function detectarBordesHorizontales(grises) {
+  const w = grises.width, h = grises.height;
+  const data = grises.data;
+  const bordes = [];
+
+  for (let y = 2; y < h - 2; y++) {
+    let contador = 0;
+    for (let x = 0; x < w; x++) {
+      const dif = Math.abs(data[(y+1)*w+x] - data[(y-1)*w+x]);
+      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE) contador++;
+    }
+    const cobertura = contador / w;
+    if (cobertura > PARAMS_PASO4.COBERTURA_MIN) {
+      bordes.push({ posicion: y, cobertura });
+    }
+  }
+
+  const agrupados = [];
+  for (const b of bordes) {
+    if (agrupados.length === 0 || b.posicion - agrupados[agrupados.length-1].posicion > 3) {
+      agrupados.push(b);
+    }
+  }
+  return agrupados;
+}
 
 async function ejecutarPaso4() {
   if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) {
@@ -15,54 +71,20 @@ async function ejecutarPaso4() {
   const t0 = performance.now();
 
   const grises = window.MAR.paso2.grises;
-  const w = grises.width, h = grises.height, data = grises.data;
 
-  const gradX = new Array(w).fill(0);
-  for (let x = 1; x < w-1; x++) {
-    let s = 0;
-    for (let y = 0; y < h; y++) {
-      const dif = Math.abs(data[y*w+(x+1)] - data[y*w+(x-1)]);
-      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE_V) s++;
-    }
-    gradX[x] = s;
-  }
-  const gradY = new Array(h).fill(0);
-  for (let y = 1; y < h-1; y++) {
-    let s = 0;
-    for (let x = 0; x < w; x++) {
-      const dif = Math.abs(data[(y+1)*w+x] - data[(y-1)*w+x]);
-      if (dif > PARAMS_PASO4.UMBRAL_CONTRASTE) s++;
-    }
-    gradY[y] = s;
-  }
+  const vBordes = detectarBordesVerticales(grises);
+  const hBordes = detectarBordesHorizontales(grises);
 
-  const gx = suavizar3(gradX, 3);
-  const gy = suavizar3(gradY, 3);
+  console.log('🔊 Bordes V:', vBordes.length, 'H:', hBordes.length);
 
-  const umbralX = h * PARAMS_PASO4.LONGITUD_MIN_BORDE;
-  const umbralY = w * PARAMS_PASO4.LONGITUD_MIN_BORDE;
-
-  const picos = (arr, umbral, distMin) => {
-    const p = [];
-    for (let i = 2; i < arr.length-2; i++) {
-      if (arr[i] > umbral && arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
-        if (p.length === 0 || i - p[p.length-1] >= distMin) p.push(i);
-      }
-    }
-    return p;
-  };
-
-  const verticales = picos(gx, umbralX, PARAMS_PASO3.DISTANCIA_MIN_V);
-  const horizontales = picos(gy, umbralY, PARAMS_PASO3.DISTANCIA_MIN_H);
-
-  window.MAR.paso4.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
-  window.MAR.paso4.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
+  window.MAR.paso4.verticales = vBordes.map(b => ({ posicion: b.posicion, votos: 1, cobertura: b.cobertura }));
+  window.MAR.paso4.horizontales = hBordes.map(b => ({ posicion: b.posicion, votos: 1, cobertura: b.cobertura }));
   window.MAR.paso4.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso4.ejecutado = true;
 
   if (typeof dibujarLineasPaso === 'function') {
-    dibujarLineasPaso(4, verticales, horizontales);
-    actualizarContadores(verticales.length, horizontales.length);
+    dibujarLineasPaso(4, vBordes.map(b => b.posicion), hBordes.map(b => b.posicion));
+    actualizarContadores(vBordes.length, hBordes.length);
   }
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 4!');
@@ -75,5 +97,5 @@ function debugPaso4() {
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
-⚙️ Contraste V: ${PARAMS_PASO4.UMBRAL_CONTRASTE_V}, H: ${PARAMS_PASO4.UMBRAL_CONTRASTE}`;
+⚙️ Cobertura mínima: ${PARAMS_PASO4.COBERTURA_MIN * 100}%`;
 }

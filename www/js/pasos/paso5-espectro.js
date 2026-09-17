@@ -1,6 +1,7 @@
 const PARAMS_PASO5 = {
   UMBRAL_MATIZ: 20,
-  UMBRAL_SATURACION: 30
+  UMBRAL_SATURACION: 30,
+  COBERTURA_MIN: 0.50
 };
 
 window.MAR = window.MAR || {};
@@ -17,56 +18,45 @@ async function ejecutarPaso5() {
   const w = hsv.width, h = hsv.height;
   const H = hsv.H, S = hsv.S;
 
-  const cV = new Array(w).fill(0);
+  const verticales = [];
   for (let x = 1; x < w-1; x++) {
-    let s = 0;
+    let contador = 0;
     for (let y = 0; y < h; y++) {
       const iL = y*w+(x-1), iR = y*w+(x+1);
       if (S[iL] > PARAMS_PASO5.UMBRAL_SATURACION || S[iR] > PARAMS_PASO5.UMBRAL_SATURACION) {
         let d = Math.abs(H[iL] - H[iR]);
         if (d > 128) d = 255 - d;
-        if (d > PARAMS_PASO5.UMBRAL_MATIZ) s++;
+        if (d > PARAMS_PASO5.UMBRAL_MATIZ) contador++;
       }
     }
-    cV[x] = s;
+    if (contador / h > PARAMS_PASO5.COBERTURA_MIN) {
+      verticales.push({ posicion: x, votos: 1 });
+    }
   }
-  const cH = new Array(h).fill(0);
+
+  const horizontales = [];
   for (let y = 1; y < h-1; y++) {
-    let s = 0;
+    let contador = 0;
     for (let x = 0; x < w; x++) {
       const iA = (y-1)*w+x, iB = (y+1)*w+x;
       if (S[iA] > PARAMS_PASO5.UMBRAL_SATURACION || S[iB] > PARAMS_PASO5.UMBRAL_SATURACION) {
         let d = Math.abs(H[iA] - H[iB]);
         if (d > 128) d = 255 - d;
-        if (d > PARAMS_PASO5.UMBRAL_MATIZ) s++;
+        if (d > PARAMS_PASO5.UMBRAL_MATIZ) contador++;
       }
     }
-    cH[y] = s;
+    if (contador / w > PARAMS_PASO5.COBERTURA_MIN) {
+      horizontales.push({ posicion: y, votos: 1 });
+    }
   }
 
-  const cvS = suavizar3(cV, 3);
-  const chS = suavizar3(cH, 3);
-
-  const picos = (arr, umbral, distMin) => {
-    const p = [];
-    for (let i = 2; i < arr.length-2; i++) {
-      if (arr[i] > umbral && arr[i] >= arr[i-1] && arr[i] >= arr[i+1]) {
-        if (p.length === 0 || i - p[p.length-1] >= distMin) p.push(i);
-      }
-    }
-    return p;
-  };
-
-  const verticales = picos(cvS, h * 0.3, PARAMS_PASO3.DISTANCIA_MIN_V);
-  const horizontales = picos(chS, w * 0.3, PARAMS_PASO3.DISTANCIA_MIN_H);
-
-  window.MAR.paso5.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
-  window.MAR.paso5.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
+  window.MAR.paso5.verticales = verticales;
+  window.MAR.paso5.horizontales = horizontales;
   window.MAR.paso5.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso5.ejecutado = true;
 
   if (typeof dibujarLineasPaso === 'function') {
-    dibujarLineasPaso(5, verticales, horizontales);
+    dibujarLineasPaso(5, verticales.map(v => v.posicion), horizontales.map(h => h.posicion));
     actualizarContadores(verticales.length, horizontales.length);
   }
 
@@ -79,6 +69,5 @@ function debugPaso5() {
   return `PASO 5: ESPECTRO
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
-📊 Horizontales: ${p.horizontales.length}
-⚙️ Matiz: ${PARAMS_PASO5.UMBRAL_MATIZ}°, Sat: ${PARAMS_PASO5.UMBRAL_SATURACION}%`;
+📊 Horizontales: ${p.horizontales.length}`;
 }

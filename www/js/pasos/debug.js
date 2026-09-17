@@ -4,15 +4,15 @@
 
 window.MAR = window.MAR || {};
 
-// Colores por algoritmo
 const COLORES_ALGORITMO = {
-  3: { vertical: 'rgba(255, 100, 100, 0.7)', horizontal: 'rgba(100, 100, 255, 0.7)' }, // Óptica: rojo/azul claro
-  4: { vertical: 'rgba(255, 165, 0, 0.7)', horizontal: 'rgba(160, 32, 240, 0.7)' },    // Ecografía: naranja/morado
-  5: { vertical: 'rgba(0, 200, 0, 0.7)', horizontal: 'rgba(255, 215, 0, 0.7)' },       // Espectro: verde/amarillo
-  6: { vertical: 'rgba(255, 0, 0, 1)', horizontal: 'rgba(0, 0, 255, 1)' }              // LIDAR: rojo/azul intenso
+  3: { vertical: 'rgba(255, 100, 100, 0.85)', horizontal: 'rgba(100, 100, 255, 0.85)' },
+  4: { vertical: 'rgba(255, 165, 0, 0.85)', horizontal: 'rgba(160, 32, 240, 0.85)' },
+  5: { vertical: 'rgba(0, 200, 0, 0.85)', horizontal: 'rgba(255, 215, 0, 0.85)' },
+  6: { vertical: 'rgba(255, 0, 0, 1)', horizontal: 'rgba(0, 0, 255, 1)' }
 };
 
-// Actualizar estado visual del botón
+const GROSOR_LINEA = 0.5; // Líneas más finas
+
 function actualizarEstadoBoton(pasoId, ejecutado, error) {
   const estado = document.getElementById('estado-' + pasoId);
   const btn = document.getElementById('btn-' + pasoId);
@@ -32,37 +32,24 @@ function actualizarEstadoBoton(pasoId, ejecutado, error) {
     }
   } else {
     estado.textContent = '⏳';
-    if (btn) {
-      btn.classList.remove('paso-ejecutando', 'paso-ejecutado', 'paso-error');
-    }
+    if (btn) btn.classList.remove('paso-ejecutando', 'paso-ejecutado', 'paso-error');
   }
 }
 
-// Marcar botón como ejecutando
 function marcarEjecutando(pasoId) {
   const btn = document.getElementById('btn-' + pasoId);
   const estado = document.getElementById('estado-' + pasoId);
-  if (btn) {
-    btn.classList.add('paso-ejecutando');
-  }
-  if (estado) {
-    estado.textContent = '🔄';
-  }
+  if (btn) btn.classList.add('paso-ejecutando');
+  if (estado) estado.textContent = '🔄';
 }
 
-// Mostrar debug en pantalla
 function mostrarDebug(texto) {
   const panel = document.getElementById('debugContent');
-  const container = document.getElementById('debugContainer');
   const textoEl = document.getElementById('debugTexto');
-  
-  if (container) container.style.display = 'block';
   if (textoEl) textoEl.textContent = texto;
-  
   console.log(texto);
 }
 
-// Actualizar contadores
 function actualizarContadores(numV, numH) {
   const cv = document.getElementById('contadorV');
   const ch = document.getElementById('contadorH');
@@ -70,14 +57,15 @@ function actualizarContadores(numV, numH) {
   if (ch) ch.textContent = numH + ' horizontales';
 }
 
-// Dibujar líneas de un paso específico
 function dibujarLineasPaso(numPaso, verticales, horizontales) {
   const img = document.getElementById('imgPreview');
   const canvas = document.getElementById('deteccionCanvas');
   if (!img || !canvas || !img.clientWidth) return;
 
-  // Si es el primer paso que dibuja, limpiar
   if (numPaso === 3) {
+    canvas.width = img.clientWidth;
+    canvas.height = img.clientHeight;
+  } else if (numPaso === 6) {
     canvas.width = img.clientWidth;
     canvas.height = img.clientHeight;
   }
@@ -85,12 +73,10 @@ function dibujarLineasPaso(numPaso, verticales, horizontales) {
   const ctx = canvas.getContext('2d');
   const escalaX = img.clientWidth / img.naturalWidth;
   const escalaY = img.clientHeight / img.naturalHeight;
-
   const colores = COLORES_ALGORITMO[numPaso] || COLORES_ALGORITMO[6];
 
-  // Líneas verticales
   ctx.strokeStyle = colores.vertical;
-  ctx.lineWidth = numPaso === 6 ? 2 : 1;
+  ctx.lineWidth = GROSOR_LINEA;
   for (const v of verticales) {
     const x = (v.posicion !== undefined ? v.posicion : v) * escalaX;
     ctx.beginPath();
@@ -99,9 +85,8 @@ function dibujarLineasPaso(numPaso, verticales, horizontales) {
     ctx.stroke();
   }
 
-  // Líneas horizontales
   ctx.strokeStyle = colores.horizontal;
-  ctx.lineWidth = numPaso === 6 ? 2 : 1;
+  ctx.lineWidth = GROSOR_LINEA;
   for (const h of horizontales) {
     const y = (h.posicion !== undefined ? h.posicion : h) * escalaY;
     ctx.beginPath();
@@ -109,53 +94,23 @@ function dibujarLineasPaso(numPaso, verticales, horizontales) {
     ctx.lineTo(canvas.width, y + 0.5);
     ctx.stroke();
   }
-
-  // Si es LIDAR, limpiar y redibujar solo las finales
-  if (numPaso === 6) {
-    // Redibujar solo las confirmadas
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    ctx.strokeStyle = COLORES_ALGORITMO[6].vertical;
-    ctx.lineWidth = 2;
-    for (const v of verticales) {
-      const x = (v.posicion !== undefined ? v.posicion : v) * escalaX;
-      ctx.beginPath();
-      ctx.moveTo(x + 0.5, 0);
-      ctx.lineTo(x + 0.5, canvas.height);
-      ctx.stroke();
-    }
-    
-    ctx.strokeStyle = COLORES_ALGORITMO[6].horizontal;
-    ctx.lineWidth = 2;
-    for (const h of horizontales) {
-      const y = (h.posicion !== undefined ? h.posicion : h) * escalaY;
-      ctx.beginPath();
-      ctx.moveTo(0, y + 0.5);
-      ctx.lineTo(canvas.width, y + 0.5);
-      ctx.stroke();
-    }
-  }
 }
 
-// Ejecutar un paso con debug
 async function ejecutarYDebug(pasoFn, debugFn, pasoId) {
   try {
     if (pasoId) marcarEjecutando(pasoId);
-    
     await pasoFn();
     const dbg = debugFn();
     mostrarDebug(dbg);
-    
     if (pasoId) actualizarEstadoBoton(pasoId, true, false);
   } catch (e) {
-    const errMsg = '❌ Error: ' + e.message + '\n' + (e.stack || '');
+    const errMsg = '❌ Error: ' + e.message;
     mostrarDebug(errMsg);
     console.error(e);
     if (pasoId) actualizarEstadoBoton(pasoId, false, true);
   }
 }
 
-// Ejecutar todos los pasos
 async function ejecutarTodo() {
   const pasos = [
     { fn: ejecutarPaso1, dbg: debugPaso1, nombre: 'Mediana', id: 'paso1' },
@@ -170,7 +125,7 @@ async function ejecutarTodo() {
   ];
 
   let debugTotal = '═══════════════════════════════════════\n';
-  debugTotal += 'EJECUCIÓN COMPLETA - 10 PASOS\n';
+  debugTotal += 'EJECUCIÓN COMPLETA - 9 PASOS\n';
   debugTotal += '═══════════════════════════════════════\n\n';
 
   for (let i = 0; i < pasos.length; i++) {
@@ -181,16 +136,16 @@ async function ejecutarTodo() {
     try {
       marcarEjecutando(paso.id);
       await paso.fn();
-      debugTotal += paso.dbg() + '\n';
+      debugTotal += paso.dbg() + '\n\n';
       actualizarEstadoBoton(paso.id, true, false);
     } catch (e) {
-      debugTotal += `❌ Error: ${e.message}\n`;
+      debugTotal += `❌ Error: ${e.message}\n\n`;
       actualizarEstadoBoton(paso.id, false, true);
       break;
     }
     mostrarDebug(debugTotal);
   }
 
-  debugTotal += '\n✅ COMPLETADO\n';
+  debugTotal += '✅ COMPLETADO\n';
   mostrarDebug(debugTotal);
 }
