@@ -1,14 +1,14 @@
 // ============================================
-// PASO 4: ECOGRAFÍA (v9.6)
-// Cobertura 40%, búsqueda de bordes reales
+// PASO 4: ECOGRAFÍA (v9.7)
+// Cobertura 30%, búsqueda de bordes 80px
 // ============================================
 
 const PARAMS_PASO4 = {
   UMBRAL_CONTRASTE: 38,
   UMBRAL_CONTRASTE_V: 42,
   LONGITUD_MIN_BORDE: 0.15,
-  COBERTURA_MIN: 0.40,
-  BUSQUEDA_BORDE: 25
+  COBERTURA_MIN: 0.30,
+  BUSQUEDA_BORDE: 80
 };
 
 window.MAR = window.MAR || {};
@@ -80,7 +80,6 @@ async function ejecutarPaso4() {
     }
   }
 
-  // Añadir bordes reales o ciego
   const rango = PARAMS_PASO4.BUSQUEDA_BORDE;
   
   const bordeIzq = buscarLineaCercaDe4(vCortes.map(x => ({posicion: x})), 0, rango);
@@ -111,7 +110,7 @@ async function ejecutarPaso4() {
 
 function debugPaso4() {
   const p = window.MAR.paso4;
-  return `PASO 4: ECOGRAFÍA (v9.6)
+  return `PASO 4: ECOGRAFÍA (v9.7)
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}

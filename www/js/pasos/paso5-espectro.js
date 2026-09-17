@@ -1,14 +1,14 @@
 // ============================================
-// PASO 5: ESPECTRO ELECTROMAGNÉTICO (v9.6)
-// H + S + V, cobertura 40%
+// PASO 5: ESPECTRO ELECTROMAGNÉTICO (v9.7)
+// H + S + V, cobertura 30%
 // ============================================
 
 const PARAMS_PASO5 = {
   UMBRAL_MATIZ: 20,
   UMBRAL_SATURACION: 30,
   UMBRAL_VALOR: 30,
-  COBERTURA_MIN: 0.40,
-  BUSQUEDA_BORDE: 25
+  COBERTURA_MIN: 0.30,
+  BUSQUEDA_BORDE: 80
 };
 
 window.MAR = window.MAR || {};
@@ -91,7 +91,6 @@ async function ejecutarPaso5() {
     }
   }
 
-  // Añadir bordes
   const rango = PARAMS_PASO5.BUSQUEDA_BORDE;
   const bordeIzq = buscarLineaCercaDe5(vCortes.map(x => ({posicion: x})), 0, rango);
   if (!bordeIzq && (vCortes.length === 0 || vCortes[0] > 10)) vCortes.unshift(0);
@@ -118,7 +117,7 @@ async function ejecutarPaso5() {
 
 function debugPaso5() {
   const p = window.MAR.paso5;
-  return `PASO 5: ESPECTRO (v9.6)
+  return `PASO 5: ESPECTRO (v9.7)
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
