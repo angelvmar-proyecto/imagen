@@ -18,7 +18,6 @@
   <div class="tab" data-tab="historial">📋 Historial</div>
 </div>
 
-<!-- TAB PRINCIPAL -->
 <div class="tab-content active" id="tab-ocr">
 
   <div class="upload-box" id="dropZone">
@@ -56,9 +55,28 @@
 
   <div id="statusText" class="status info">📷 Carga una imagen para comenzar</div>
 
-  <!-- ============================================
-       BOTONES DE PROCESO (3 por línea)
-       ============================================ -->
+  <!-- ANÁLISIS AUTO -->
+  <div class="analisis-auto" id="analisisAuto" style="display:none;">
+    <div class="analisis-header">
+      <span>🔍 ANÁLISIS AUTOMÁTICO</span>
+    </div>
+    <div class="analisis-body">
+      <div class="analisis-item">
+        <span>Nitidez detectada:</span>
+        <span id="analisisNitidez">-</span>
+      </div>
+      <div class="analisis-item">
+        <span>Ruido detectado:</span>
+        <span id="analisisRuido">-</span>
+      </div>
+      <div class="analisis-item">
+        <span>Recomendación:</span>
+        <span id="analisisRecomendacion" class="recomendacion">-</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTONES DE PROCESO -->
   <div class="proceso-container" id="procesoContainer" style="display:none;">
     <h3 class="seccion-titulo">🔧 PROCESO</h3>
     <div class="botones-grid">
@@ -114,87 +132,101 @@
     </button>
   </div>
 
-  <!-- ============================================
-       PARÁMETROS (sliders)
-       ============================================ -->
+  <!-- PARÁMETROS -->
   <div class="params-container" id="paramsContainer" style="display:none;">
 
     <div class="param-grupo">
-      <h4 class="param-grupo-titulo">🧹 PASO 1: MEDIANA</h4>
-      <div class="param-item">
-        <label>Tamaño ventana</label>
-        <input type="range" id="param-mediana-ventana" min="3" max="7" step="2" value="3">
-        <span class="param-valor" id="val-mediana-ventana">3</span>
+      <div class="param-grupo-header">
+        <h4 class="param-grupo-titulo">🧹 PASO 1: MEDIANA</h4>
+        <button class="btn-reset" data-grupo="mediana">↺</button>
       </div>
+      <div class="param-item">
+        <label>Filtro</label>
+        <input type="range" id="param-mediana-ventana" min="0" max="3" step="1" value="0">
+        <span class="param-valor" id="val-mediana-ventana">Sin filtro</span>
+      </div>
+      <div class="param-help">1=Sin filtro · 3=Suave · 5=Medio · 7=Fuerte</div>
     </div>
 
     <div class="param-grupo">
-      <h4 class="param-grupo-titulo">🔭 PASO 3: ÓPTICA AÉREA</h4>
+      <div class="param-grupo-header">
+        <h4 class="param-grupo-titulo">🔭 PASO 3: ÓPTICA AÉREA</h4>
+        <button class="btn-reset" data-grupo="optica">↺</button>
+      </div>
       <div class="param-item">
         <label>Umbral densidad</label>
-        <input type="range" id="param-optica-umbral" min="1" max="20" step="1" value="4">
+        <input type="range" id="param-optica-umbral" min="0" max="30" step="1" value="4">
         <span class="param-valor" id="val-optica-umbral">4</span>
       </div>
       <div class="param-item">
         <label>Distancia mín V</label>
-        <input type="range" id="param-optica-distV" min="5" max="60" step="1" value="22">
-        <span class="param-valor" id="val-optica-distV">22</span>
+        <input type="range" id="param-optica-distV" min="2" max="80" step="1" value="22">
+        <span class="param-valor" id="val-optica-distV">22px</span>
       </div>
       <div class="param-item">
         <label>Distancia mín H</label>
-        <input type="range" id="param-optica-distH" min="5" max="60" step="1" value="24">
-        <span class="param-valor" id="val-optica-distH">24</span>
+        <input type="range" id="param-optica-distH" min="2" max="80" step="1" value="24">
+        <span class="param-valor" id="val-optica-distH">24px</span>
       </div>
       <div class="param-item">
         <label>Umbral continuidad</label>
-        <input type="range" id="param-optica-cont" min="10" max="100" step="5" value="55">
+        <input type="range" id="param-optica-cont" min="5" max="100" step="5" value="55">
         <span class="param-valor" id="val-optica-cont">55%</span>
       </div>
     </div>
 
     <div class="param-grupo">
-      <h4 class="param-grupo-titulo">🔊 PASO 4: ECOGRAFÍA</h4>
+      <div class="param-grupo-header">
+        <h4 class="param-grupo-titulo">🔊 PASO 4: ECOGRAFÍA</h4>
+        <button class="btn-reset" data-grupo="eco">↺</button>
+      </div>
       <div class="param-item">
         <label>Umbral contraste V</label>
-        <input type="range" id="param-eco-contV" min="10" max="100" step="1" value="42">
+        <input type="range" id="param-eco-contV" min="1" max="100" step="1" value="42">
         <span class="param-valor" id="val-eco-contV">42</span>
       </div>
       <div class="param-item">
         <label>Umbral contraste H</label>
-        <input type="range" id="param-eco-contH" min="10" max="100" step="1" value="38">
+        <input type="range" id="param-eco-contH" min="1" max="100" step="1" value="38">
         <span class="param-valor" id="val-eco-contH">38</span>
       </div>
       <div class="param-item">
         <label>Longitud mín borde</label>
-        <input type="range" id="param-eco-long" min="5" max="50" step="1" value="15">
+        <input type="range" id="param-eco-long" min="1" max="50" step="1" value="15">
         <span class="param-valor" id="val-eco-long">15%</span>
       </div>
     </div>
 
     <div class="param-grupo">
-      <h4 class="param-grupo-titulo">📡 PASO 5: ESPECTRO</h4>
+      <div class="param-grupo-header">
+        <h4 class="param-grupo-titulo">📡 PASO 5: ESPECTRO</h4>
+        <button class="btn-reset" data-grupo="espectro">↺</button>
+      </div>
       <div class="param-item">
         <label>Umbral matiz</label>
-        <input type="range" id="param-espectro-matiz" min="5" max="60" step="1" value="20">
+        <input type="range" id="param-espectro-matiz" min="1" max="90" step="1" value="20">
         <span class="param-valor" id="val-espectro-matiz">20°</span>
       </div>
       <div class="param-item">
         <label>Umbral saturación</label>
-        <input type="range" id="param-espectro-sat" min="5" max="100" step="5" value="30">
+        <input type="range" id="param-espectro-sat" min="1" max="100" step="1" value="30">
         <span class="param-valor" id="val-espectro-sat">30%</span>
       </div>
     </div>
 
     <div class="param-grupo">
-      <h4 class="param-grupo-titulo">📐 PASO 6: LIDAR</h4>
+      <div class="param-grupo-header">
+        <h4 class="param-grupo-titulo">📐 PASO 6: LIDAR</h4>
+        <button class="btn-reset" data-grupo="lidar">↺</button>
+      </div>
       <div class="param-item">
         <label>Tolerancia alineación</label>
-        <input type="range" id="param-lidar-tol" min="2" max="40" step="1" value="12">
+        <input type="range" id="param-lidar-tol" min="1" max="40" step="1" value="12">
         <span class="param-valor" id="val-lidar-tol">12px</span>
       </div>
       <div class="param-item">
         <label>Distancia agrupación</label>
-        <input type="range" id="param-lidar-dist" min="2" max="30" step="1" value="8">
+        <input type="range" id="param-lidar-dist" min="1" max="30" step="1" value="8">
         <span class="param-valor" id="val-lidar-dist">8px</span>
       </div>
       <div class="param-item">
@@ -204,16 +236,14 @@
       </div>
       <div class="param-item">
         <label>Peso patrón regular</label>
-        <input type="range" id="param-lidar-peso" min="30" max="100" step="5" value="70">
+        <input type="range" id="param-lidar-peso" min="0" max="100" step="5" value="70">
         <span class="param-valor" id="val-lidar-peso">70%</span>
       </div>
     </div>
 
   </div>
 
-  <!-- ============================================
-       DEBUG
-       ============================================ -->
+  <!-- DEBUG -->
   <div class="debug-container" id="debugContainer" style="display:none;">
     <div class="debug-header" onclick="toggleDebug()">
       <span>📋 DEBUG</span>
@@ -237,14 +267,13 @@
 
 </div>
 
-<!-- TAB TABLA -->
 <div class="tab-content" id="tab-tabla">
   <div class="search-box">
     <input type="text" id="searchInput" placeholder="🔍 Buscar en tabla...">
     <button class="btn btn-primary btn-sm" id="btnBuscar">Buscar</button>
   </div>
   <div id="tableWrapper">
-    <div class="empty-state">📊 Sin datos. Ejecuta "Escanear" primero.</div>
+    <div class="empty-state">📊 Sin datos. Ejecuta los pasos primero.</div>
   </div>
   <div class="btn-group">
     <button class="btn btn-primary btn-sm" id="btnCopiarTabla">📋 Copiar</button>
@@ -254,12 +283,11 @@
   <div class="info-extra" id="infoExtra">📊 0 filas</div>
 </div>
 
-<!-- TAB HISTORIAL -->
 <div class="tab-content" id="tab-historial">
   <div id="listaHistorial"></div>
 </div>
 
-<footer>MAR Caribe v7.0 · 10 Pasos Integrados</footer>
+<footer>MAR Caribe v7.1 · 10 Pasos · Análisis Auto</footer>
 
 <script src="tesseract/tesseract.min.js"></script>
 <script src="js/tabs.js"></script>
@@ -277,6 +305,7 @@
 <script src="js/pasos/paso10-aprendizaje.js"></script>
 <script src="js/pasos/conectar-botones.js"></script>
 <script src="js/sliders.js"></script>
+<script src="js/analisis-auto.js"></script>
 
 </body>
 </html>

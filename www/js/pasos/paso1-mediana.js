@@ -1,14 +1,15 @@
 // ============================================
 // PASO 1: FILTRO DE MEDIANA
-// Quita manchas, polvo, ruido
+// Slider 0-3 mapea a ventanas 1, 3, 5, 7
 // ============================================
 
+const VENTANAS_MEDIANA = [1, 3, 5, 7];
+
 const PARAMS_PASO1 = {
-  TAMANO_VENTANA: 3,
-  MODO: 'normal'
+  INDICE_VENTANA: 0,       // 0 → 1 (sin filtro)
+  TAMANO_VENTANA: 1
 };
 
-// Estado global compartido
 window.MAR = window.MAR || {};
 window.MAR.paso1 = {
   ejecutado: false,
@@ -19,16 +20,20 @@ window.MAR.paso1 = {
 
 // Aplicar filtro de mediana
 function aplicarMediana(imageData, tamanoVentana) {
+  // Si tamanoVentana === 1 → sin filtro
+  if (tamanoVentana <= 1) {
+    return imageData;
+  }
+
   const w = imageData.width;
   const h = imageData.height;
   const src = imageData.data;
   const dst = new Uint8ClampedArray(src.length);
   const radio = Math.floor(tamanoVentana / 2);
-  const tamano = tamanoVentana * tamanoVentana;
 
-  const bufferR = new Array(tamano);
-  const bufferG = new Array(tamano);
-  const bufferB = new Array(tamano);
+  const bufferR = new Array(tamanoVentana * tamanoVentana);
+  const bufferG = new Array(tamanoVentana * tamanoVentana);
+  const bufferB = new Array(tamanoVentana * tamanoVentana);
 
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -46,7 +51,6 @@ function aplicarMediana(imageData, tamanoVentana) {
         }
       }
 
-      // Ordenar para encontrar la mediana
       const rOrd = bufferR.slice(0, count).sort((a, b) => a - b);
       const gOrd = bufferG.slice(0, count).sort((a, b) => a - b);
       const bOrd = bufferB.slice(0, count).sort((a, b) => a - b);
@@ -63,81 +67,59 @@ function aplicarMediana(imageData, tamanoVentana) {
   return new ImageData(dst, w, h);
 }
 
-// Ejecutar paso 1
 async function ejecutarPaso1() {
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 1: Filtro de Mediana...');
-  
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 1: Mediana...');
   const t0 = performance.now();
 
   const img = document.getElementById('imgPreview');
   if (!img || !img.naturalWidth) {
-    alert('📷 Carga una imagen primero.');
-    return null;
+    throw new Error('Carga una imagen primero');
   }
 
-  // Crear canvas con la imagen original
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
+  // Usar la imagen ORIGINAL guardada (no la que está en pantalla)
+  let imageData;
+  if (window.MAR.imagenOriginalGuardada) {
+    imageData = window.MAR.imagenOriginalGuardada;
+  } else {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    window.MAR.imagenOriginalGuardada = imageData;
+  }
 
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   window.MAR.paso1.imagenOriginal = imageData;
 
-  if (typeof setProgreso === 'function') setProgreso(50, 'Aplicando mediana...');
+  const ventana = PARAMS_PASO1.TAMANO_VENTANA;
+  if (typeof setProgreso === 'function') setProgreso(50, `Aplicando mediana ${ventana}×${ventana}...`);
 
-  // Aplicar filtro
-  const mediana = aplicarMediana(imageData, PARAMS_PASO1.TAMANO_VENTANA);
+  const mediana = aplicarMediana(imageData, ventana);
   window.MAR.paso1.imagenMediana = mediana;
 
-  // Guardar en canvas para los siguientes pasos
   const canvasMediana = document.createElement('canvas');
-  canvasMediana.width = canvas.width;
-  canvasMediana.height = canvas.height;
+  canvasMediana.width = imageData.width;
+  canvasMediana.height = imageData.height;
   canvasMediana.getContext('2d').putImageData(mediana, 0, 0);
   window.MAR.imagenMedianaCanvas = canvasMediana;
 
-  const t1 = performance.now();
-  window.MAR.paso1.tiempoMs = Math.round(t1 - t0);
+  window.MAR.paso1.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso1.ejecutado = true;
 
   // Actualizar el preview
   document.getElementById('imgPreview').src = canvasMediana.toDataURL('image/png');
 
-  if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 1 completado!');
-  if (typeof mostrarStatus === 'function') mostrarStatus('✅ Paso 1: Mediana aplicada', 'success');
-  
-  // Actualizar botón
-  actualizarEstadoBoton('paso1', true);
-
+  if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 1!');
   return window.MAR.paso1;
 }
 
-// Obtener debug del paso 1
 function debugPaso1() {
   const p = window.MAR.paso1;
-  if (!p.ejecutado) return '⚠️ Paso 1 no ejecutado aún';
-  
-  return `
-═══════════════════════════════════════
-PASO 1: FILTRO DE MEDIANA
-═══════════════════════════════════════
-
-📊 ENTRADA:
-   - Imagen: ${p.imagenOriginal ? p.imagenOriginal.width + ' × ' + p.imagenOriginal.height + ' px' : 'N/A'}
-   - Tipo: RGB
-
-⚙️ PARÁMETROS:
-   - Tamaño ventana: ${PARAMS_PASO1.TAMANO_VENTANA}×${PARAMS_PASO1.TAMANO_VENTANA}
-   - Modo: ${PARAMS_PASO1.MODO}
-
-⏱️ TIEMPO:
-   - Ejecución: ${p.tiempoMs} ms
-
-✅ RESULTADO:
-   - Imagen limpia sin ruido
-   - Manchas eliminadas
-   - Bordes preservados
-═══════════════════════════════════════`;
+  const ventana = PARAMS_PASO1.TAMANO_VENTANA;
+  const nombres = { 1: 'Sin filtro', 3: 'Suave', 5: 'Medio', 7: 'Fuerte' };
+  return `PASO 1: MEDIANA
+⏱️ ${p.tiempoMs} ms
+📊 Ventana: ${ventana}×${ventana} (${nombres[ventana]})
+📊 Imagen: ${p.imagenOriginal.width} × ${p.imagenOriginal.height}`;
 }

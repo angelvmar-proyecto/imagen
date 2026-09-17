@@ -336,3 +336,82 @@ footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; p
 .notificacion-compartir { background: #e3f2fd; border: 2px solid #3c6382; border-radius: 12px; padding: 12px; margin-bottom: 12px; text-align: center; display: none; }
 .notificacion-compartir .icono { font-size: 1.5rem; margin-bottom: 4px; }
 .notificacion-compartir .texto { color: #0a3d62; font-weight: bold; font-size: 0.9rem; }
+
+/* Análisis automático */
+.analisis-auto {
+  background: white;
+  border-radius: 12px;
+  margin-top: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.analisis-header {
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #0a3d62, #3c6382);
+  color: white;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+.analisis-body {
+  padding: 12px;
+}
+
+.analisis-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.analisis-item:last-child {
+  border-bottom: none;
+}
+
+.analisis-item .recomendacion {
+  font-weight: bold;
+  color: #0a3d62;
+  text-align: right;
+  max-width: 60%;
+  font-size: 0.75rem;
+}
+
+/* Header de grupo de parámetros */
+.param-grupo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.param-grupo-header .param-grupo-titulo {
+  margin-bottom: 0;
+}
+
+.btn-reset {
+  background: #f0f4f8;
+  border: none;
+  color: #3c6382;
+  font-size: 0.9rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.btn-reset:active {
+  transform: scale(0.9);
+  background: #e0e8f0;
+}
+
+/* Help text */
+.param-help {
+  font-size: 0.65rem;
+  color: #95a5a6;
+  text-align: center;
+  margin-top: 4px;
+  font-style: italic;
+}

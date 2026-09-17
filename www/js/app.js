@@ -261,3 +261,60 @@ cargarEnCanvas = function(src) {
     mostrarStatus('✅ Imagen cargada. Toca los botones del proceso.', 'success');
   };
 };
+
+// ============================================
+// ANÁLISIS AUTOMÁTICO AL CARGAR IMAGEN
+// ============================================
+const _cargarOriginal = cargarEnCanvas;
+cargarEnCanvas = function(src) {
+  rutaImagenActual = src;
+  const img = document.getElementById('imgPreview');
+  if (!img) return;
+  img.src = src;
+  img.onload = async () => {
+    document.getElementById('previewContainer').style.display = 'block';
+    document.getElementById('procesoContainer').style.display = 'block';
+    document.getElementById('paramsContainer').style.display = 'block';
+    document.getElementById('debugContainer').style.display = 'block';
+    if (typeof resetearZoom === 'function') resetearZoom();
+
+    // Guardar imagen original
+    window.MAR = window.MAR || {};
+    window.MAR.imagenOriginalGuardada = null;
+
+    // Analizar imagen
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      const imageData = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+      
+      window.MAR.imagenOriginalGuardada = imageData;
+
+      if (typeof analizarImagen === 'function') {
+        setProgreso(50, 'Analizando imagen...');
+        const analisis = await analizarImagen(imageData);
+        mostrarAnalisis(analisis);
+        ocultarProgreso();
+
+        // Auto-ajustar mediana si el usuario no ha guardado params
+        const saved = localStorage.getItem('marCaribeParams');
+        if (!saved) {
+          PARAMS_PASO1.INDICE_VENTANA = analisis.indiceVentanaRecomendado;
+          PARAMS_PASO1.TAMANO_VENTANA = VENTANAS_MEDIANA[analisis.indiceVentanaRecomendado];
+          const slider = document.getElementById('param-mediana-ventana');
+          if (slider) {
+            slider.value = analisis.indiceVentanaRecomendado;
+            document.getElementById('val-mediana-ventana').textContent = 
+              NOMBRES_MEDIANA[analisis.indiceVentanaRecomendado] + ' (' + VENTANAS_MEDIANA[analisis.indiceVentanaRecomendado] + ')';
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error analizando:', e);
+    }
+
+    mostrarStatus('✅ Imagen cargada. Revisa la recomendación.', 'success');
+  };
+};
