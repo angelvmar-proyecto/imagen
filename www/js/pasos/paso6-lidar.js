@@ -1,9 +1,15 @@
+// ============================================
+// PASO 6: LIDAR (v9.3)
+// - Votos mínimos 1
+// - Sin validación de patrón regular
+// - Cobertura mínima 50%
+// - Prioriza líneas con 2+ algoritmos
+// ============================================
+
 const PARAMS_PASO6 = {
-  TOLERANCIA_ALINEACION: 12,
   DISTANCIA_AGRUPACION: 8,
-  RECORRIDO_BORDE: true,
-  PESO_PATRON_REGULAR: 0.70,
-  VOTOS_MINIMOS: 2
+  VOTOS_MINIMOS: 1,
+  COBERTURA_MIN: 0.50
 };
 
 window.MAR = window.MAR || {};
@@ -43,26 +49,9 @@ function votar(algoritmos, distAgrup, votosMin) {
   return confirmados;
 }
 
-function validarPatron(cortes) {
-  if (cortes.length < 3) return cortes;
-  const dists = [];
-  for (let i = 1; i < cortes.length; i++) dists.push(cortes[i].posicion - cortes[i-1].posicion);
-  const conteo = {};
-  for (const d of dists) {
-    const k = Math.round(d / 5) * 5;
-    conteo[k] = (conteo[k] || 0) + 1;
-  }
-  let distComun = 0, maxR = 0;
-  for (const [k, v] of Object.entries(conteo)) {
-    if (v > maxR) { maxR = v; distComun = parseInt(k); }
-  }
-  const filtrados = [cortes[0]];
-  for (let i = 1; i < cortes.length; i++) {
-    const d = cortes[i].posicion - filtrados[filtrados.length-1].posicion;
-    const ratio = d / distComun;
-    if (Math.abs(ratio - Math.round(ratio)) < 0.35) filtrados.push(cortes[i]);
-  }
-  return filtrados;
+// Ordenar por votos descendente (más votos = más confiable)
+function ordenarPorVotos(cortes) {
+  return cortes.sort((a, b) => b.votos - a.votos);
 }
 
 async function ejecutarPaso6() {
@@ -86,11 +75,16 @@ async function ejecutarPaso6() {
   const votosV = votar(algV, PARAMS_PASO6.DISTANCIA_AGRUPACION, PARAMS_PASO6.VOTOS_MINIMOS);
   const votosH = votar(algH, PARAMS_PASO6.DISTANCIA_AGRUPACION, PARAMS_PASO6.VOTOS_MINIMOS);
 
-  const verticales = validarPatron(votosV);
-  const horizontales = validarPatron(votosH);
+  // Ordenar por votos (más votos primero)
+  const verticalesOrdenadas = ordenarPorVotos([...votosV]);
+  const horizontalesOrdenadas = ordenarPorVotos([...votosH]);
 
-  window.MAR.paso6.verticales = verticales;
-  window.MAR.paso6.horizontales = horizontales;
+  console.log('🗳️ Votos V:', votosV.length, 'H:', votosH.length);
+  console.log('📊 Distribución V:', votosV.map(v => v.votos).join(','));
+  console.log('📊 Distribución H:', votosH.map(v => v.votos).join(','));
+
+  window.MAR.paso6.verticales = verticalesOrdenadas.sort((a, b) => a.posicion - b.posicion);
+  window.MAR.paso6.horizontales = horizontalesOrdenadas.sort((a, b) => a.posicion - b.posicion);
   window.MAR.paso6.votosV = votosV;
   window.MAR.paso6.votosH = votosH;
   window.MAR.paso6.tiempoMs = Math.round(performance.now() - t0);
@@ -102,9 +96,9 @@ async function ejecutarPaso6() {
   if (img && canvas) {
     canvas.width = img.clientWidth;
     canvas.height = img.clientHeight;
-    dibujarLineasPaso(6, verticales, horizontales);
+    dibujarLineasPaso(6, window.MAR.paso6.verticales, window.MAR.paso6.horizontales);
   }
-  actualizarContadores(verticales.length, horizontales.length);
+  actualizarContadores(window.MAR.paso6.verticales.length, window.MAR.paso6.horizontales.length);
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 6!');
   return window.MAR.paso6;
@@ -112,18 +106,22 @@ async function ejecutarPaso6() {
 
 function debugPaso6() {
   const p = window.MAR.paso6;
-  const vStr = p.votosV.slice(0, 8).map(v => `${v.posicion}(${v.votos}v)`).join(', ');
-  const hStr = p.votosH.slice(0, 8).map(h => `${h.posicion}(${h.votos}v)`).join(', ');
+  const v3 = p.votosV.filter(v => v.votos === 3).length;
+  const v2 = p.votosV.filter(v => v.votos === 2).length;
+  const v1 = p.votosV.filter(v => v.votos === 1).length;
+  const h3 = p.votosH.filter(v => v.votos === 3).length;
+  const h2 = p.votosH.filter(v => v.votos === 2).length;
+  const h1 = p.votosH.filter(v => v.votos === 1).length;
+  
   return `PASO 6: LIDAR
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales FINALES: ${p.verticales.length}
+   3 votos: ${v3}, 2 votos: ${v2}, 1 voto: ${v1}
 📊 Horizontales FINALES: ${p.horizontales.length}
+   3 votos: ${h3}, 2 votos: ${h2}, 1 voto: ${h1}
 
-📋 Detalle verticales:
-${vStr}${p.votosV.length > 8 ? '...' : ''}
-
-📋 Detalle horizontales:
-${hStr}${p.votosH.length > 8 ? '...' : ''}
-
-💡 META: 21 columnas → 22V, 10 filas → 11H`;
+💡 Los votos indican cuántos algoritmos coinciden:
+   - 3 votos: Óptica + Ecografía + Espectro (muy confiable)
+   - 2 votos: al menos 2 coinciden (confiable)
+   - 1 voto: solo 1 algoritmo lo detectó (posible pero menos seguro)`;
 }
