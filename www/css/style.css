@@ -187,3 +187,66 @@ input[type="file"] { display: none; }
 .punto.azul { background: #0000FF; }
 
 footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; }
+
+/* Panel de pasos */
+.pasos-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.paso-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.btn-paso {
+  flex: 1;
+  text-align: left;
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #2d3436;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-paso:active {
+  transform: scale(0.98);
+  background: #e8f0f5;
+}
+
+.paso-ejecutado .btn-paso {
+  background: #e8f5e9;
+  border-color: #00C853;
+  color: #2e7d32;
+}
+
+.estado {
+  font-size: 1.2rem;
+  min-width: 24px;
+  text-align: center;
+}
+
+.debug-panel {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  font-family: 'Courier New', monospace;
+  font-size: 0.7rem;
+  padding: 12px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+  margin-top: 12px;
+  display: none;
+}
