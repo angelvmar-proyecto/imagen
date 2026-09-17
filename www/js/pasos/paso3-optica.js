@@ -1,3 +1,8 @@
+// ============================================
+// PASO 3: ÓPTICA AÉREA
+// Lee de window.MAR.paso2.grises
+// ============================================
+
 const PARAMS_PASO3 = {
   UMBRAL_DENSIDAD: 4,
   DISTANCIA_MIN_V: 22,
@@ -6,7 +11,7 @@ const PARAMS_PASO3 = {
 };
 
 window.MAR = window.MAR || {};
-window.MAR.paso3 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0, fuente: 'original' };
+window.MAR.paso3 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
 
 function suavizar3(arr, ventana) {
   const r = new Array(arr.length);
@@ -38,22 +43,21 @@ function detectarValles3(arr, umbral, distanciaMin) {
 }
 
 async function ejecutarPaso3() {
-  if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
+  if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) {
+    throw new Error('Ejecuta Paso 2 primero');
+  }
   if (typeof setProgreso === 'function') setProgreso(10, 'Paso 3: Óptica...');
   const t0 = performance.now();
 
-  const fuente = (window.MAR.fuentes && window.MAR.fuentes.paso3) || 'original';
-  window.MAR.paso3.fuente = fuente;
-
-  // Leer del CAJÓN
-  const imgFuente = obtenerImagenFuente(3);
-  const grises = rgbAGrises2(imgFuente);
+  const grises = window.MAR.paso2.grises;
   const w = grises.width, h = grises.height, data = grises.data;
 
   const perfilV = new Array(w).fill(0);
   const perfilH = new Array(h).fill(0);
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (data[y*w+x] < 128) { perfilV[x]++; perfilH[y]++; }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (data[y*w+x] < 128) { perfilV[x]++; perfilH[y]++; }
+    }
   }
   const pv = suavizar3(perfilV, 3);
   const ph = suavizar3(perfilH, 3);
@@ -67,12 +71,10 @@ async function ejecutarPaso3() {
 
   window.MAR.paso3.verticales = verticales.map(v => ({ posicion: v, votos: 1 }));
   window.MAR.paso3.horizontales = horizontales.map(h => ({ posicion: h, votos: 1 }));
-  window.MAR.lineasPaso3 = { verticales: verticales, horizontales: horizontales };
   window.MAR.paso3.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso3.ejecutado = true;
 
   if (typeof dibujarLineasPaso === 'function') {
-    // Limpiar canvas si es el primero en dibujar
     const img = document.getElementById('imgPreview');
     const canvas = document.getElementById('deteccionCanvas');
     if (canvas && img) {
@@ -91,7 +93,6 @@ function debugPaso3() {
   const p = window.MAR.paso3;
   return `PASO 3: ÓPTICA AÉREA
 ⏱️ ${p.tiempoMs} ms
-📊 Fuente: ${p.fuente === 'original' ? '⚪ Original' : '⚫ Filtrada'}
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
 ⚙️ Umbral: ${PARAMS_PASO3.UMBRAL_DENSIDAD}, DistV: ${PARAMS_PASO3.DISTANCIA_MIN_V}, DistH: ${PARAMS_PASO3.DISTANCIA_MIN_H}`;

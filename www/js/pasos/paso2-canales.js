@@ -1,5 +1,10 @@
+// ============================================
+// PASO 2: CANALES (Grises + HSV)
+// Lee de window.MAR.imagenOriginal
+// ============================================
+
 window.MAR = window.MAR || {};
-window.MAR.paso2 = { ejecutado: false, tiempoMs: 0, fuente: 'original' };
+window.MAR.paso2 = { ejecutado: false, tiempoMs: 0 };
 
 function rgbAGrises2(imageData) {
   const w = imageData.width, h = imageData.height;
@@ -40,12 +45,13 @@ async function ejecutarPaso2() {
   if (typeof setProgreso === 'function') setProgreso(10, 'Paso 2: Canales...');
   const t0 = performance.now();
 
-  const fuente = (window.MAR.fuentes && window.MAR.fuentes.paso2) || 'original';
-  window.MAR.paso2.fuente = fuente;
+  // Verificar que la imagen original existe
+  if (!window.MAR.imagenOriginal) {
+    throw new Error('No hay imagen. Carga una imagen primero.');
+  }
 
-  // Leer del CAJÓN, no de imgPreview
-  const imageData = obtenerImagenFuente(2);
-  if (!imageData) throw new Error('No hay imagen fuente');
+  // Leer DIRECTAMENTE de la imagen original
+  const imageData = window.MAR.imagenOriginal;
 
   window.MAR.paso2.grises = rgbAGrises2(imageData);
   window.MAR.paso2.hsv = rgbAHSV2(imageData);
@@ -62,6 +68,6 @@ function debugPaso2() {
   const p = window.MAR.paso2;
   return `PASO 2: CANALES
 ⏱️ ${p.tiempoMs} ms
-📊 Fuente: ${p.fuente === 'original' ? '⚪ Original' : '⚫ Filtrada'}
-✅ Grises + HSV preparados`;
+✅ Grises: ${p.grises.width}×${p.grises.height}
+✅ HSV: H, S, V preparados`;
 }

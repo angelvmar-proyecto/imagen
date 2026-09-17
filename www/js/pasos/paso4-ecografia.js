@@ -8,9 +8,12 @@ window.MAR = window.MAR || {};
 window.MAR.paso4 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
 
 async function ejecutarPaso4() {
-  if (!window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 4...');
+  if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) {
+    throw new Error('Ejecuta Paso 2 primero');
+  }
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 4: Ecografía...');
   const t0 = performance.now();
+
   const grises = window.MAR.paso2.grises;
   const w = grises.width, h = grises.height, data = grises.data;
 
@@ -57,8 +60,10 @@ async function ejecutarPaso4() {
   window.MAR.paso4.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso4.ejecutado = true;
 
-  dibujarLineasPaso(4, verticales, horizontales);
-  actualizarContadores(verticales.length, horizontales.length);
+  if (typeof dibujarLineasPaso === 'function') {
+    dibujarLineasPaso(4, verticales, horizontales);
+    actualizarContadores(verticales.length, horizontales.length);
+  }
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 4!');
   return window.MAR.paso4;

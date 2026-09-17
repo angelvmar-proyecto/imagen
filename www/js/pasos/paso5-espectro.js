@@ -7,9 +7,12 @@ window.MAR = window.MAR || {};
 window.MAR.paso5 = { ejecutado: false, verticales: [], horizontales: [], tiempoMs: 0 };
 
 async function ejecutarPaso5() {
-  if (!window.MAR.paso2.ejecutado) throw new Error('Ejecuta Paso 2 primero');
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 5...');
+  if (!window.MAR.paso2 || !window.MAR.paso2.ejecutado) {
+    throw new Error('Ejecuta Paso 2 primero');
+  }
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 5: Espectro...');
   const t0 = performance.now();
+
   const hsv = window.MAR.paso2.hsv;
   const w = hsv.width, h = hsv.height;
   const H = hsv.H, S = hsv.S;
@@ -62,8 +65,10 @@ async function ejecutarPaso5() {
   window.MAR.paso5.tiempoMs = Math.round(performance.now() - t0);
   window.MAR.paso5.ejecutado = true;
 
-  dibujarLineasPaso(5, verticales, horizontales);
-  actualizarContadores(verticales.length, horizontales.length);
+  if (typeof dibujarLineasPaso === 'function') {
+    dibujarLineasPaso(5, verticales, horizontales);
+    actualizarContadores(verticales.length, horizontales.length);
+  }
 
   if (typeof setProgreso === 'function') setProgreso(100, '¡Paso 5!');
   return window.MAR.paso5;
@@ -75,5 +80,5 @@ function debugPaso5() {
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales: ${p.verticales.length}
 📊 Horizontales: ${p.horizontales.length}
-⚙️ Matiz: ${PARAMS_PASO5.UMBRAL_MATIZ}°, Saturación: ${PARAMS_PASO5.UMBRAL_SATURACION}%`;
+⚙️ Matiz: ${PARAMS_PASO5.UMBRAL_MATIZ}°, Sat: ${PARAMS_PASO5.UMBRAL_SATURACION}%`;
 }
