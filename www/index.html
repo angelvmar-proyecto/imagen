@@ -22,25 +22,48 @@
     .btn-analizar { background: #22c55e; color: white; }
     .btn-menos { background: #3b82f6; color: white; }
     .btn-mas { background: #3b82f6; color: white; }
-    .btn-ocr { background: #f97316; color: white; }
     .btn-limpiar { background: #ef4444; color: white; }
     .btn-csv { background: #f39c12; color: white; }
     .btn-excel { background: #217346; color: white; }
     .btn-copiar { background: #3c6382; color: white; }
     
-    .area-img { width: 100%; height: 45vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; }
+    .seccion-leer {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .seccion-leer-titulo {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-align: center;
+      margin-bottom: 6px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .botonera-leer {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .btn-rapido { background: #f97316; color: white; }
+    .btn-medio { background: #eab308; color: #1a1a1a; }
+    .btn-preciso { background: #8b5cf6; color: white; }
+    .btn-leer-porDefecto { box-shadow: 0 0 0 3px #eab308; }
+    
+    .area-img { width: 100%; height: 42vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; }
     canvas { max-width: none; transform-origin: top left; display: block; }
     
-    .logs { background: #1e293b; border-radius: 8px; padding: 8px; height: 20vh; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; }
+    .logs { background: #1e293b; border-radius: 8px; padding: 8px; height: 18vh; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; }
     #entradaImagen { display: none; }
     
     .progreso { width: 100%; height: 24px; background: #334155; border-radius: 12px; margin: 8px 0; overflow: hidden; }
     .barra-progreso { height: 100%; background: #22c55e; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
     
-    .pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
-    .paso { padding: 10px 6px; background: #1e293b; border-radius: 8px; text-align: center; border: 2px solid transparent; }
+    .pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+    .paso { padding: 8px 4px; background: #1e293b; border-radius: 8px; text-align: center; border: 2px solid transparent; font-size: 0.65rem; }
     .paso.hecho { background: #166534; border-color: #22c55e; }
-    .paso-texto { font-size: 0.75rem; margin-top: 4px; }
+    .paso-texto { font-size: 0.6rem; margin-top: 2px; }
     
     .tabla-wrapper { background: #1e293b; border-radius: 8px; padding: 8px; max-height: 65vh; overflow: auto; }
     .tabla-resultado { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
@@ -81,10 +104,18 @@
     <div class="botonera">
       <button class="btn-img" id="btnCargar">📷 Imagen</button>
       <button class="btn-analizar" id="btnAnalizar">🔬 Analizar</button>
+      <button class="btn-limpiar" id="btnLimpiar">🗑️ Limpiar</button>
       <button class="btn-menos" id="btnMenos">− Zoom</button>
       <button class="btn-mas" id="btnMas">+ Zoom</button>
-      <button class="btn-ocr" id="btnOCR">📖 Leer</button>
-      <button class="btn-limpiar" id="btnLimpiar">🗑️ Limpiar</button>
+    </div>
+
+    <div class="seccion-leer">
+      <div class="seccion-leer-titulo">📖 LEER</div>
+      <div class="botonera-leer">
+        <button class="btn-rapido" id="btnLeerRapido">⚡ Rápido</button>
+        <button class="btn-medio btn-leer-porDefecto" id="btnLeerMedio">📊 Medio</button>
+        <button class="btn-preciso" id="btnLeerPreciso">🎯 Preciso</button>
+      </div>
     </div>
 
     <input type="file" id="entradaImagen" accept="image/*">
@@ -94,7 +125,7 @@
 
   <div class="tab-content" id="tab-tabla">
     <div class="tabla-wrapper" id="tablaWrapper">
-      <div class="empty-state">📊 Sin datos. Ejecuta "Analizar" y "Leer" primero.</div>
+      <div class="empty-state">📊 Sin datos. Ejecuta "Analizar" y luego "Leer" primero.</div>
     </div>
     <div class="botonera" style="margin-top:8px;">
       <button class="btn-copiar" id="btnCopiar">📋 Copiar</button>
