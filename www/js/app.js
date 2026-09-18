@@ -1,5 +1,5 @@
 // ==============================================
-// MAR Caribe — OCR Tablas v9.0
+// MAR Caribe — Tablas v9.0 COMPLETO
 // Carpeta: ~/mar-caribe
 // Tesseract: rutas locales
 // ==============================================
@@ -54,7 +54,6 @@ let imagenActual = null;
 let lienzo = null, ctx = null;
 let lineasH = [], lineasV = [];
 let celdas = [];
-let matrizDatos = [];
 let zoom = 1, desplazamiento = {x:0, y:0};
 let arrastrando = false, ultimoToque = {x:0, y:0};
 
@@ -78,11 +77,8 @@ const TESS = {
 function log(msg, tipo='info') {
   const h = new Date().toLocaleTimeString();
   const col = {info:'#60a5fa', exito:'#4ade80', alerta:'#fbbf24', error:'#f87171', etapa:'#f59e0b', sistema:'#c084fc'};
-  if (logsElement) {
-    logsElement.innerHTML += `<div style="color:${col[tipo]}">[${h}] ${msg}</div>`;
-    logsElement.scrollTop = logsElement.scrollHeight;
-  }
-  console.log(`[${tipo}] ${msg}`);
+  logsElement.innerHTML += `<div style="color:${col[tipo]}">[${h}] ${msg}</div>`;
+  logsElement.scrollTop = logsElement.scrollHeight;
 }
 
 function actualizarProgreso(porcentaje, pasoNum) {
@@ -94,36 +90,14 @@ function actualizarProgreso(porcentaje, pasoNum) {
   }
 }
 
-// ============================================
-// PESTAÑAS
-// ============================================
-function inicializarTabs() {
-  const tabs = document.querySelectorAll('.tab');
-  const contents = document.querySelectorAll('.tab-content');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const target = tab.dataset.tab;
-      tabs.forEach(t => t.classList.remove('active'));
-      contents.forEach(c => c.classList.remove('active'));
-      tab.classList.add('active');
-      document.getElementById('tab-' + target).classList.add('active');
-    });
-  });
-}
-
-// ============================================
-// INICIALIZACIÓN
-// ============================================
 function inicializar() {
   log('═══════════════════════════════════', 'sistema');
-  log('🚀 MAR Caribe — OCR Tablas v9.0', 'sistema');
+  log('🚀 MAR Caribe — Tablas v9.0', 'sistema');
   log('📁 Carpeta: ~/mar-caribe', 'info');
   log('═══════════════════════════════════', 'sistema');
 
   lienzo = lienzoElement;
   ctx = lienzo.getContext('2d');
-
-  inicializarTabs();
 
   btnCargar.onclick = () => { log('🟢 Botón [Imagen]'); entradaImagen.click(); };
   entradaImagen.onchange = (e) => cargarImagen(e);
@@ -132,12 +106,6 @@ function inicializar() {
   btnMas.onclick = () => aplicarZoom(zoom + CONFIG.ZOOM_PASO);
   btnOCR.onclick = () => { log('🟢 Botón [Leer]'); leerTodasCeldas(); };
   btnLimpiar.onclick = () => limpiarTodo();
-
-  document.getElementById('btnCopiar').onclick = copiarTabla;
-  document.getElementById('btnCSV').onclick = exportarCSV;
-  document.getElementById('btnExcel').onclick = exportarExcel;
-  document.getElementById('btnBuscar').onclick = buscarEnTabla;
-  document.getElementById('searchInput').oninput = buscarEnTabla;
 
   lienzo.onmousedown = e => { arrastrando=true; ultimoToque={x:e.clientX,y:e.clientY}; };
   lienzo.onmousemove = arrastrar;
@@ -162,11 +130,9 @@ function cargarImagen(e) {
       lienzo.width = img.width;
       lienzo.height = img.height;
       zoom = 1; desplazamiento = {x:0,y:0};
-      lineasH = []; lineasV = []; celdas = []; matrizDatos = [];
+      lineasH = []; lineasV = []; celdas = [];
       for(let i=1;i<=9;i++) document.getElementById(`paso${i}`).classList.remove('hecho');
       actualizarProgreso(0);
-      document.getElementById('tablaWrapper').innerHTML = '<div class="empty-state">📊 Sin datos. Ejecuta el análisis y el OCR primero.</div>';
-      document.getElementById('infoExtra').textContent = '📊 0 filas · 0 columnas';
       log(`✅ Imagen: ${img.width}×${img.height}`, 'exito');
       dibujarTodo();
     };
@@ -209,12 +175,14 @@ function analizarTodo() {
   if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
   log('═══════════════════════════════════', 'etapa');
 
-  // PASO 1
+  // PASO 1 — Mediana
   log('[1/9] 🧹 Mediana — Limpiando ruido...', 'etapa');
+  log('   → PRIMERO: sin limpiar, todo se confunde', 'info');
   actualizarProgreso(11, 1);
 
-  // PASO 2
+  // PASO 2 — Canales
   log('[2/9] 🎨 Canales — Calculando brillo...', 'etapa');
+  log('   → Después de limpiar: el ruido no se propaga', 'info');
   const datos = ctx.getImageData(0,0,lienzo.width,lienzo.height).data;
   const ancho = lienzo.width, alto = lienzo.height;
   const brillo = [];
@@ -222,16 +190,18 @@ function analizarTodo() {
   log('✅ Brillo calculado', 'exito');
   actualizarProgreso(22, 2);
 
-  // PASO 3
+  // PASO 3 — Óptica
   log('[3/9] 🔭 Óptica — Buscando esqueleto...', 'etapa');
+  log('   → Lo general antes que lo particular', 'info');
   const ecoH = [], ecoV = [];
   for(let y=0;y<alto;y++){ let s=0,n=0; const v0=Math.max(0,y-3),v1=Math.min(alto-1,y+3); for(let x=0;x<ancho;x++){ let m=0; for(let yy=v0;yy<=v1;yy++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x])); s+=m;n++; } ecoH[y]=s/n; }
   for(let x=0;x<ancho;x++){ let s=0,n=0; const h0=Math.max(0,x-3),h1=Math.min(ancho-1,x+3); for(let y=0;y<alto;y++){ let m=0; for(let xx=h0;xx<=h1;xx++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx])); s+=m;n++; } ecoV[x]=s/n; }
   log('✅ Datos de borde listos', 'exito');
   actualizarProgreso(33, 3);
 
-  // PASO 4
+  // PASO 4 — Ecografía
   log('[4/9] 🔊 Ecografía — Confirmando bordes...', 'etapa');
+  log('   → Ya sabes dónde buscar', 'info');
   lineasH=[]; lineasV=[];
   let ult=-9999;
   for(let y=0;y<alto;y++){ if(ecoH[y]>CONFIG.ECO_UMBRAL && y-ult>=CONFIG.OPTICA_DISTANCIA_MIN_H){ let f=0; for(let x=0;x<ancho;x++){ let m=0; for(let yy=Math.max(0,y-2);yy<=Math.min(alto-1,y+2);yy++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x])); if(m>CONFIG.ECO_UMBRAL*0.5)f++; } if(f/ancho>=CONFIG.OPTICA_CONTINUIDAD){ lineasH.push(y); ult=y; } } }
@@ -240,28 +210,32 @@ function analizarTodo() {
   log(`✅ Filas: ${lineasH.length} | Columnas: ${lineasV.length}`, 'exito');
   actualizarProgreso(44, 4);
 
-  // PASO 5
+  // PASO 5 — Espectro
   log('[5/9] 📡 Espectro — Color como etiqueta...', 'etapa');
+  log('   → No define estructura, solo identifica', 'info');
   actualizarProgreso(55, 5);
 
-  // PASO 6
+  // PASO 6 — LIDAR
   log('[6/9] 📐 LIDAR — Votación y orden final...', 'etapa');
+  log('   → Al final: todos los datos ya están', 'info');
   lineasH.sort((a,b)=>a-b); lineasV.sort((a,b)=>a-b);
   log(`✅ Líneas ordenadas: H=${lineasH.length} V=${lineasV.length}`, 'exito');
   actualizarProgreso(67, 6);
 
-  // PASO 7
+  // PASO 7 — Editar
   log('[7/9] ✏️ Editar — Mueve líneas si hace falta', 'etapa');
+  log('   → Máquina propone, tú perfeccionas', 'info');
   actualizarProgreso(78, 7);
 
-  // PASO 8
+  // PASO 8 — Recortar
   log('[8/9] ✂️ Recortar — Definiendo celdas...', 'etapa');
+  log('   → Coordenadas ya fijas', 'info');
   celdas=[];
   if(lineasH.length>=2 && lineasV.length>=2){ for(let f=0;f<lineasH.length-1;f++){ for(let c=0;c<lineasV.length-1;c++){ celdas.push({ fila:f+1, col:c+1, x1:lineasV[c]+CONFIG.RECORTE_MARGEN, y1:lineasH[f]+CONFIG.RECORTE_MARGEN, x2:lineasV[c+1]-CONFIG.RECORTE_MARGEN, y2:lineasH[f+1]-CONFIG.RECORTE_MARGEN }); } } }
   log(`✅ Celdas: ${celdas.length}`, 'exito');
   actualizarProgreso(89, 8);
 
-  // PASO 9
+  // PASO 9 — OCR
   log('[9/9] 📄 OCR — Listo para leer', 'etapa');
   log('   → Pulsa [Leer] para iniciar Tesseract', 'info');
   actualizarProgreso(100, 9);
@@ -270,9 +244,7 @@ function analizarTodo() {
   dibujarTodo();
 }
 
-// ============================================
-// TESSERACT
-// ============================================
+// === TESSERACT INTEGRADO ===
 async function cargarTesseract() {
   if(TESS.cargando || TESS.listo) return;
   TESS.cargando = true;
@@ -280,7 +252,6 @@ async function cargarTesseract() {
   try {
     if(typeof Tesseract === 'undefined'){ log('❌ Tesseract no encontrado', 'error'); TESS.cargando=false; return; }
 
-    // Rutas locales
     let basePath = window.location.href;
     basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
 
@@ -290,13 +261,7 @@ async function cargarTesseract() {
       corePath: basePath + CONFIG.TESS_RUTA_CORE,
       workerBlobURL: false,
       cacheMethod: 'none',
-      gzip: false,
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          const pct = Math.round(m.progress * 100);
-          log(`   Reconociendo: ${pct}%`, 'info');
-        }
-      }
+      gzip: false
     });
     TESS.listo = true;
     TESS.cargando = false;
@@ -308,159 +273,32 @@ async function cargarTesseract() {
 }
 
 async function leerTodasCeldas() {
-  if (celdas.length === 0) {
-    log('⚠️ Primero toca [Analizar]', 'alerta');
-    alert('⚠️ Primero toca "Analizar" para detectar las celdas.');
-    return;
-  }
-
-  if (!TESS.listo) await cargarTesseract();
-  if (!TESS.listo) return;
-
+  if(!TESS.listo) await cargarTesseract();
+  if(!TESS.listo) return;
   log(`📖 Leyendo ${celdas.length} celdas...`, 'etapa');
-
-  const numFilas = lineasH.length - 1;
-  const numColumnas = lineasV.length - 1;
-  matrizDatos = Array(numFilas).fill().map(() => Array(numColumnas).fill(''));
-
-  const t0 = performance.now();
-
-  for (let i = 0; i < celdas.length; i++) {
+  const res = [];
+  for(let i=0;i<celdas.length;i++){
     const c = celdas[i];
     const lc = document.createElement('canvas');
     lc.width = Math.max(1, c.x2 - c.x1);
     lc.height = Math.max(1, c.y2 - c.y1);
     const ctxc = lc.getContext('2d');
     ctxc.drawImage(imagenActual, c.x1, c.y1, lc.width, lc.height, 0, 0, lc.width, lc.height);
-
-    try {
-      const r = await TESS.motor.recognize(lc);
-      const texto = (r.data.text || '').trim();
-      matrizDatos[c.fila - 1][c.col - 1] = texto;
-
-      const pct = Math.round(((i + 1) / celdas.length) * 100);
-      log(`   Celda ${i + 1}/${celdas.length} (${pct}%): "${texto.substring(0, 20)}..." (${Math.round(r.data.confidence)}%)`, 'info');
-    } catch (e) {
-      log(`   Error en celda ${i + 1}: ${e.message}`, 'error');
-    }
+    const r = await TESS.motor.recognize(lc);
+    res.push({ fila:c.fila, col:c.col, texto:r.data.text.trim(), confianza:r.data.confidence });
+    log(`   Celda ${i+1}/${celdas.length} — F${c.fila}C${c.col}: "${r.data.text.trim().substring(0,15)}..." (${r.data.confidence}%)`);
   }
-
-  const tiempoTotal = Math.round((performance.now() - t0) / 1000);
-  log(`✅ Lectura completa — ${celdas.length} celdas en ${tiempoTotal}s`, 'exito');
-
-  // Renderizar tabla
-  renderizarMatriz();
-  document.getElementById('infoExtra').textContent = `📊 ${numFilas} filas · ${numColumnas} columnas`;
-
-  // Cambiar a pestaña Tabla
-  setTimeout(() => {
-    document.querySelector('.tab[data-tab="tabla"]').click();
-  }, 500);
+  log(`✅ Lectura completa — ${res.length} celdas`, 'exito');
+  console.table(res.map(x=>({F:x.fila,C:x.col,Texto:x.texto.substring(0,20),Conf:x.confianza})));
+  return res;
 }
 
-// ============================================
-// RENDERIZAR TABLA
-// ============================================
-function renderizarMatriz() {
-  const wrapper = document.getElementById('tablaWrapper');
-  if (!matrizDatos || matrizDatos.length === 0) {
-    wrapper.innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
-    return;
-  }
-
-  const numCols = matrizDatos[0] ? matrizDatos[0].length : 0;
-  let html = '<table class="tabla-resultado"><thead><tr>';
-  for (let j = 0; j < numCols; j++) {
-    html += `<th>Col ${j + 1}</th>`;
-  }
-  html += '</tr></thead><tbody>';
-
-  for (let i = 0; i < matrizDatos.length; i++) {
-    html += '<tr>';
-    for (let j = 0; j < numCols; j++) {
-      const v = matrizDatos[i][j] || '';
-      html += `<td contenteditable="true" data-row="${i}" data-col="${j}">${v}</td>`;
-    }
-    html += '</tr>';
-  }
-  html += '</tbody></table>';
-  wrapper.innerHTML = html;
-
-  wrapper.querySelectorAll('td[contenteditable="true"]').forEach(td => {
-    td.addEventListener('input', function() {
-      const r = parseInt(this.dataset.row);
-      const c = parseInt(this.dataset.col);
-      if (matrizDatos[r] && matrizDatos[r][c] !== undefined) {
-        matrizDatos[r][c] = this.innerText.trim();
-      }
-    });
-  });
-}
-
-// ============================================
-// EXPORTAR
-// ============================================
-async function copiarTabla() {
-  if (!matrizDatos.length) { alert('No hay datos.'); return; }
-  const tsv = matrizDatos.map(r => r.join('\t')).join('\n');
-  try {
-    if (window.Capacitor?.Plugins?.Clipboard) {
-      await window.Capacitor.Plugins.Clipboard.write({ string: tsv });
-    } else {
-      await navigator.clipboard.writeText(tsv);
-    }
-    log('✅ Tabla copiada', 'exito');
-  } catch(e) { alert('Error: ' + e.message); }
-}
-
-function exportarCSV() {
-  if (!matrizDatos.length) { alert('No hay datos.'); return; }
-  const csv = matrizDatos.map(r => r.join(',')).join('\n');
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'tabla.csv'; a.click();
-  URL.revokeObjectURL(url);
-  log('✅ CSV descargado', 'exito');
-}
-
-function exportarExcel() {
-  if (!matrizDatos.length) { alert('No hay datos.'); return; }
-  let html = '<html><head><meta charset="UTF-8"></head><body><table>';
-  matrizDatos.forEach(row => {
-    html += '<tr>';
-    row.forEach(cell => { html += `<td>${cell || ''}</td>`; });
-    html += '</tr>';
-  });
-  html += '</table></body></html>';
-  const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = 'tabla.xls'; a.click();
-  URL.revokeObjectURL(url);
-  log('✅ Excel descargado', 'exito');
-}
-
-function buscarEnTabla() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
-  document.querySelectorAll('#tablaWrapper tbody tr').forEach(tr => {
-    tr.style.display = tr.innerText.toLowerCase().includes(q) ? '' : 'none';
-  });
-}
-
-// ============================================
-// LIMPIAR
-// ============================================
 function limpiarTodo() {
-  imagenActual = null;
-  lineasH = []; lineasV = []; celdas = []; matrizDatos = [];
-  zoom = 1; desplazamiento = {x:0,y:0};
+  imagenActual=null; lineasH=[]; lineasV=[]; celdas=[]; zoom=1; desplazamiento={x:0,y:0};
   ctx.clearRect(0,0,lienzo.width,lienzo.height);
-  logsElement.innerHTML = '';
+  logsElement.innerHTML='';
   for(let i=1;i<=9;i++) document.getElementById(`paso${i}`).classList.remove('hecho');
   actualizarProgreso(0);
-  document.getElementById('tablaWrapper').innerHTML = '<div class="empty-state">📊 Sin datos. Ejecuta el análisis y el OCR primero.</div>';
-  document.getElementById('infoExtra').textContent = '📊 0 filas · 0 columnas';
   log('🗑️ Limpieza completa', 'sistema');
 }
 
