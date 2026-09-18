@@ -1,6 +1,6 @@
 // ==============================================
 // MAR Caribe — Tablas v9.0
-// Método D (centro del valle) + Color + OCR
+// Algoritmo ORIGINAL + Ajuste local de líneas
 // ==============================================
 
 const CONFIG = {
@@ -13,6 +13,7 @@ const CONFIG = {
   ECO_UMBRAL: 25,
   ECO_UMBRAL_V: 42,
   ECO_UMBRAL_H: 38,
+  RANGO_AJUSTE: 5,
   LIDAR_TOLERANCIA: 12,
   LIDAR_AGRUPAR: 8,
   RECORTE_MARGEN: 2,
@@ -81,8 +82,7 @@ function inicializarTabs() {
 function inicializar() {
   log('═══════════════════════════════════', 'sistema');
   log('🚀 MAR Caribe — Tablas v9.0', 'sistema');
-  log('📐 Método D: Centro del valle', 'info');
-  log('🎨 Detección de color + OCR', 'info');
+  log('📐 Algoritmo original + Ajuste local', 'info');
   log('═══════════════════════════════════', 'sistema');
 
   lienzo = lienzoElement;
@@ -168,42 +168,46 @@ function arrastrar(e) {
 function detenerArrastre() { arrastrando = false; }
 
 // ============================================
-// MÉTODO D: DETECCIÓN DEL CENTRO DEL VALLE
+// AJUSTE LOCAL DE LÍNEAS
 // ============================================
-function detectarLineasCentroValle(eco, umbral, distanciaMin) {
-  const lineas = [];
-  let ultima = -9999;
-  let i = 0;
+function ajustarLineaH(y, brillo, alto, ancho, rango) {
+  const y0 = Math.max(0, y - rango);
+  const y1 = Math.min(alto - 1, y + rango);
+  let mejorY = y;
+  let mejorBrillo = Infinity;
 
-  while (i < eco.length) {
-    // Buscar INICIO de zona donde eco > umbral
-    if (eco[i] > umbral) {
-      let inicio = i;
-      
-      // Buscar FIN de la zona
-      let fin = i;
-      while (fin < eco.length && eco[fin] > umbral) {
-        fin++;
-      }
-      fin = fin - 1;  // Último punto dentro del umbral
-
-      // Centro del valle
-      const centro = Math.round((inicio + fin) / 2);
-
-      // Respetar distancia mínima
-      if (centro - ultima >= distanciaMin) {
-        lineas.push(centro);
-        ultima = centro;
-      }
-
-      // Saltar al final de la zona
-      i = fin + 1;
-    } else {
-      i++;
+  for (let yy = y0; yy <= y1; yy++) {
+    let sumaBrillo = 0;
+    for (let x = 0; x < ancho; x++) {
+      sumaBrillo += brillo[yy][x];
+    }
+    const promedio = sumaBrillo / ancho;
+    if (promedio < mejorBrillo) {
+      mejorBrillo = promedio;
+      mejorY = yy;
     }
   }
+  return mejorY;
+}
 
-  return lineas;
+function ajustarLineaV(x, brillo, alto, ancho, rango) {
+  const x0 = Math.max(0, x - rango);
+  const x1 = Math.min(ancho - 1, x + rango);
+  let mejorX = x;
+  let mejorBrillo = Infinity;
+
+  for (let xx = x0; xx <= x1; xx++) {
+    let sumaBrillo = 0;
+    for (let y = 0; y < alto; y++) {
+      sumaBrillo += brillo[y][xx];
+    }
+    const promedio = sumaBrillo / alto;
+    if (promedio < mejorBrillo) {
+      mejorBrillo = promedio;
+      mejorX = xx;
+    }
+  }
+  return mejorX;
 }
 
 // ============================================
@@ -293,11 +297,53 @@ function analizarTodo() {
   log('✅ Eco calculado', 'exito');
   actualizarProgreso(33, 3);
 
-  log('[4/9] 🔊 Ecografía — MÉTODO D (centro del valle)...', 'etapa');
-  log('   → Detecta centro de zona con eco alto', 'info');
-  lineasH = detectarLineasCentroValle(ecoH, CONFIG.ECO_UMBRAL_H, CONFIG.OPTICA_DISTANCIA_MIN_H);
-  lineasV = detectarLineasCentroValle(ecoV, CONFIG.ECO_UMBRAL_V, CONFIG.OPTICA_DISTANCIA_MIN_V);
-  log(`✅ Filas: ${lineasH.length} | Columnas: ${lineasV.length}`, 'exito');
+  log('[4/9] 🔊 Ecografía — Algoritmo original...', 'etapa');
+  lineasH = []; lineasV = [];
+  let ult = -9999;
+  
+  // Detección H original
+  for(let y=0;y<alto;y++){
+    if(ecoH[y]>CONFIG.ECO_UMBRAL_H && y-ult>=CONFIG.OPTICA_DISTANCIA_MIN_H){
+      let f=0;
+      for(let x=0;x<ancho;x++){
+        let m=0;
+        for(let yy=Math.max(0,y-2);yy<=Math.min(alto-1,y+2);yy++)
+          m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x]));
+        if(m>CONFIG.ECO_UMBRAL_H*0.5)f++;
+      }
+      if(f/ancho>=CONFIG.OPTICA_CONTINUIDAD){
+        lineasH.push(y);
+        ult=y;
+      }
+    }
+  }
+  
+  ult = -9999;
+  // Detección V original
+  for(let x=0;x<ancho;x++){
+    if(ecoV[x]>CONFIG.ECO_UMBRAL_V && x-ult>=CONFIG.OPTICA_DISTANCIA_MIN_V){
+      let f=0;
+      for(let y=0;y<alto;y++){
+        let m=0;
+        for(let xx=Math.max(0,x-2);xx<=Math.min(ancho-1,x+2);xx++)
+          m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx]));
+        if(m>CONFIG.ECO_UMBRAL_V*0.5)f++;
+      }
+      if(f/alto>=CONFIG.OPTICA_CONTINUIDAD){
+        lineasV.push(x);
+        ult=x;
+      }
+    }
+  }
+
+  log(`✅ Detectadas: H=${lineasH.length} V=${lineasV.length}`, 'exito');
+  log(`📐 Ajustando al centro de línea (rango ±${CONFIG.RANGO_AJUSTE}px)...`, 'info');
+
+  // Aplicar ajuste local
+  lineasH = lineasH.map(y => ajustarLineaH(y, brillo, alto, ancho, CONFIG.RANGO_AJUSTE));
+  lineasV = lineasV.map(x => ajustarLineaV(x, brillo, alto, ancho, CONFIG.RANGO_AJUSTE));
+
+  log(`✅ Líneas ajustadas al centro`, 'exito');
   actualizarProgreso(44, 4);
 
   log('[5/9] 📡 Espectro...', 'etapa');
@@ -311,7 +357,7 @@ function analizarTodo() {
   actualizarProgreso(78, 7);
 
   log('[8/9] ✂️ Recortar + Detectar colores...', 'etapa');
-  celdas=[];
+  celdas = [];
   const numFilas = lineasH.length - 1;
   const numColumnas = lineasV.length - 1;
   
