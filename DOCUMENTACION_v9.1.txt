@@ -1,0 +1,1356 @@
+===============================================================================
+          MAR Caribe — DOCUMENTACIÓN COMPLETA
+          Versión: 9.1 (Estado actual estable)
+          Carpeta: ~/mar-caribe
+          Fecha: 18/09/2026
+===============================================================================
+
+ÍNDICE
+------
+1. ESTRUCTURA DEL PROYECTO
+2. PARÁMETROS GLOBALES (CONFIG)
+3. LOS 9 PASOS DEL PROCESO
+4. DETECCIÓN DE COLOR
+5. LOS 3 MÉTODOS OCR
+6. INTERFAZ DE USUARIO
+7. MOTOR OCR (Tesseract)
+8. COMANDOS DE INSTALACIÓN
+9. CARACTERÍSTICAS Y COMPORTAMIENTO
+
+===============================================================================
+1. ESTRUCTURA DEL PROYECTO
+===============================================================================
+
+~/mar-caribe/
+├── www/
+│   ├── index.html                    ← Interfaz principal
+│   ├── js/
+│   │   └── app.js                    ← Toda la lógica
+│   └── tesseract/
+│       ├── tesseract.min.js          ← Librería Tesseract
+│       ├── worker.min.js              ← Worker
+│       ├── tesseract-core.wasm.js
+│       ├── tesseract-core-simd.wasm.js
+│       ├── tesseract-core-lstm.wasm.js
+│       ├── tesseract-core-simd-lstm.wasm.js
+│       └── lang-data/
+│           ├── spa.traineddata        ← Español
+│           └── eng.traineddata        ← Inglés
+├── android/                           ← Proyecto Capacitor
+├── capacitor.config.json
+├── package.json
+└── DOCUMENTACION_v9.1.txt             ← Este archivo
+
+===============================================================================
+2. PARÁMETROS GLOBALES (CONFIG)
+===============================================================================
+
+Todos los parámetros están en app.js, objeto CONFIG:
+
+// PASO 1 — Mediana
+MEDIANA_VENTANA: 3           // Tamaño de ventana
+MEDIANA_ACTIVO: true
+
+// PASO 3 — Óptica Aérea
+OPTICA_DENSIDAD: 4
+OPTICA_DISTANCIA_MIN_V: 22   // Distancia mínima entre verticales
+OPTICA_DISTANCIA_MIN_H: 24   // Distancia mínima entre horizontales
+OPTICA_CONTINUIDAD: 0.55     // 55% mínimo de cobertura
+
+// PASO 4 — Ecografía
+ECO_VENTANA: 3               // Ventana de análisis
+ECO_UMBRAL: 25
+ECO_UMBRAL_V: 42             // Umbral para verticales
+ECO_UMBRAL_H: 38             // Umbral para horizontales
+
+// AJUSTE LOCAL DE LÍNEAS
+RANGO_AJUSTE: 5              // ±5px para encontrar centro real
+
+// PASO 5 — Espectro
+ESPECTRO_MATIZ: 20
+ESPECTRO_SATUR: 30
+ESPECTRO_ACTIVO: true
+
+// PASO 6 — LIDAR
+LIDAR_TOLERANCIA: 12
+LIDAR_AGRUPAR: 8
+LIDAR_PESO_PATRON: 0.70
+LIDAR_BORDE_FINAL: true
+
+// PASO 8 — Recorte
+RECORTE_MARGEN: 2            // Margen interno de cada celda
+RECORTE_ESCALA: 1.0
+
+// DETECCIÓN DE COLOR
+MARGEN_COLOR: 5              // Excluir 5px del borde
+
+// MOTOR OCR
+TESS_RUTA_WORKER: 'tesseract/worker.min.js'
+TESS_RUTA_CORE: 'tesseract/'
+TESS_RUTA_DATOS: 'tesseract/lang-data'
+TESS_IDIOMAS: 'spa+eng'
+TESS_ESCALA_PRECISO: 2       // Escalar 2x en modo preciso
+TESS_CONF_MIN: 30            // Confianza mínima
+
+// INTERFAZ
+ANCHO_LINEA: 2.2
+ZOOM_MIN: 1
+ZOOM_MAX: 5
+ZOOM_PASO: 0.5
+
+===============================================================================
+3. LOS 9 PASOS DEL PROCESO
+===============================================================================
+
+ORDEN DE EJECUCIÓN
+-------------------
+PASO 1 → Mediana (limpieza)
+PASO 2 → Canales (brillo/grises)
+PASO 3 → Óptica Aérea (perfiles de densidad)
+PASO 4 → Ecografía (cambios de brillo + ajuste local)
+PASO 5 → Espectro (color - placeholder)
+PASO 6 → LIDAR (ordenamiento)
+PASO 7 → Editar (manual - placeholder)
+PASO 8 → Recortar + Detectar colores
+PASO 9 → OCR (3 métodos)
+
+-------------------------------------------------------------------------------
+PASO 1: MEDIANA
+-------------------------------------------------------------------------------
+Propósito: Limpiar ruido y manchas
+Método: No aplicado actualmente (MEDIANA_VENTANA=3 pero no se usa filtro real)
+Estado: Declarado pero inactivo
+
+-------------------------------------------------------------------------------
+PASO 2: CANALES (Brillo)
+-------------------------------------------------------------------------------
+Propósito: Convertir a escala de grises
+Método:
+  Para cada píxel:
+    brillo = (R + G + B) / 3
+  Se guarda en matriz brillo[y][x]
+
+IMPORTANTE: El análisis se hace sobre un canvas OCULTO
+  - NO sobre el canvas visible
+  - Esto evita que el zoom afecte al análisis
+
+-------------------------------------------------------------------------------
+PASO 3: ÓPTICA AÉREA
+-------------------------------------------------------------------------------
+Propósito: Calcular perfiles de eco
+Método:
+  PERFIL HORIZONTAL (ecoH):
+    Para cada fila Y:
+      Para cada X: diferencia máxima con Y±3
+      ecoH[Y] = promedio de todas las diferencias
+
+  PERFIL VERTICAL (ecoV):
+    Para cada columna X:
+      Para cada Y: diferencia máxima con X±3
+      ecoV[X] = promedio de todas las diferencias
+
+-------------------------------------------------------------------------------
+PASO 4: ECOGRAFÍA + AJUSTE LOCAL
+-------------------------------------------------------------------------------
+Propósito: Detectar líneas reales
+
+DETECCIÓN ORIGINAL:
+  Para cada Y:
+    SI ecoH[Y] > ECO_UMBRAL_H (38)
+    Y distancia a última línea >= OPTICA_DISTANCIA_MIN_H (24):
+      Contar píxeles con cambio fuerte
+      SI cobertura >= OPTICA_CONTINUIDAD (0.55):
+        GUARDAR Y como línea
+
+  Lo mismo para verticales con ECO_UMBRAL_V (42)
+
+AJUSTE LOCAL (corrige desfase):
+  Para cada línea horizontal detectada en Y:
+    Buscar en rango [Y-5, Y+5]
+    Calcular brillo promedio de cada fila
+    El Y con MENOR brillo = centro real de la línea
+    Reemplazar Y por ese valor
+
+  Lo mismo para verticales
+
+  Resultado: Líneas centradas exactamente en las líneas del Excel
+
+-------------------------------------------------------------------------------
+PASO 5: ESPECTRO
+-------------------------------------------------------------------------------
+Propósito: Detección por color (placeholder actual)
+Estado: No implementado aún
+
+-------------------------------------------------------------------------------
+PASO 6: LIDAR
+-------------------------------------------------------------------------------
+Propósito: Ordenar líneas
+Método actual:
+  - lineasH.sort() de menor a mayor
+  - lineasV.sort() de menor a mayor
+  - No hay votación real (simplificado)
+
+-------------------------------------------------------------------------------
+PASO 7: EDITAR
+-------------------------------------------------------------------------------
+Propósito: Edición manual de líneas (placeholder)
+Estado: No implementado
+
+-------------------------------------------------------------------------------
+PASO 8: RECORTAR + DETECTAR COLORES
+-------------------------------------------------------------------------------
+Propósito: Crear las celdas y detectar su color de fondo
+
+Método:
+  Para cada fila f (0 a numFilas-1):
+    Para cada columna c (0 a numColumnas-1):
+      x1 = lineasV[c]
+      y1 = lineasH[f]
+      x2 = lineasV[c+1]
+      y2 = lineasH[f+1]
+
+      Detectar color dominante de la celda
+      Guardar en matrizColores[f][c]
+      Guardar celda en array celdas[]
+
+-------------------------------------------------------------------------------
+PASO 9: OCR (3 MÉTODOS)
+-------------------------------------------------------------------------------
+Ver sección 5
+
+===============================================================================
+4. DETECCIÓN DE COLOR
+===============================================================================
+
+MÉTODO: Moda por histograma cuantizado
+
+Para cada celda:
+  1. Excluir MARGEN_COLOR (5px) de cada borde
+  2. Leer píxeles del interior
+  3. Ignorar píxeles muy oscuros (<100) → es texto
+  4. Ignorar píxeles muy claros (>253) → es blanco puro
+  5. Cuantizar cada píxel a bins de 16 niveles por canal
+  6. Contar frecuencia de cada bin
+  7. El bin MÁS FRECUENTE = color dominante
+
+RESULTADO por celda:
+  {
+    r: valor R (0-255),
+    g: valor G (0-255),
+    b: valor B (0-255),
+    h: matiz HSV (0-360),
+    s: saturación HSV (0-100),
+    v: valor HSV (0-100)
+  }
+
+PRESERVACIÓN:
+  - Los colores se detectan ANTES de cualquier binarización
+  - Se guardan en matrizColores[f][c]
+  - En la tabla HTML se aplican como fondo: background: rgb(r,g,b)
+
+===============================================================================
+5. LOS 3 MÉTODOS OCR
+===============================================================================
+
+Los 3 métodos usan Tesseract como motor.
+Diferencia: cuántas veces llaman a Tesseract y cómo asignan el texto.
+
+-------------------------------------------------------------------------------
+MÉTODO 1: ⚡ RÁPIDO (OCR Global)
+-------------------------------------------------------------------------------
+Velocidad: 10-30 segundos
+Precisión: 85-90%
+Llamadas a Tesseract: 1
+
+Proceso:
+  1. Crear canvas con la imagen original
+  2. Dibujar líneas negras puras (2px) sobre la imagen
+  3. Binarizar (fondo blanco puro, texto negro puro)
+  4. UNA sola llamada a Tesseract con toda la imagen
+  5. Tesseract devuelve bloques de texto con coordenadas
+  6. Asignar cada bloque a su celda por posición (cx, cy)
+
+Uso: Pruebas rápidas, tablas simples
+
+-------------------------------------------------------------------------------
+MÉTODO 2: 📊 MEDIO (Fila por fila)
+-------------------------------------------------------------------------------
+Velocidad: 1-3 minutos
+Precisión: 85-92%
+Llamadas a Tesseract: N (una por fila)
+
+Proceso:
+  Para cada fila:
+    1. Recortar la fila completa (desde primer borde V hasta último)
+    2. Binarizar
+    3. Tesseract sobre la fila
+    4. Obtener bloques de texto
+    5. Asignar cada bloque a su columna por posición X
+
+Uso: Uso general, recomendado ← PREDETERMINADO
+
+-------------------------------------------------------------------------------
+MÉTODO 3: 🎯 PRECISO (Celda por celda)
+-------------------------------------------------------------------------------
+Velocidad: 10-20 minutos (depende de celdas)
+Precisión: 92-97%
+Llamadas a Tesseract: N×M (una por celda)
+
+Proceso:
+  Para cada celda:
+    1. Recortar celda (con margen interno)
+    2. Escalar 2x (para mejor lectura)
+    3. Binarizar
+    4. Tesseract sobre la celda
+    5. Limpiar texto basura
+    6. Guardar en matrizTexto[fila][col]
+
+Uso: Resultado final, máxima precisión
+
+===============================================================================
+6. INTERFAZ DE USUARIO
+===============================================================================
+
+ESTRUCTURA:
+  - Título: "MAR Caribe — Tablas v9.0"
+  - Subtítulo con los 9 pasos
+  - 2 pestañas: 📷 Imagen | 📊 Tabla
+
+BOTONES PRINCIPALES:
+  [📷 Imagen]     → Cargar imagen
+  [🔬 Analizar]   → Ejecuta pasos 1-8
+  [🗑️ Limpiar]    → Reinicia todo
+  [− Zoom]        → Zoom out
+  [+ Zoom]        → Zoom in
+
+SECCIÓN LEER (3 métodos):
+  [⚡ Rápido]     → Método global
+  [📊 Medio]      → Método por fila (predeterminado, borde amarillo)
+  [🎯 Preciso]    → Método por celda
+
+PESTAÑA TABLA:
+  - Tabla con colores de fondo detectados
+  - Celdas editables
+  - [📋 Copiar] / [📊 CSV] / [📈 Excel]
+
+GRID DE 9 PASOS:
+  - Se iluminan en verde al completarse
+  - Indicador visual de progreso
+
+BARRA DE PROGRESO:
+  - 0% al 100%
+  - Se actualiza durante el análisis
+
+LOGS:
+  - Panel inferior con mensajes de tiempo real
+  - Colores por tipo de mensaje
+
+===============================================================================
+7. MOTOR OCR (Tesseract)
+===============================================================================
+
+VERSIÓN: Tesseract.js v5 (local)
+
+UBICACIÓN DE ARCHIVOS:
+  ~/mar-caribe/www/tesseract/
+    ├── tesseract.min.js
+    ├── worker.min.js
+    ├── tesseract-core.wasm.js
+    ├── tesseract-core-simd.wasm.js
+    ├── tesseract-core-lstm.wasm.js
+    ├── tesseract-core-simd-lstm.wasm.js
+    └── lang-data/
+        ├── spa.traineddata
+        └── eng.traineddata
+
+CONFIGURACIÓN DEL WORKER:
+  Tesseract.createWorker('spa+eng', 1, {
+    workerPath: basePath + 'tesseract/worker.min.js',
+    langPath: basePath + 'tesseract/lang-data',
+    corePath: basePath + 'tesseract/',
+    workerBlobURL: false,
+    cacheMethod: 'none',
+    gzip: false
+  })
+
+PARÁMETROS ADICIONALES:
+  await worker.setParameters({
+    preserve_interword_spaces: '1',  // Respeta espacios
+    tessedit_pageseg_mode: '6'       // Bloque uniforme de texto
+  })
+
+IDIOMAS: Español + Inglés combinados
+
+BINARIZACIÓN:
+  Para cada píxel:
+    SI brillo > 180: blanco puro (255, 255, 255)
+    SINO: negro puro (0, 0, 0)
+
+LIMPIEZA DE TEXTO:
+  Si longitud <= 2 y solo puntuación → vacío
+  Si confianza < 30 y longitud <= 3 → vacío
+
+===============================================================================
+8. COMANDOS DE INSTALACIÓN
+===============================================================================
+
+ESTRUCTURA DE INSTALACIÓN COMPLETA:
+  ~/mar-caribe/
+  ├── www/
+  │   ├── index.html
+  │   ├── js/app.js
+  │   └── tesseract/ (todos los archivos)
+  ├── android/
+  ├── capacitor.config.json
+  ├── package.json
+  └── DOCUMENTACION_v9.1.txt
+
+COMANDO PARA CREAR index.html:
+[Ver apéndice A]
+
+COMANDO PARA CREAR app.js:
+[Ver apéndice B]
+
+COMANDO PARA SINCRONIZAR:
+  cd ~/mar-caribe && npx cap sync
+
+COMANDO PARA SUBIR A GITHUB:
+  cd ~/mar-caribe && git add . && git commit -m "mensaje" && git push origin main
+
+COMANDO PARA COMPILAR APK:
+  1. Ir a: https://github.com/angelvmar-proyecto/imagen/actions
+  2. Clic en "Build APK" → "Run workflow" → "Run workflow"
+  3. Esperar ~10 min
+  4. Descargar artefacto "app-debug"
+  5. Descomprimir el ZIP
+  6. Instalar app-debug.apk en el celular
+
+===============================================================================
+9. CARACTERÍSTICAS Y COMPORTAMIENTO
+===============================================================================
+
+CARACTERÍSTICAS ACTUALES:
+  ✅ Detección de líneas en imágenes de Excel
+  ✅ Ajuste local para centrar líneas exactamente
+  ✅ Detección de color por celda (RGB + HSV)
+  ✅ 3 métodos OCR (rápido/medio/preciso)
+  ✅ Binarización antes de OCR
+  ✅ Limpieza de texto basura
+  ✅ Tabla HTML con colores de fondo
+  ✅ Exportar a CSV y Excel
+  ✅ Análisis independiente del zoom (bug corregido)
+  ✅ Interfaz oscura moderna
+
+COMPORTAMIENTO CLAVE:
+  - El análisis SIEMPRE lee del canvas OCULTO (sin zoom)
+  - El zoom es SOLO visual, no afecta el análisis
+  - Los colores se detectan ANTES de binarizar
+  - Los 3 métodos OCR comparten la misma matriz de colores
+  - Tesseract usa PSM 6 (bloque uniforme)
+
+BUGS CONOCIDOS:
+  ⚠️ Algunas líneas tenues pueden no detectarse
+  ⚠️ Celdas con doble renglón pueden unirse
+  ⚠️ El método rápido puede mezclar texto entre celdas
+
+MEJORAS PENDIENTES:
+  - Sistema inteligente de detección adaptativa
+  - Filtro de Ortogonalidad
+  - Detección de celdas sin líneas
+  - Modo "forzar tipo de tabla"
+
+===============================================================================
+FIN DE LA DOCUMENTACIÓN v9.1
+===============================================================================
+
+===============================================================================
+APÉNDICE A: INDEX.HTML COMPLETO
+===============================================================================
+[INSTRUCCIÓN: Copiar el contenido de ~/mar-caribe/www/index.html]
+
+===============================================================================
+APÉNDICE B: APP.JS COMPLETO
+===============================================================================
+[INSTRUCCIÓN: Copiar el contenido de ~/mar-caribe/www/js/app.js]
+
+===============================================================================
+FIN DEL DOCUMENTO
+===============================================================================
+═══════════════════════════════════════════════════════════════════════════
+APÉNDICE A: INDEX.HTML COMPLETO
+═══════════════════════════════════════════════════════════════════════════
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>MAR Caribe — Tablas v9.0</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: #0f172a; color: #f1f5f9; padding: 8px; max-width: 100vw; overflow-x: hidden; }
+    h1 { font-size: 1rem; text-align: center; margin-bottom: 4px; color: #38bdf8; }
+    .subtitulo { font-size: 0.7rem; color: #94a3b8; text-align: center; margin-bottom: 8px; }
+    
+    .tabs { display: flex; background: #1e293b; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .tab { flex: 1; padding: 10px 6px; text-align: center; color: #94a3b8; font-weight: 600; font-size: 0.8rem; cursor: pointer; border-bottom: 3px solid transparent; }
+    .tab.active { color: #38bdf8; border-bottom-color: #38bdf8; background: #0f172a; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .botonera { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+    button { padding: 10px 4px; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: 44px; }
+    .btn-img { background: #a855f7; color: white; }
+    .btn-analizar { background: #22c55e; color: white; }
+    .btn-menos { background: #3b82f6; color: white; }
+    .btn-mas { background: #3b82f6; color: white; }
+    .btn-limpiar { background: #ef4444; color: white; }
+    .btn-csv { background: #f39c12; color: white; }
+    .btn-excel { background: #217346; color: white; }
+    .btn-copiar { background: #3c6382; color: white; }
+    
+    .seccion-leer {
+      background: #1e293b;
+      border-radius: 10px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+    .seccion-leer-titulo {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-align: center;
+      margin-bottom: 6px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .botonera-leer {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    .btn-rapido { background: #f97316; color: white; }
+    .btn-medio { background: #eab308; color: #1a1a1a; }
+    .btn-preciso { background: #8b5cf6; color: white; }
+    .btn-leer-porDefecto { box-shadow: 0 0 0 3px #eab308; }
+    
+    .area-img { width: 100%; height: 42vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; }
+    canvas { max-width: none; transform-origin: top left; display: block; }
+    
+    .logs { background: #1e293b; border-radius: 8px; padding: 8px; height: 18vh; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; }
+    #entradaImagen { display: none; }
+    
+    .progreso { width: 100%; height: 24px; background: #334155; border-radius: 12px; margin: 8px 0; overflow: hidden; }
+    .barra-progreso { height: 100%; background: #22c55e; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
+    
+    .pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+    .paso { padding: 8px 4px; background: #1e293b; border-radius: 8px; text-align: center; border: 2px solid transparent; font-size: 0.65rem; }
+    .paso.hecho { background: #166534; border-color: #22c55e; }
+    .paso-texto { font-size: 0.6rem; margin-top: 2px; }
+    
+    .tabla-wrapper { background: #1e293b; border-radius: 8px; padding: 8px; max-height: 65vh; overflow: auto; }
+    .tabla-resultado { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+    .tabla-resultado th, .tabla-resultado td { border: 1px solid #334155; padding: 4px 6px; text-align: left; min-width: 60px; color: #000; }
+    .tabla-resultado th { background: #0a3d62; color: white; position: sticky; top: 0; z-index: 10; }
+    .tabla-resultado td[contenteditable="true"]:focus { outline: 2px solid #38bdf8; }
+    
+    .info-extra { font-size: 0.75rem; color: #94a3b8; text-align: center; padding: 8px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #64748b; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>📊 MAR Caribe — Tablas v9.0</h1>
+  <p class="subtitulo">1.Mediana → 2.Canales → 3.Óptica → 4.Ecografía → 5.Espectro → 6.LIDAR → 7.Editar → 8.Recortar → 9.OCR</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="imagen">📷 Imagen</div>
+    <div class="tab" data-tab="tabla">📊 Tabla</div>
+  </div>
+
+  <div class="tab-content active" id="tab-imagen">
+    <div class="progreso">
+      <div class="barra-progreso" id="barraProgreso">0%</div>
+    </div>
+
+    <div class="pasos" id="pasosProceso">
+      <div class="paso" id="paso1"><span>🧹</span><div class="paso-texto">1.Mediana</div></div>
+      <div class="paso" id="paso2"><span>🎨</span><div class="paso-texto">2.Canales</div></div>
+      <div class="paso" id="paso3"><span>🔭</span><div class="paso-texto">3.Óptica</div></div>
+      <div class="paso" id="paso4"><span>🔊</span><div class="paso-texto">4.Ecografía</div></div>
+      <div class="paso" id="paso5"><span>📡</span><div class="paso-texto">5.Espectro</div></div>
+      <div class="paso" id="paso6"><span>📐</span><div class="paso-texto">6.LIDAR</div></div>
+      <div class="paso" id="paso7"><span>✏️</span><div class="paso-texto">7.Editar</div></div>
+      <div class="paso" id="paso8"><span>✂️</span><div class="paso-texto">8.Recortar</div></div>
+      <div class="paso" id="paso9"><span>📄</span><div class="paso-texto">9.OCR</div></div>
+    </div>
+
+    <div class="botonera">
+      <button class="btn-img" id="btnCargar">📷 Imagen</button>
+      <button class="btn-analizar" id="btnAnalizar">🔬 Analizar</button>
+      <button class="btn-limpiar" id="btnLimpiar">🗑️ Limpiar</button>
+      <button class="btn-menos" id="btnMenos">− Zoom</button>
+      <button class="btn-mas" id="btnMas">+ Zoom</button>
+    </div>
+
+    <div class="seccion-leer">
+      <div class="seccion-leer-titulo">📖 LEER</div>
+      <div class="botonera-leer">
+        <button class="btn-rapido" id="btnLeerRapido">⚡ Rápido</button>
+        <button class="btn-medio btn-leer-porDefecto" id="btnLeerMedio">📊 Medio</button>
+        <button class="btn-preciso" id="btnLeerPreciso">🎯 Preciso</button>
+      </div>
+    </div>
+
+    <input type="file" id="entradaImagen" accept="image/*">
+    <div class="area-img"><canvas id="lienzo"></canvas></div>
+    <div class="logs" id="logs"></div>
+  </div>
+
+  <div class="tab-content" id="tab-tabla">
+    <div class="tabla-wrapper" id="tablaWrapper">
+      <div class="empty-state">📊 Sin datos. Ejecuta "Analizar" y luego "Leer" primero.</div>
+    </div>
+    <div class="botonera" style="margin-top:8px;">
+      <button class="btn-copiar" id="btnCopiar">📋 Copiar</button>
+      <button class="btn-csv" id="btnCSV">📊 CSV</button>
+      <button class="btn-excel" id="btnExcel">📈 Excel</button>
+    </div>
+    <div class="info-extra" id="infoExtra">📊 0 filas · 0 columnas</div>
+  </div>
+
+  <script src="tesseract/tesseract.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
+
+═══════════════════════════════════════════════════════════════════════════
+APÉNDICE B: APP.JS COMPLETO
+═══════════════════════════════════════════════════════════════════════════
+
+// ==============================================
+// MAR Caribe — Tablas v9.1
+// Análisis independiente del zoom + Umbral adaptativo
+// ==============================================
+
+const CONFIG = {
+  MEDIANA_VENTANA: 3,
+  OPTICA_DENSIDAD: 4,
+  OPTICA_DISTANCIA_MIN_V: 22,
+  OPTICA_DISTANCIA_MIN_H: 24,
+  OPTICA_CONTINUIDAD: 0.55,
+  ECO_VENTANA: 3,
+  ECO_UMBRAL: 25,
+  ECO_UMBRAL_V: 42,
+  ECO_UMBRAL_H: 38,
+  RANGO_AJUSTE: 5,
+  LIDAR_TOLERANCIA: 12,
+  LIDAR_AGRUPAR: 8,
+  RECORTE_MARGEN: 2,
+  MARGEN_COLOR: 5,
+  TESS_RUTA_WORKER: 'tesseract/worker.min.js',
+  TESS_RUTA_CORE: 'tesseract/',
+  TESS_RUTA_DATOS: 'tesseract/lang-data',
+  TESS_IDIOMAS: 'spa+eng',
+  TESS_ESCALA_PRECISO: 2,
+  TESS_CONF_MIN: 30,
+  ANCHO_LINEA: 2.2,
+  ZOOM_MIN: 1,
+  ZOOM_MAX: 5,
+  ZOOM_PASO: 0.5
+};
+
+let imagenActual = null;
+let lienzo = null, ctx = null;
+let lineasH = [], lineasV = [];
+let celdas = [];
+let matrizTexto = [];
+let matrizColores = [];
+let zoom = 1, desplazamiento = {x:0, y:0};
+let arrastrando = false, ultimoToque = {x:0, y:0};
+let brilloGlobal = null;
+let anchoGlobal = 0, altoGlobal = 0;
+
+const entradaImagen = document.getElementById('entradaImagen');
+const lienzoElement = document.getElementById('lienzo');
+const btnCargar = document.getElementById('btnCargar');
+const btnAnalizar = document.getElementById('btnAnalizar');
+const btnMenos = document.getElementById('btnMenos');
+const btnMas = document.getElementById('btnMas');
+const btnLimpiar = document.getElementById('btnLimpiar');
+const btnLeerRapido = document.getElementById('btnLeerRapido');
+const btnLeerMedio = document.getElementById('btnLeerMedio');
+const btnLeerPreciso = document.getElementById('btnLeerPreciso');
+const logsElement = document.getElementById('logs');
+const barraProgreso = document.getElementById('barraProgreso');
+
+const TESS = { cargando: false, listo: false, motor: null };
+
+function log(msg, tipo='info') {
+  const h = new Date().toLocaleTimeString();
+  const col = {info:'#60a5fa', exito:'#4ade80', alerta:'#fbbf24', error:'#f87171', etapa:'#f59e0b', sistema:'#c084fc'};
+  logsElement.innerHTML += `<div style="color:${col[tipo]}">[${h}] ${msg}</div>`;
+  logsElement.scrollTop = logsElement.scrollHeight;
+}
+
+function actualizarProgreso(p, paso) {
+  barraProgreso.style.width = p + '%';
+  barraProgreso.textContent = p + '%';
+  if (paso) {
+    const el = document.getElementById(`paso${paso}`);
+    if (el) el.classList.add('hecho');
+  }
+}
+
+function inicializarTabs() {
+  const tabs = document.querySelectorAll('.tab');
+  const contents = document.querySelectorAll('.tab-content');
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      contents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+function inicializar() {
+  log('═══════════════════════════════════', 'sistema');
+  log('🚀 MAR Caribe — Tablas v9.1', 'sistema');
+  log('🔧 Análisis independiente del zoom', 'info');
+  log('🔧 Umbral adaptativo', 'info');
+  log('═══════════════════════════════════', 'sistema');
+
+  lienzo = lienzoElement;
+  ctx = lienzo.getContext('2d');
+  inicializarTabs();
+
+  btnCargar.onclick = () => { log('🟢 [Imagen]'); entradaImagen.click(); };
+  entradaImagen.onchange = e => cargarImagen(e);
+  btnAnalizar.onclick = () => { log('🟢 [Analizar]'); analizarTodo(); };
+  btnMenos.onclick = () => aplicarZoom(zoom - CONFIG.ZOOM_PASO);
+  btnMas.onclick = () => aplicarZoom(zoom + CONFIG.ZOOM_PASO);
+  btnLimpiar.onclick = () => limpiarTodo();
+
+  btnLeerRapido.onclick = () => { log('🟢 [Leer Rápido]'); leerRapido(); };
+  btnLeerMedio.onclick = () => { log('🟢 [Leer Medio]'); leerMedio(); };
+  btnLeerPreciso.onclick = () => { log('🟢 [Leer Preciso]'); leerPreciso(); };
+
+  document.getElementById('btnCopiar').onclick = copiarTabla;
+  document.getElementById('btnCSV').onclick = exportarCSV;
+  document.getElementById('btnExcel').onclick = exportarExcel;
+
+  lienzo.onmousedown = e => { arrastrando=true; ultimoToque={x:e.clientX,y:e.clientY}; };
+  lienzo.onmousemove = arrastrar;
+  lienzo.onmouseup = detenerArrastre;
+  lienzo.onmouseleave = detenerArrastre;
+  lienzo.addEventListener('touchstart', e => { arrastrando=true; ultimoToque={x:e.touches[0].clientX,y:e.touches[0].clientY}; }, {passive:false});
+  lienzo.addEventListener('touchmove', e => { e.preventDefault(); if(!arrastrando)return; desplazamiento.x+=e.touches[0].clientX-ultimoToque.x; desplazamiento.y+=e.touches[0].clientY-ultimoToque.y; ultimoToque={x:e.touches[0].clientX,y:e.touches[0].clientY}; dibujarTodo(); }, {passive:false});
+  lienzo.addEventListener('touchend', detenerArrastre);
+
+  log('✅ Todo listo', 'exito');
+}
+
+function cargarImagen(e) {
+  const arch = e.target.files[0];
+  if(!arch)return;
+  log(`🖼️ ${arch.name}`);
+  const lector = new FileReader();
+  lector.onload = evt => {
+    const img = new Image();
+    img.onload = () => {
+      imagenActual = img;
+      lienzo.width = img.width;
+      lienzo.height = img.height;
+      zoom = 1; desplazamiento = {x:0,y:0};
+      lineasH = []; lineasV = []; celdas = [];
+      matrizTexto = []; matrizColores = [];
+      brilloGlobal = null;
+      for(let i=1;i<=9;i++) document.getElementById(`paso${i}`).classList.remove('hecho');
+      actualizarProgreso(0);
+      document.getElementById('tablaWrapper').innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
+      document.getElementById('infoExtra').textContent = '📊 0 filas · 0 columnas';
+      log(`✅ ${img.width}×${img.height}`, 'exito');
+      dibujarTodo();
+    };
+    img.src = evt.target.result;
+  };
+  lector.readAsDataURL(arch);
+}
+
+function aplicarZoom(n) {
+  zoom = Math.max(CONFIG.ZOOM_MIN, Math.min(CONFIG.ZOOM_MAX, n));
+  log(`🔍 Zoom: ${Math.round(zoom*100)}%`);
+  dibujarTodo();
+}
+
+function dibujarTodo() {
+  if(!imagenActual)return;
+  ctx.clearRect(0,0,lienzo.width,lienzo.height);
+  ctx.save();
+  ctx.translate(desplazamiento.x, desplazamiento.y);
+  ctx.scale(zoom, zoom);
+  ctx.drawImage(imagenActual, 0, 0);
+  ctx.lineWidth = CONFIG.ANCHO_LINEA / zoom;
+  ctx.strokeStyle = '#ff0000';
+  lineasH.forEach(y => { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(imagenActual.width,y); ctx.stroke(); });
+  ctx.strokeStyle = '#0088ff';
+  lineasV.forEach(x => { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,imagenActual.height); ctx.stroke(); });
+  ctx.restore();
+}
+
+function arrastrar(e) {
+  if(!arrastrando)return;
+  desplazamiento.x += e.clientX - ultimoToque.x;
+  desplazamiento.y += e.clientY - ultimoToque.y;
+  ultimoToque = {x:e.clientX, y:e.clientY};
+  dibujarTodo();
+}
+function detenerArrastre() { arrastrando = false; }
+
+// ============================================
+// OBTENER IMAGEN ORIGINAL (sin zoom)
+// ============================================
+function obtenerDatosOriginales() {
+  // Crear canvas OCULTO con la imagen original (sin zoom, sin pan)
+  const canvasOculto = document.createElement('canvas');
+  canvasOculto.width = imagenActual.width;
+  canvasOculto.height = imagenActual.height;
+  const ctxOculto = canvasOculto.getContext('2d');
+  ctxOculto.drawImage(imagenActual, 0, 0);
+  return ctxOculto.getImageData(0, 0, canvasOculto.width, canvasOculto.height);
+}
+
+// ============================================
+// AJUSTE LOCAL DE LÍNEAS
+// ============================================
+function ajustarLineaH(y, brillo, alto, ancho, rango) {
+  const y0 = Math.max(0, y - rango);
+  const y1 = Math.min(alto - 1, y + rango);
+  let mejorY = y, mejorBrillo = Infinity;
+  for (let yy = y0; yy <= y1; yy++) {
+    let suma = 0;
+    for (let x = 0; x < ancho; x++) suma += brillo[yy][x];
+    const prom = suma / ancho;
+    if (prom < mejorBrillo) { mejorBrillo = prom; mejorY = yy; }
+  }
+  return mejorY;
+}
+
+function ajustarLineaV(x, brillo, alto, ancho, rango) {
+  const x0 = Math.max(0, x - rango);
+  const x1 = Math.min(ancho - 1, x + rango);
+  let mejorX = x, mejorBrillo = Infinity;
+  for (let xx = x0; xx <= x1; xx++) {
+    let suma = 0;
+    for (let y = 0; y < alto; y++) suma += brillo[y][xx];
+    const prom = suma / alto;
+    if (prom < mejorBrillo) { mejorBrillo = prom; mejorX = xx; }
+  }
+  return mejorX;
+}
+
+// ============================================
+// DETECCIÓN DE COLOR
+// ============================================
+function detectarColorDominante(x1, y1, x2, y2, ctxFuente) {
+  const m = CONFIG.MARGEN_COLOR;
+  const xStart = Math.max(0, x1 + m);
+  const yStart = Math.max(0, y1 + m);
+  const xEnd = Math.min(anchoGlobal, x2 - m);
+  const yEnd = Math.min(altoGlobal, y2 - m);
+
+  if (xEnd <= xStart || yEnd <= yStart) return { r: 255, g: 255, b: 255, h: 0, s: 0, v: 100 };
+
+  const ancho = xEnd - xStart, alto = yEnd - yStart;
+  const datos = ctxFuente.getImageData(xStart, yStart, ancho, alto).data;
+  const histograma = {};
+  let maxCount = 0, colorDominante = null;
+
+  for (let i = 0; i < datos.length; i += 4) {
+    const r = datos[i], g = datos[i+1], b = datos[i+2];
+    const brillo = (r + g + b) / 3;
+    if (brillo < 100 || brillo > 253) continue;
+    const qr = Math.round(r / 16) * 16;
+    const qg = Math.round(g / 16) * 16;
+    const qb = Math.round(b / 16) * 16;
+    const key = `${qr},${qg},${qb}`;
+    histograma[key] = (histograma[key] || 0) + 1;
+    if (histograma[key] > maxCount) {
+      maxCount = histograma[key];
+      colorDominante = { r: qr, g: qg, b: qb };
+    }
+  }
+
+  if (!colorDominante) return { r: 255, g: 255, b: 255, h: 0, s: 0, v: 100 };
+  const hsv = rgbToHsv(colorDominante.r, colorDominante.g, colorDominante.b);
+  return { r: colorDominante.r, g: colorDominante.g, b: colorDominante.b, ...hsv };
+}
+
+function rgbToHsv(r, g, b) {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g-b)/d) % 6;
+    else if (max === g) h = (b-r)/d + 2;
+    else h = (r-g)/d + 4;
+  }
+  h = Math.round(h * 60); if (h < 0) h += 360;
+  return { h, s: max === 0 ? 0 : Math.round((d/max)*100), v: Math.round(max*100) };
+}
+
+// ============================================
+// BINARIZAR CANVAS
+// ============================================
+function binarizarCanvas(canvas) {
+  const c = canvas.getContext('2d');
+  const imgData = c.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imgData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const brillo = (data[i] + data[i+1] + data[i+2]) / 3;
+    if (brillo > 180) {
+      data[i] = data[i+1] = data[i+2] = 255;
+    } else {
+      data[i] = data[i+1] = data[i+2] = 0;
+    }
+  }
+  c.putImageData(imgData, 0, 0);
+}
+
+// ============================================
+// LIMPIAR TEXTO
+// ============================================
+function limpiarTextoOCR(texto, confianza) {
+  let limpio = texto.trim();
+  if (limpio.length <= 2 && /^[.,;:\-_\s|\[\]{}]+$/.test(limpio)) return '';
+  if (confianza < CONFIG.TESS_CONF_MIN && limpio.length <= 3) return '';
+  return limpio;
+}
+
+// ============================================
+// ANÁLISIS (independiente del zoom)
+// ============================================
+function analizarTodo() {
+  if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
+  log('═══════════════════════════════════', 'etapa');
+
+  // ⚠️ IMPORTANTE: Leer de canvas OCULTO, no del visible
+  log('[1/9] 🧹 Mediana...', 'etapa');
+  const imageData = obtenerDatosOriginales();
+  const datos = imageData.data;
+  const ancho = imageData.width;
+  const alto = imageData.height;
+  anchoGlobal = ancho;
+  altoGlobal = alto;
+  log(`   📐 Analizando: ${ancho}×${alto} (sin zoom)`, 'info');
+  actualizarProgreso(11, 1);
+
+  log('[2/9] 🎨 Canales...', 'etapa');
+  const brillo = [];
+  for(let y=0;y<alto;y++){ brillo[y]=[]; for(let x=0;x<ancho;x++){ const i=(y*ancho+x)*4; brillo[y][x]=Math.round((datos[i]+datos[i+1]+datos[i+2])/3); } }
+  brilloGlobal = brillo;
+  log('✅ Brillo calculado', 'exito');
+  actualizarProgreso(22, 2);
+
+  log('[3/9] 🔭 Óptica...', 'etapa');
+  const ecoH = [], ecoV = [];
+  for(let y=0;y<alto;y++){ let s=0,n=0; const v0=Math.max(0,y-3),v1=Math.min(alto-1,y+3); for(let x=0;x<ancho;x++){ let m=0; for(let yy=v0;yy<=v1;yy++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x])); s+=m;n++; } ecoH[y]=s/n; }
+  for(let x=0;x<ancho;x++){ let s=0,n=0; const h0=Math.max(0,x-3),h1=Math.min(ancho-1,x+3); for(let y=0;y<alto;y++){ let m=0; for(let xx=h0;xx<=h1;xx++)m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx])); s+=m;n++; } ecoV[x]=s/n; }
+  log('✅ Eco calculado', 'exito');
+  actualizarProgreso(33, 3);
+
+  log('[4/9] 🔊 Ecografía con UMBRAL ADAPTATIVO...', 'etapa');
+  
+  // ============================================
+  // UMBRAL ADAPTATIVO
+  // ============================================
+  const maxEcoH = Math.max(...ecoH);
+  const maxEcoV = Math.max(...ecoV);
+  const umbralAdaptH = Math.max(20, maxEcoH * 0.40);
+  const umbralAdaptV = Math.max(20, maxEcoV * 0.40);
+  log(`   📊 Eco máx H: ${Math.round(maxEcoH)} → umbral: ${Math.round(umbralAdaptH)}`, 'info');
+  log(`   📊 Eco máx V: ${Math.round(maxEcoV)} → umbral: ${Math.round(umbralAdaptV)}`, 'info');
+
+  lineasH = []; lineasV = [];
+  let ult = -9999;
+  for(let y=0;y<alto;y++){
+    if(ecoH[y]>umbralAdaptH && y-ult>=CONFIG.OPTICA_DISTANCIA_MIN_H){
+      let f=0;
+      for(let x=0;x<ancho;x++){
+        let m=0;
+        for(let yy=Math.max(0,y-2);yy<=Math.min(alto-1,y+2);yy++) m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x]));
+        if(m>umbralAdaptH*0.5)f++;
+      }
+      if(f/ancho>=CONFIG.OPTICA_CONTINUIDAD){ lineasH.push(y); ult=y; }
+    }
+  }
+  ult = -9999;
+  for(let x=0;x<ancho;x++){
+    if(ecoV[x]>umbralAdaptV && x-ult>=CONFIG.OPTICA_DISTANCIA_MIN_V){
+      let f=0;
+      for(let y=0;y<alto;y++){
+        let m=0;
+        for(let xx=Math.max(0,x-2);xx<=Math.min(ancho-1,x+2);xx++) m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx]));
+        if(m>umbralAdaptV*0.5)f++;
+      }
+      if(f/alto>=CONFIG.OPTICA_CONTINUIDAD){ lineasV.push(x); ult=x; }
+    }
+  }
+  log(`✅ Detectadas: H=${lineasH.length} V=${lineasV.length}`, 'exito');
+  log(`📐 Ajustando al centro (rango ±${CONFIG.RANGO_AJUSTE}px)...`, 'info');
+  lineasH = lineasH.map(y => ajustarLineaH(y, brillo, alto, ancho, CONFIG.RANGO_AJUSTE));
+  lineasV = lineasV.map(x => ajustarLineaV(x, brillo, alto, ancho, CONFIG.RANGO_AJUSTE));
+  log(`✅ Líneas ajustadas`, 'exito');
+  actualizarProgreso(44, 4);
+
+  log('[5/9] 📡 Espectro...', 'etapa');
+  actualizarProgreso(55, 5);
+
+  log('[6/9] 📐 LIDAR...', 'etapa');
+  lineasH.sort((a,b)=>a-b); lineasV.sort((a,b)=>a-b);
+  actualizarProgreso(67, 6);
+
+  log('[7/9] ✏️ Editar...', 'etapa');
+  actualizarProgreso(78, 7);
+
+  log('[8/9] ✂️ Recortar + Colores...', 'etapa');
+  celdas = [];
+  const numFilas = lineasH.length - 1;
+  const numColumnas = lineasV.length - 1;
+
+  // Canvas oculto para colores (sin zoom)
+  const canvasColor = document.createElement('canvas');
+  canvasColor.width = ancho;
+  canvasColor.height = alto;
+  const ctxColor = canvasColor.getContext('2d');
+  ctxColor.drawImage(imagenActual, 0, 0);
+  
+  if(numFilas > 0 && numColumnas > 0){
+    matrizTexto = Array(numFilas).fill().map(() => Array(numColumnas).fill(''));
+    matrizColores = Array(numFilas).fill().map(() => Array(numColumnas).fill(null));
+
+    for(let f=0;f<numFilas;f++){
+      for(let c=0;c<numColumnas;c++){
+        const x1 = lineasV[c], y1 = lineasH[f];
+        const x2 = lineasV[c+1], y2 = lineasH[f+1];
+        matrizColores[f][c] = detectarColorDominante(x1, y1, x2, y2, ctxColor);
+        celdas.push({ fila:f, col:c, x1, y1, x2, y2 });
+      }
+    }
+  }
+  log(`✅ Celdas: ${celdas.length}`, 'exito');
+  actualizarProgreso(89, 8);
+
+  log('[9/9] 📄 OCR — Listo', 'etapa');
+  log('   → Elige método: ⚡ Rápido / 📊 Medio / 🎯 Preciso', 'info');
+  actualizarProgreso(100, 9);
+  log('═══════════════════════════════════', 'etapa');
+  dibujarTodo();
+}
+
+// ============================================
+// TESSERACT
+// ============================================
+async function cargarTesseract() {
+  if(TESS.cargando || TESS.listo) return;
+  TESS.cargando = true;
+  log('📖 Cargando Tesseract...', 'etapa');
+  try {
+    if(typeof Tesseract === 'undefined'){ log('❌ Tesseract no encontrado', 'error'); TESS.cargando=false; return; }
+    let basePath = window.location.href;
+    basePath = basePath.substring(0, basePath.lastIndexOf('/') + 1);
+    TESS.motor = await Tesseract.createWorker(CONFIG.TESS_IDIOMAS, 1, {
+      workerPath: basePath + CONFIG.TESS_RUTA_WORKER,
+      langPath: basePath + CONFIG.TESS_RUTA_DATOS,
+      corePath: basePath + CONFIG.TESS_RUTA_CORE,
+      workerBlobURL: false,
+      cacheMethod: 'none',
+      gzip: false
+    });
+    await TESS.motor.setParameters({
+      preserve_interword_spaces: '1',
+      tessedit_pageseg_mode: '6'
+    });
+    TESS.listo = true;
+    TESS.cargando = false;
+    log('✅ Tesseract listo', 'exito');
+  } catch(e) {
+    TESS.cargando = false;
+    log(`❌ Error: ${e.message}`, 'error');
+  }
+}
+
+// ============================================
+// MÉTODO 1: LEER RÁPIDO
+// ============================================
+async function leerRapido() {
+  if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
+  if(!TESS.listo) await cargarTesseract();
+  if(!TESS.listo) return;
+
+  log('⚡ MÉTODO RÁPIDO (OCR Global)', 'etapa');
+
+  const lc = document.createElement('canvas');
+  lc.width = anchoGlobal;
+  lc.height = altoGlobal;
+  const c = lc.getContext('2d');
+  c.drawImage(imagenActual, 0, 0);
+
+  c.strokeStyle = '#000000';
+  c.lineWidth = 2;
+  lineasH.forEach(y => { c.beginPath(); c.moveTo(0, y); c.lineTo(lc.width, y); c.stroke(); });
+  lineasV.forEach(x => { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, lc.height); c.stroke(); });
+
+  binarizarCanvas(lc);
+
+  log('   Tesseract leyendo...', 'info');
+  const t0 = performance.now();
+  const r = await TESS.motor.recognize(lc);
+  const tiempo = Math.round((performance.now() - t0) / 1000);
+  log(`   ✅ Lectura en ${tiempo}s (confianza ${Math.round(r.data.confidence)}%)`, 'exito');
+
+  const blocks = r.data.blocks || [];
+  let asignados = 0;
+  for (const block of blocks) {
+    if (!block.paragraphs) continue;
+    for (const para of block.paragraphs) {
+      if (!para.lines) continue;
+      for (const line of para.lines) {
+        if (!line.words || line.words.length === 0) continue;
+        const cx = (line.bbox.x0 + line.bbox.x1) / 2;
+        const cy = (line.bbox.y0 + line.bbox.y1) / 2;
+        for (const celda of celdas) {
+          if (cx >= celda.x1 && cx <= celda.x2 && cy >= celda.y1 && cy <= celda.y2) {
+            const texto = line.text.trim();
+            if (texto) {
+              const actual = matrizTexto[celda.fila][celda.col];
+              matrizTexto[celda.fila][celda.col] = actual ? actual + ' ' + texto : texto;
+              asignados++;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  log(`✅ ${asignados} bloques asignados`, 'exito');
+  finalizarLectura();
+}
+
+// ============================================
+// MÉTODO 2: LEER MEDIO
+// ============================================
+async function leerMedio() {
+  if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
+  if(!TESS.listo) await cargarTesseract();
+  if(!TESS.listo) return;
+
+  log('📊 MÉTODO MEDIO (Fila por fila)', 'etapa');
+
+  const t0 = performance.now();
+  const numFilas = lineasH.length - 1;
+
+  for (let f = 0; f < numFilas; f++) {
+    const y1 = lineasH[f] + CONFIG.RECORTE_MARGEN;
+    const y2 = lineasH[f + 1] - CONFIG.RECORTE_MARGEN;
+    const x1 = lineasV[0];
+    const x2 = lineasV[lineasV.length - 1];
+
+    const lc = document.createElement('canvas');
+    lc.width = Math.max(1, x2 - x1);
+    lc.height = Math.max(1, y2 - y1);
+    const c = lc.getContext('2d');
+    c.drawImage(imagenActual, x1, y1, lc.width, lc.height, 0, 0, lc.width, lc.height);
+    binarizarCanvas(lc);
+
+    try {
+      const r = await TESS.motor.recognize(lc);
+      const blocks = r.data.blocks || [];
+      for (const block of blocks) {
+        if (!block.paragraphs) continue;
+        for (const para of block.paragraphs) {
+          if (!para.lines) continue;
+          for (const line of para.lines) {
+            if (!line.words || line.words.length === 0) continue;
+            const cx = (line.bbox.x0 + line.bbox.x1) / 2 + x1;
+            for (let c2 = 0; c2 < lineasV.length - 1; c2++) {
+              if (cx >= lineasV[c2] && cx < lineasV[c2 + 1]) {
+                const texto = line.text.trim();
+                if (texto) {
+                  const actual = matrizTexto[f][c2];
+                  matrizTexto[f][c2] = actual ? actual + ' ' + texto : texto;
+                }
+                break;
+              }
+            }
+          }
+        }
+      }
+      const pct = Math.round(((f + 1) / numFilas) * 100);
+      log(`   Fila ${f + 1}/${numFilas} (${pct}%)`);
+    } catch(e) {
+      log(`   Error fila ${f + 1}: ${e.message}`, 'error');
+    }
+  }
+
+  const tiempo = Math.round((performance.now() - t0) / 1000);
+  log(`✅ Lectura completa en ${tiempo}s`, 'exito');
+  finalizarLectura();
+}
+
+// ============================================
+// MÉTODO 3: LEER PRECISO
+// ============================================
+async function leerPreciso() {
+  if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
+  if(!TESS.listo) await cargarTesseract();
+  if(!TESS.listo) return;
+
+  log('🎯 MÉTODO PRECISO (Celda por celda)', 'etapa');
+  const t0 = performance.now();
+
+  for(let i=0;i<celdas.length;i++){
+    const c = celdas[i];
+    const m = CONFIG.RECORTE_MARGEN;
+    const anchoC = Math.max(1, c.x2 - c.x1 - m*2);
+    const altoC = Math.max(1, c.y2 - c.y1 - m*2);
+    const escala = CONFIG.TESS_ESCALA_PRECISO;
+
+    const lc = document.createElement('canvas');
+    lc.width = anchoC * escala;
+    lc.height = altoC * escala;
+    const cctx = lc.getContext('2d');
+    cctx.drawImage(imagenActual,
+      c.x1 + m, c.y1 + m, anchoC, altoC,
+      0, 0, lc.width, lc.height);
+    binarizarCanvas(lc);
+
+    try {
+      const r = await TESS.motor.recognize(lc);
+      const texto = limpiarTextoOCR(r.data.text, r.data.confidence);
+      matrizTexto[c.fila][c.col] = texto;
+      const pct = Math.round(((i + 1) / celdas.length) * 100);
+      if (i % 10 === 0 || i === celdas.length - 1) log(`   ${i + 1}/${celdas.length} (${pct}%)`);
+    } catch(e) {
+      log(`   Error celda ${i+1}: ${e.message}`, 'error');
+    }
+  }
+
+  const tiempo = Math.round((performance.now() - t0) / 1000);
+  log(`✅ Lectura completa en ${tiempo}s`, 'exito');
+  finalizarLectura();
+}
+
+function finalizarLectura() {
+  renderizarTabla();
+  setTimeout(() => {
+    document.querySelector('.tab[data-tab="tabla"]').click();
+  }, 500);
+}
+
+// ============================================
+// RENDERIZAR TABLA
+// ============================================
+function renderizarTabla() {
+  const wrapper = document.getElementById('tablaWrapper');
+  if (!matrizTexto.length) {
+    wrapper.innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
+    return;
+  }
+
+  const numFilas = matrizTexto.length;
+  const numColumnas = matrizTexto[0].length;
+
+  let html = '<table class="tabla-resultado"><thead><tr>';
+  for (let j = 0; j < numColumnas; j++) html += `<th>Col ${j + 1}</th>`;
+  html += '</tr></thead><tbody>';
+
+  for (let i = 0; i < numFilas; i++) {
+    html += '<tr>';
+    for (let j = 0; j < numColumnas; j++) {
+      const texto = matrizTexto[i][j] || '';
+      const color = (matrizColores[i] && matrizColores[i][j]) ? matrizColores[i][j] : { r: 255, g: 255, b: 255 };
+      const bg = `rgb(${color.r},${color.g},${color.b})`;
+      const colorTexto = (color.r + color.g + color.b) / 3 < 128 ? 'white' : 'black';
+      html += `<td contenteditable="true" data-row="${i}" data-col="${j}" style="background:${bg};color:${colorTexto}">${texto}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  wrapper.innerHTML = html;
+
+  wrapper.querySelectorAll('td[contenteditable="true"]').forEach(td => {
+    td.addEventListener('input', function() {
+      const r = parseInt(this.dataset.row);
+      const c = parseInt(this.dataset.col);
+      if (matrizTexto[r] && matrizTexto[r][c] !== undefined) {
+        matrizTexto[r][c] = this.innerText.trim();
+      }
+    });
+  });
+
+  document.getElementById('infoExtra').textContent = `📊 ${numFilas} filas · ${numColumnas} columnas`;
+}
+
+// ============================================
+// EXPORTAR
+// ============================================
+async function copiarTabla() {
+  if (!matrizTexto.length) { alert('No hay datos.'); return; }
+  const tsv = matrizTexto.map(r => r.join('\t')).join('\n');
+  try {
+    if (window.Capacitor?.Plugins?.Clipboard) {
+      await window.Capacitor.Plugins.Clipboard.write({ string: tsv });
+    } else {
+      await navigator.clipboard.writeText(tsv);
+    }
+    log('✅ Copiado', 'exito');
+  } catch(e) { alert('Error: ' + e.message); }
+}
+
+function exportarCSV() {
+  if (!matrizTexto.length) { alert('No hay datos.'); return; }
+  const csv = matrizTexto.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'tabla.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportarExcel() {
+  if (!matrizTexto.length) { alert('No hay datos.'); return; }
+  let html = '<html><head><meta charset="UTF-8"></head><body><table>';
+  for (let i = 0; i < matrizTexto.length; i++) {
+    html += '<tr>';
+    for (let j = 0; j < matrizTexto[i].length; j++) {
+      const texto = matrizTexto[i][j] || '';
+      const color = (matrizColores[i] && matrizColores[i][j]) ? matrizColores[i][j] : { r: 255, g: 255, b: 255 };
+      const bg = `rgb(${color.r},${color.g},${color.b})`;
+      html += `<td style="background:${bg}">${texto}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table></body></html>';
+  const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'tabla.xls'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function limpiarTodo() {
+  imagenActual=null; lineasH=[]; lineasV=[]; celdas=[];
+  matrizTexto=[]; matrizColores=[];
+  brilloGlobal = null;
+  zoom=1; desplazamiento={x:0,y:0};
+  ctx.clearRect(0,0,lienzo.width,lienzo.height);
+  logsElement.innerHTML='';
+  for(let i=1;i<=9;i++) document.getElementById(`paso${i}`).classList.remove('hecho');
+  actualizarProgreso(0);
+  document.getElementById('tablaWrapper').innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
+  document.getElementById('infoExtra').textContent = '📊 0 filas · 0 columnas';
+  log('🗑️ Limpieza completa', 'sistema');
+}
+
+document.addEventListener('DOMContentLoaded', inicializar);
