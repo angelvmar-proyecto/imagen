@@ -2,243 +2,125 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <title>MAR Caribe — OCR Tablas</title>
-  <link rel="stylesheet" href="css/style.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { background: #0f172a; color: #f1f5f9; padding: 8px; max-width: 100vw; overflow-x: hidden; padding-bottom: 70px; }
+    h1 { font-size: 1rem; text-align: center; margin-bottom: 4px; color: #38bdf8; }
+    .subtitulo { font-size: 0.7rem; color: #94a3b8; text-align: center; margin-bottom: 8px; }
+    
+    .tabs { display: flex; background: #1e293b; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+    .tab { flex: 1; padding: 10px 6px; text-align: center; color: #94a3b8; font-weight: 600; font-size: 0.8rem; cursor: pointer; border-bottom: 3px solid transparent; }
+    .tab.active { color: #38bdf8; border-bottom-color: #38bdf8; background: #0f172a; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    .botonera { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+    button { padding: 10px 4px; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: 44px; }
+    .btn-img { background: #a855f7; color: white; }
+    .btn-analizar { background: #22c55e; color: white; }
+    .btn-menos { background: #3b82f6; color: white; }
+    .btn-mas { background: #3b82f6; color: white; }
+    .btn-ocr { background: #f97316; color: white; }
+    .btn-limpiar { background: #ef4444; color: white; }
+    .btn-csv { background: #f39c12; color: white; }
+    .btn-excel { background: #217346; color: white; }
+    .btn-copiar { background: #3c6382; color: white; }
+    
+    .area-img { width: 100%; height: 42vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; }
+    canvas { max-width: none; transform-origin: top left; display: block; }
+    
+    .logs { background: #1e293b; border-radius: 8px; padding: 8px; height: 18vh; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; }
+    #entradaImagen { display: none; }
+    
+    .progreso { width: 100%; height: 24px; background: #334155; border-radius: 12px; margin: 8px 0; overflow: hidden; }
+    .barra-progreso { height: 100%; background: #22c55e; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
+    
+    .pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
+    .paso { padding: 8px 4px; background: #1e293b; border-radius: 8px; text-align: center; border: 2px solid transparent; font-size: 0.65rem; }
+    .paso.hecho { background: #166534; border-color: #22c55e; }
+    .paso-texto { font-size: 0.6rem; margin-top: 2px; }
+    
+    .tabla-wrapper { background: #1e293b; border-radius: 8px; padding: 8px; max-height: 60vh; overflow-y: auto; }
+    .tabla-resultado { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+    .tabla-resultado th, .tabla-resultado td { border: 1px solid #334155; padding: 4px 6px; text-align: left; min-width: 60px; }
+    .tabla-resultado th { background: #0a3d62; color: white; position: sticky; top: 0; }
+    .tabla-resultado tr:nth-child(even) { background: #0f172a; }
+    .tabla-resultado td[contenteditable="true"]:focus { outline: 2px solid #38bdf8; background: #1e293b; }
+    
+    .info-extra { font-size: 0.75rem; color: #94a3b8; text-align: center; padding: 8px; }
+    .empty-state { text-align: center; padding: 40px 20px; color: #64748b; font-size: 0.85rem; }
+    
+    .search-box { display: flex; gap: 6px; margin-bottom: 8px; }
+    .search-box input { flex: 1; padding: 8px 10px; border: 1px solid #334155; border-radius: 6px; background: #1e293b; color: white; font-size: 0.8rem; }
+    .search-box .btn { width: auto; padding: 8px 14px; }
+    
+    footer { text-align: center; padding: 12px; color: #636e72; font-size: 0.7rem; position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; border-top: 1px solid #334155; }
+  </style>
 </head>
 <body>
-
-<header>
   <h1>📊 MAR Caribe — OCR Tablas</h1>
-</header>
+  <p class="subtitulo">Mediana → Canales → Óptica → Ecografía → Espectro → LIDAR → Editar → Recortar → OCR</p>
 
-<div class="tabs">
-  <div class="tab active" data-tab="ocr">📷 Imagen</div>
-  <div class="tab" data-tab="tabla">📊 Tabla <span class="badge" id="badgeTabla" style="display:none;">Nueva</span></div>
-  <div class="tab" data-tab="historial">📋 Historial</div>
-</div>
-
-<div class="tab-content active" id="tab-ocr">
-
-  <div class="upload-box" id="dropZone">
-    <div class="upload-icon">📷</div>
-    <p class="upload-text">Toca para seleccionar imagen</p>
-    <p class="upload-sub">Tesseract.js v5 · 10 Pasos</p>
-    <input type="file" id="fileInput" accept="image/*">
+  <div class="tabs">
+    <div class="tab active" data-tab="imagen">📷 Imagen</div>
+    <div class="tab" data-tab="tabla">📊 Tabla</div>
   </div>
 
-  <div class="preview-container" id="previewContainer">
-    <div class="zoom-wrapper" id="zoomWrapper">
-      <div class="zoom-content" id="zoomContent">
-        <img id="imgPreview" class="preview-img" alt="Vista previa">
-        <canvas id="deteccionCanvas" class="grid-canvas"></canvas>
-      </div>
-    </div>
-    <div class="zoom-controls">
-      <button class="zoom-btn" id="btnZoomIn">+</button>
-      <button class="zoom-btn" id="btnZoomOut">−</button>
-      <button class="zoom-btn" id="btnToggleLineas">👁️</button>
-      <button class="zoom-btn" id="btnZoomReset">↺</button>
-    </div>
-    <div class="zoom-level" id="zoomLevel">1.0x</div>
-  </div>
-
-  <div class="toolbar">
-    <button class="btn btn-primary btn-sm" id="btnCamera">📷 Cámara</button>
-    <button class="btn btn-danger btn-sm" id="btnLimpiar">🗑️ Limpiar</button>
-  </div>
-
-  <!-- MEDIANA -->
-  <div class="slider-mediana" id="sliderMediana" style="display:none;">
-    <div class="slider-mediana-header">
-      <span>🧹 Mediana</span>
-      <span class="slider-mediana-valor" id="valMediana">Sin filtro</span>
-    </div>
-    <input type="range" id="param-mediana" min="0" max="3" step="1" value="0">
-    <div class="slider-mediana-labels">
-      <span>Sin filtro</span>
-      <span>Suave</span>
-      <span>Medio</span>
-      <span>Fuerte</span>
-    </div>
-  </div>
-
-  <div class="progress-container" id="progressWrapper">
-    <div class="progress-bar" id="progressFill">0%</div>
-  </div>
-  <div id="progressStep" class="progress-step"></div>
-
-  <div id="statusText" class="status info">📷 Carga una imagen para comenzar</div>
-
-  <!-- BOTONES DE PROCESO -->
-  <div class="proceso-container" id="procesoContainer" style="display:none;">
-    <h3 class="seccion-titulo">🔧 PROCESO</h3>
-    <div class="botones-grid">
-      <button class="btn-paso" id="btn-paso1">
-        <span class="icono">🧹</span>
-        <span class="nombre">1. Mediana</span>
-        <span class="estado" id="estado-paso1">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso2">
-        <span class="icono">🎨</span>
-        <span class="nombre">2. Canales</span>
-        <span class="estado" id="estado-paso2">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso3">
-        <span class="icono">🔭</span>
-        <span class="nombre">3. Óptica</span>
-        <span class="estado" id="estado-paso3">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso4">
-        <span class="icono">🔊</span>
-        <span class="nombre">4. Ecografía</span>
-        <span class="estado" id="estado-paso4">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso5">
-        <span class="icono">📡</span>
-        <span class="nombre">5. Espectro</span>
-        <span class="estado" id="estado-paso5">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso6">
-        <span class="icono">📐</span>
-        <span class="nombre">6. LIDAR</span>
-        <span class="estado" id="estado-paso6">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso7">
-        <span class="icono">✏️</span>
-        <span class="nombre">7. Editar</span>
-        <span class="estado" id="estado-paso7">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso8">
-        <span class="icono">✂️</span>
-        <span class="nombre">8. Recortar</span>
-        <span class="estado" id="estado-paso8">⏳</span>
-      </button>
-      <button class="btn-paso" id="btn-paso9">
-        <span class="icono">📄</span>
-        <span class="nombre">9. OCR</span>
-        <span class="estado" id="estado-paso9">⏳</span>
-      </button>
+  <!-- TAB IMAGEN -->
+  <div class="tab-content active" id="tab-imagen">
+    <div class="progreso">
+      <div class="barra-progreso" id="barraProgreso">0%</div>
     </div>
 
-    <button class="btn btn-success btn-todo" id="btnEjecutarTodo">
-      🚀 EJECUTAR TODO
-    </button>
-  </div>
-
-  <!-- DEBUG -->
-  <div class="debug-container" id="debugContainer" style="display:none;">
-    <div class="debug-header" onclick="toggleDebug()">
-      <span>📋 DEBUG</span>
-      <span id="debugToggle">▼</span>
-    </div>
-    <div class="debug-content" id="debugContent">
-      <div class="debug-lineas">
-        <div class="debug-item">
-          <span class="punto rojo"></span>
-          <span id="contadorV">0 verticales</span>
-        </div>
-        <div class="debug-item">
-          <span class="punto azul"></span>
-          <span id="contadorH">0 horizontales</span>
-        </div>
-      </div>
-      <pre class="debug-texto" id="debugTexto"></pre>
-      <button class="btn btn-primary btn-sm" id="btnCopiarDebug">📋 Copiar Debug</button>
-    </div>
-  </div>
-
-</div>
-
-<div class="tab-content" id="tab-tabla">
-  <div class="search-box">
-    <input type="text" id="searchInput" placeholder="🔍 Buscar...">
-    <button class="btn btn-primary btn-sm" id="btnBuscar">Buscar</button>
-  </div>
-  <div id="tableWrapper">
-    <div class="empty-state">📊 Sin datos.</div>
-  </div>
-  <div class="btn-group">
-    <button class="btn btn-primary btn-sm" id="btnCopiarTabla">📋 Copiar</button>
-    <button class="btn btn-csv btn-sm" id="btnExportarCSV">📊 CSV</button>
-    <button class="btn btn-excel btn-sm" id="btnExportarExcel">📈 Excel</button>
-  </div>
-  <div class="info-extra" id="infoExtra">📊 0 filas</div>
-</div>
-
-<div class="tab-content" id="tab-historial">
-  <div id="listaHistorial"></div>
-</div>
-
-<!-- BOTÓN FLOTANTE AJUSTES -->
-<button class="btn-ajustes-flotante" id="btnAjustesFlotante" style="display:none;">⚙️</button>
-
-<!-- PANEL FLOTANTE DE AJUSTES LIDAR -->
-<div class="panel-lidar" id="panelLidar">
-  <div class="panel-lidar-header">
-    <span>⚙️ Ajustes LIDAR</span>
-    <button class="panel-cerrar" id="btnCerrarPanel">✗</button>
-  </div>
-  <div class="panel-lidar-body">
-
-    <div class="param-slider">
-      <div class="param-slider-header">
-        <label>Votos mínimos</label>
-        <span class="param-valor" id="valVotos">1</span>
-      </div>
-      <input type="range" id="sliderVotos" min="1" max="3" step="1" value="1">
-      <div class="param-slider-help">1 = permisivo · 2 = balance · 3 = estricto</div>
+    <div class="pasos" id="pasosProceso">
+      <div class="paso" id="paso1"><span>🧹</span><div class="paso-texto">1.Mediana</div></div>
+      <div class="paso" id="paso2"><span>🎨</span><div class="paso-texto">2.Canales</div></div>
+      <div class="paso" id="paso3"><span>🔭</span><div class="paso-texto">3.Óptica</div></div>
+      <div class="paso" id="paso4"><span>🔊</span><div class="paso-texto">4.Ecografía</div></div>
+      <div class="paso" id="paso5"><span>📡</span><div class="paso-texto">5.Espectro</div></div>
+      <div class="paso" id="paso6"><span>📐</span><div class="paso-texto">6.LIDAR</div></div>
+      <div class="paso" id="paso7"><span>✏️</span><div class="paso-texto">7.Editar</div></div>
+      <div class="paso" id="paso8"><span>✂️</span><div class="paso-texto">8.Recortar</div></div>
+      <div class="paso" id="paso9"><span>📄</span><div class="paso-texto">9.OCR</div></div>
     </div>
 
-    <div class="param-slider">
-      <div class="param-slider-header">
-        <label>Distancia agrupación</label>
-        <span class="param-valor" id="valDistancia">8px</span>
-      </div>
-      <input type="range" id="sliderDistancia" min="3" max="30" step="1" value="8">
-      <div class="param-slider-help">Fusiona líneas a menos de X píxeles</div>
+    <div class="botonera">
+      <button class="btn-img" id="btnCargar">📷 Imagen</button>
+      <button class="btn-analizar" id="btnAnalizar">🔬 Analizar</button>
+      <button class="btn-menos" id="btnMenos">− Zoom</button>
+      <button class="btn-mas" id="btnMas">+ Zoom</button>
+      <button class="btn-ocr" id="btnOCR">📖 Leer</button>
+      <button class="btn-limpiar" id="btnLimpiar">🗑️ Limpiar</button>
     </div>
 
-    <div class="param-toggle">
-      <label>Patrón regular</label>
-      <button class="toggle-btn activo" id="togglePatron">✓ ON</button>
-    </div>
-    <div class="param-slider-help">Filtra líneas que no siguen patrón regular</div>
-
-    <div class="param-slider">
-      <div class="param-slider-header">
-        <label>Tolerancia (px)</label>
-        <span class="param-valor" id="valTolerancia">12px</span>
-      </div>
-      <input type="range" id="sliderTolerancia" min="2" max="30" step="1" value="12">
-      <div class="param-slider-help">Cuánta desalineación se acepta</div>
-    </div>
-
-    <button class="btn btn-primary btn-todo" id="btnRedetectarLidar" style="margin-top:12px;">
-      🔄 Redetectar LIDAR
-    </button>
-
+    <input type="file" id="entradaImagen" accept="image/*">
+    <div class="area-img"><canvas id="lienzo"></canvas></div>
+    <div class="logs" id="logs"></div>
   </div>
-</div>
 
-<footer>MAR Caribe v10.1 · Sliders LIDAR en vivo</footer>
+  <!-- TAB TABLA -->
+  <div class="tab-content" id="tab-tabla">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="🔍 Buscar...">
+      <button class="btn btn-copiar" id="btnBuscar">Buscar</button>
+    </div>
+    <div id="tablaWrapper" class="tabla-wrapper">
+      <div class="empty-state">📊 Sin datos. Ejecuta el análisis y el OCR primero.</div>
+    </div>
+    <div class="botonera" style="margin-top:8px;">
+      <button class="btn-copiar" id="btnCopiar">📋 Copiar</button>
+      <button class="btn-csv" id="btnCSV">📊 CSV</button>
+      <button class="btn-excel" id="btnExcel">📈 Excel</button>
+    </div>
+    <div class="info-extra" id="infoExtra">📊 0 filas · 0 columnas</div>
+  </div>
 
-<script src="tesseract/tesseract.min.js"></script>
-<script src="js/tabs.js"></script>
-<script src="js/app.js"></script>
-<script src="js/pasos/debug.js"></script>
-<script src="js/pasos/paso1-mediana.js"></script>
-<script src="js/pasos/paso2-canales.js"></script>
-<script src="js/pasos/paso3-optica.js"></script>
-<script src="js/pasos/paso4-ecografia.js"></script>
-<script src="js/pasos/paso5-espectro.js"></script>
-<script src="js/pasos/paso6-lidar.js"></script>
-<script src="js/pasos/paso7-edicion.js"></script>
-<script src="js/pasos/paso8-recorte.js"></script>
-<script src="js/pasos/paso9-ocr.js"></script>
-<script src="js/pasos/paso10-aprendizaje.js"></script>
-<script src="js/pasos/conectar-botones.js"></script>
-<script src="js/sliders-lidar.js"></script>
+  <footer>MAR Caribe v9.0 · Tesseract integrado</footer>
 
+  <!-- Tesseract cargado desde tesseract/ -->
+  <script src="tesseract/tesseract.min.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
