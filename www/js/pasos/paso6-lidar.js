@@ -1,21 +1,19 @@
 // ============================================
-// PASO 6: LIDAR (v3.0) - Votación real entre 3 sistemas
-// Óptica + Ecografía + Espectro
+// PASO 6: LIDAR (v10.1) - Votación con parámetros ajustables
 // ============================================
 
 const PARAMS_PASO6 = {
   TOLERANCIA: 12,
   AGRUPAR_DIST: 8,
   PESO_PATRON: 0.70,
-  RECORRER_BORDE: true,
-  VOTOS_MINIMOS: 2,
-  COBERTURA_MIN: 0.40
+  VOTOS_MINIMOS: 1,
+  USAR_PATRON: true,
+  RECORRER_BORDE: true
 };
 
 window.MAR = window.MAR || {};
 window.MAR.paso6 = { ejecutado: false, verticales: [], horizontales: [], votosV: [], votosH: [], tiempoMs: 0 };
 
-// Votación entre algoritmos
 function votarLidar(algoritmos, distAgrup, votosMin) {
   const todos = [];
   for (let i = 0; i < algoritmos.length; i++) {
@@ -50,7 +48,6 @@ function votarLidar(algoritmos, distAgrup, votosMin) {
   return confirmados;
 }
 
-// Validar patrón regular (distancias regulares = tabla real)
 function validarPatron(cortes, peso) {
   if (cortes.length < 3) return cortes;
 
@@ -70,10 +67,8 @@ function validarPatron(cortes, peso) {
     if (c > maxRep) { maxRep = c; distanciaComun = parseInt(k); }
   }
 
-  // Si no hay patrón claro, devolver todos
   if (maxRep < 2) return cortes;
 
-  // Filtrar por patrón, pero ser permisivo
   const filtrados = [cortes[0]];
   for (let i = 1; i < cortes.length; i++) {
     const d = cortes[i].posicion - filtrados[filtrados.length-1].posicion;
@@ -90,10 +85,9 @@ async function ejecutarPaso6() {
   if (!window.MAR.paso3.ejecutado || !window.MAR.paso4.ejecutado || !window.MAR.paso5.ejecutado) {
     throw new Error('Ejecuta Pasos 3, 4 y 5 primero');
   }
-  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 6: LIDAR (votación)...');
+  if (typeof setProgreso === 'function') setProgreso(10, 'Paso 6: LIDAR...');
   const t0 = performance.now();
 
-  // Recopilar votos de los 3 sistemas
   const algV = [
     window.MAR.paso3.verticales,
     window.MAR.paso4.verticales,
@@ -108,11 +102,13 @@ async function ejecutarPaso6() {
   const votosV = votarLidar(algV, PARAMS_PASO6.AGRUPAR_DIST, PARAMS_PASO6.VOTOS_MINIMOS);
   const votosH = votarLidar(algH, PARAMS_PASO6.AGRUPAR_DIST, PARAMS_PASO6.VOTOS_MINIMOS);
 
-  console.log('🗳️ Votos V:', votosV.length, 'H:', votosH.length);
+  let verticales = votosV;
+  let horizontales = votosH;
 
-  // Validar patrón regular
-  const verticales = validarPatron(votosV, PARAMS_PASO6.PESO_PATRON);
-  const horizontales = validarPatron(votosH, PARAMS_PASO6.PESO_PATRON);
+  if (PARAMS_PASO6.USAR_PATRON) {
+    verticales = validarPatron(votosV, PARAMS_PASO6.PESO_PATRON);
+    horizontales = validarPatron(votosH, PARAMS_PASO6.PESO_PATRON);
+  }
 
   window.MAR.paso6.verticales = verticales.sort((a, b) => a.posicion - b.posicion);
   window.MAR.paso6.horizontales = horizontales.sort((a, b) => a.posicion - b.posicion);
@@ -143,14 +139,16 @@ function debugPaso6() {
   const h2 = p.votosH.filter(v => v.votos === 2).length;
   const h1 = p.votosH.filter(v => v.votos === 1).length;
   
-  return `PASO 6: LIDAR (v3.0 Votación Real)
+  return `PASO 6: LIDAR (v10.1)
 ⏱️ ${p.tiempoMs} ms
 📊 Verticales FINALES: ${p.verticales.length}
    Votos: 3v=${v3}, 2v=${v2}, 1v=${v1}
 📊 Horizontales FINALES: ${p.horizontales.length}
    Votos: 3v=${h3}, 2v=${h2}, 1v=${h1}
-⚙️ Votos mínimos: ${PARAMS_PASO6.VOTOS_MINIMOS}
-⚙️ Agrupación: ${PARAMS_PASO6.AGRUPAR_DIST}px
-⚙️ Tolerancia: ${PARAMS_PASO6.TOLERANCIA}px
-⚙️ Peso patrón: ${PARAMS_PASO6.PESO_PATRON * 100}%`;
+
+⚙️ CONFIGURACIÓN ACTUAL:
+   • Votos mínimos: ${PARAMS_PASO6.VOTOS_MINIMOS}
+   • Distancia agrupación: ${PARAMS_PASO6.AGRUPAR_DIST}px
+   • Tolerancia: ${PARAMS_PASO6.TOLERANCIA}px
+   • Usar patrón: ${PARAMS_PASO6.USAR_PATRON ? 'SÍ' : 'NO'}`;
 }

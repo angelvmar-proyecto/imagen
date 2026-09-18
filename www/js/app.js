@@ -353,3 +353,13 @@ document.addEventListener('DOMContentLoaded', () => {
   inicializarGestos();
   mostrarStatus('📷 Carga una imagen', 'info');
 });
+
+// Mostrar botón flotante cuando hay imagen cargada
+const _cargarOriginal = cargarEnCanvas;
+cargarEnCanvas = function(src) {
+  _cargarOriginal(src);
+  setTimeout(() => {
+    const btn = document.getElementById('btnAjustesFlotante');
+    if (btn) btn.style.display = 'flex';
+  }, 500);
+};

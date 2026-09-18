@@ -48,7 +48,7 @@
     <button class="btn btn-danger btn-sm" id="btnLimpiar">🗑️ Limpiar</button>
   </div>
 
-  <!-- MEDIANA (único slider) -->
+  <!-- MEDIANA -->
   <div class="slider-mediana" id="sliderMediana" style="display:none;">
     <div class="slider-mediana-header">
       <span>🧹 Mediana</span>
@@ -128,9 +128,9 @@
 
   <!-- DEBUG -->
   <div class="debug-container" id="debugContainer" style="display:none;">
-    <div class="debug-header">
+    <div class="debug-header" onclick="toggleDebug()">
       <span>📋 DEBUG</span>
-      <span id="debugToggle" onclick="toggleDebug()">▼</span>
+      <span id="debugToggle">▼</span>
     </div>
     <div class="debug-content" id="debugContent">
       <div class="debug-lineas">
@@ -170,7 +170,58 @@
   <div id="listaHistorial"></div>
 </div>
 
-<footer>MAR Caribe v9.0 · Simplificado</footer>
+<!-- BOTÓN FLOTANTE AJUSTES -->
+<button class="btn-ajustes-flotante" id="btnAjustesFlotante" style="display:none;">⚙️</button>
+
+<!-- PANEL FLOTANTE DE AJUSTES LIDAR -->
+<div class="panel-lidar" id="panelLidar">
+  <div class="panel-lidar-header">
+    <span>⚙️ Ajustes LIDAR</span>
+    <button class="panel-cerrar" id="btnCerrarPanel">✗</button>
+  </div>
+  <div class="panel-lidar-body">
+
+    <div class="param-slider">
+      <div class="param-slider-header">
+        <label>Votos mínimos</label>
+        <span class="param-valor" id="valVotos">1</span>
+      </div>
+      <input type="range" id="sliderVotos" min="1" max="3" step="1" value="1">
+      <div class="param-slider-help">1 = permisivo · 2 = balance · 3 = estricto</div>
+    </div>
+
+    <div class="param-slider">
+      <div class="param-slider-header">
+        <label>Distancia agrupación</label>
+        <span class="param-valor" id="valDistancia">8px</span>
+      </div>
+      <input type="range" id="sliderDistancia" min="3" max="30" step="1" value="8">
+      <div class="param-slider-help">Fusiona líneas a menos de X píxeles</div>
+    </div>
+
+    <div class="param-toggle">
+      <label>Patrón regular</label>
+      <button class="toggle-btn activo" id="togglePatron">✓ ON</button>
+    </div>
+    <div class="param-slider-help">Filtra líneas que no siguen patrón regular</div>
+
+    <div class="param-slider">
+      <div class="param-slider-header">
+        <label>Tolerancia (px)</label>
+        <span class="param-valor" id="valTolerancia">12px</span>
+      </div>
+      <input type="range" id="sliderTolerancia" min="2" max="30" step="1" value="12">
+      <div class="param-slider-help">Cuánta desalineación se acepta</div>
+    </div>
+
+    <button class="btn btn-primary btn-todo" id="btnRedetectarLidar" style="margin-top:12px;">
+      🔄 Redetectar LIDAR
+    </button>
+
+  </div>
+</div>
+
+<footer>MAR Caribe v10.1 · Sliders LIDAR en vivo</footer>
 
 <script src="tesseract/tesseract.min.js"></script>
 <script src="js/tabs.js"></script>
@@ -187,6 +238,7 @@
 <script src="js/pasos/paso9-ocr.js"></script>
 <script src="js/pasos/paso10-aprendizaje.js"></script>
 <script src="js/pasos/conectar-botones.js"></script>
+<script src="js/sliders-lidar.js"></script>
 
 </body>
 </html>
