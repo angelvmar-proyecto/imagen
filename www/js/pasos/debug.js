@@ -1,8 +1,31 @@
 // ============================================
-// DEBUG + DIBUJO DE LÍNEAS
+// DEBUG + DIBUJO DE LÍNEAS + UTILIDADES COMUNES
 // ============================================
 
 window.MAR = window.MAR || {};
+
+// ============================================
+// UTILIDADES COMPARTIDAS
+// ============================================
+
+// Suavizar array con ventana móvil (usado por pasos 4 y 5)
+function suavizar3(arr, ventana) {
+  const r = new Array(arr.length);
+  const mitad = Math.floor(ventana / 2);
+  for (let i = 0; i < arr.length; i++) {
+    let s = 0, c = 0;
+    for (let j = -mitad; j <= mitad; j++) {
+      const idx = i + j;
+      if (idx >= 0 && idx < arr.length) { s += arr[idx]; c++; }
+    }
+    r[i] = s / c;
+  }
+  return r;
+}
+
+// ============================================
+// COLORES Y GROSOR
+// ============================================
 
 const COLORES_ALGORITMO = {
   3: { vertical: 'rgba(255, 100, 100, 0.85)', horizontal: 'rgba(100, 100, 255, 0.85)' },
@@ -11,7 +34,11 @@ const COLORES_ALGORITMO = {
   6: { vertical: 'rgba(255, 0, 0, 1)', horizontal: 'rgba(0, 0, 255, 1)' }
 };
 
-const GROSOR_LINEA = 0.5; // Líneas más finas
+const GROSOR_LINEA = 0.5;
+
+// ============================================
+// ESTADO DE BOTONES
+// ============================================
 
 function actualizarEstadoBoton(pasoId, ejecutado, error) {
   const estado = document.getElementById('estado-' + pasoId);
@@ -43,8 +70,11 @@ function marcarEjecutando(pasoId) {
   if (estado) estado.textContent = '🔄';
 }
 
+// ============================================
+// DEBUG
+// ============================================
+
 function mostrarDebug(texto) {
-  const panel = document.getElementById('debugContent');
   const textoEl = document.getElementById('debugTexto');
   if (textoEl) textoEl.textContent = texto;
   console.log(texto);
@@ -57,15 +87,16 @@ function actualizarContadores(numV, numH) {
   if (ch) ch.textContent = numH + ' horizontales';
 }
 
+// ============================================
+// DIBUJO DE LÍNEAS
+// ============================================
+
 function dibujarLineasPaso(numPaso, verticales, horizontales) {
   const img = document.getElementById('imgPreview');
   const canvas = document.getElementById('deteccionCanvas');
   if (!img || !canvas || !img.clientWidth) return;
 
-  if (numPaso === 3) {
-    canvas.width = img.clientWidth;
-    canvas.height = img.clientHeight;
-  } else if (numPaso === 6) {
+  if (numPaso === 3 || numPaso === 6) {
     canvas.width = img.clientWidth;
     canvas.height = img.clientHeight;
   }
@@ -95,6 +126,10 @@ function dibujarLineasPaso(numPaso, verticales, horizontales) {
     ctx.stroke();
   }
 }
+
+// ============================================
+// EJECUCIÓN CON DEBUG
+// ============================================
 
 async function ejecutarYDebug(pasoFn, debugFn, pasoId) {
   try {
