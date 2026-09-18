@@ -1,6 +1,6 @@
 // ==============================================
-// MAR Caribe — Tablas v9.0
-// Algoritmo original + Ajuste + 3 métodos OCR
+// MAR Caribe — Tablas v9.1
+// Análisis independiente del zoom + Umbral adaptativo
 // ==============================================
 
 const CONFIG = {
@@ -38,6 +38,8 @@ let matrizTexto = [];
 let matrizColores = [];
 let zoom = 1, desplazamiento = {x:0, y:0};
 let arrastrando = false, ultimoToque = {x:0, y:0};
+let brilloGlobal = null;
+let anchoGlobal = 0, altoGlobal = 0;
 
 const entradaImagen = document.getElementById('entradaImagen');
 const lienzoElement = document.getElementById('lienzo');
@@ -85,8 +87,9 @@ function inicializarTabs() {
 
 function inicializar() {
   log('═══════════════════════════════════', 'sistema');
-  log('🚀 MAR Caribe — Tablas v9.0', 'sistema');
-  log('📖 3 métodos de OCR disponibles', 'info');
+  log('🚀 MAR Caribe — Tablas v9.1', 'sistema');
+  log('🔧 Análisis independiente del zoom', 'info');
+  log('🔧 Umbral adaptativo', 'info');
   log('═══════════════════════════════════', 'sistema');
 
   lienzo = lienzoElement;
@@ -133,6 +136,7 @@ function cargarImagen(e) {
       zoom = 1; desplazamiento = {x:0,y:0};
       lineasH = []; lineasV = []; celdas = [];
       matrizTexto = []; matrizColores = [];
+      brilloGlobal = null;
       for(let i=1;i<=9;i++) document.getElementById(`paso${i}`).classList.remove('hecho');
       actualizarProgreso(0);
       document.getElementById('tablaWrapper').innerHTML = '<div class="empty-state">📊 Sin datos.</div>';
@@ -176,6 +180,19 @@ function arrastrar(e) {
 function detenerArrastre() { arrastrando = false; }
 
 // ============================================
+// OBTENER IMAGEN ORIGINAL (sin zoom)
+// ============================================
+function obtenerDatosOriginales() {
+  // Crear canvas OCULTO con la imagen original (sin zoom, sin pan)
+  const canvasOculto = document.createElement('canvas');
+  canvasOculto.width = imagenActual.width;
+  canvasOculto.height = imagenActual.height;
+  const ctxOculto = canvasOculto.getContext('2d');
+  ctxOculto.drawImage(imagenActual, 0, 0);
+  return ctxOculto.getImageData(0, 0, canvasOculto.width, canvasOculto.height);
+}
+
+// ============================================
 // AJUSTE LOCAL DE LÍNEAS
 // ============================================
 function ajustarLineaH(y, brillo, alto, ancho, rango) {
@@ -207,17 +224,17 @@ function ajustarLineaV(x, brillo, alto, ancho, rango) {
 // ============================================
 // DETECCIÓN DE COLOR
 // ============================================
-function detectarColorDominante(x1, y1, x2, y2) {
+function detectarColorDominante(x1, y1, x2, y2, ctxFuente) {
   const m = CONFIG.MARGEN_COLOR;
   const xStart = Math.max(0, x1 + m);
   const yStart = Math.max(0, y1 + m);
-  const xEnd = Math.min(lienzo.width, x2 - m);
-  const yEnd = Math.min(lienzo.height, y2 - m);
+  const xEnd = Math.min(anchoGlobal, x2 - m);
+  const yEnd = Math.min(altoGlobal, y2 - m);
 
   if (xEnd <= xStart || yEnd <= yStart) return { r: 255, g: 255, b: 255, h: 0, s: 0, v: 100 };
 
   const ancho = xEnd - xStart, alto = yEnd - yStart;
-  const datos = ctx.getImageData(xStart, yStart, ancho, alto).data;
+  const datos = ctxFuente.getImageData(xStart, yStart, ancho, alto).data;
   const histograma = {};
   let maxCount = 0, colorDominante = null;
 
@@ -283,20 +300,27 @@ function limpiarTextoOCR(texto, confianza) {
 }
 
 // ============================================
-// ANÁLISIS
+// ANÁLISIS (independiente del zoom)
 // ============================================
 function analizarTodo() {
   if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
   log('═══════════════════════════════════', 'etapa');
 
+  // ⚠️ IMPORTANTE: Leer de canvas OCULTO, no del visible
   log('[1/9] 🧹 Mediana...', 'etapa');
+  const imageData = obtenerDatosOriginales();
+  const datos = imageData.data;
+  const ancho = imageData.width;
+  const alto = imageData.height;
+  anchoGlobal = ancho;
+  altoGlobal = alto;
+  log(`   📐 Analizando: ${ancho}×${alto} (sin zoom)`, 'info');
   actualizarProgreso(11, 1);
 
   log('[2/9] 🎨 Canales...', 'etapa');
-  const datos = ctx.getImageData(0,0,lienzo.width,lienzo.height).data;
-  const ancho = lienzo.width, alto = lienzo.height;
   const brillo = [];
   for(let y=0;y<alto;y++){ brillo[y]=[]; for(let x=0;x<ancho;x++){ const i=(y*ancho+x)*4; brillo[y][x]=Math.round((datos[i]+datos[i+1]+datos[i+2])/3); } }
+  brilloGlobal = brillo;
   log('✅ Brillo calculado', 'exito');
   actualizarProgreso(22, 2);
 
@@ -307,28 +331,39 @@ function analizarTodo() {
   log('✅ Eco calculado', 'exito');
   actualizarProgreso(33, 3);
 
-  log('[4/9] 🔊 Ecografía...', 'etapa');
+  log('[4/9] 🔊 Ecografía con UMBRAL ADAPTATIVO...', 'etapa');
+  
+  // ============================================
+  // UMBRAL ADAPTATIVO
+  // ============================================
+  const maxEcoH = Math.max(...ecoH);
+  const maxEcoV = Math.max(...ecoV);
+  const umbralAdaptH = Math.max(20, maxEcoH * 0.40);
+  const umbralAdaptV = Math.max(20, maxEcoV * 0.40);
+  log(`   📊 Eco máx H: ${Math.round(maxEcoH)} → umbral: ${Math.round(umbralAdaptH)}`, 'info');
+  log(`   📊 Eco máx V: ${Math.round(maxEcoV)} → umbral: ${Math.round(umbralAdaptV)}`, 'info');
+
   lineasH = []; lineasV = [];
   let ult = -9999;
   for(let y=0;y<alto;y++){
-    if(ecoH[y]>CONFIG.ECO_UMBRAL_H && y-ult>=CONFIG.OPTICA_DISTANCIA_MIN_H){
+    if(ecoH[y]>umbralAdaptH && y-ult>=CONFIG.OPTICA_DISTANCIA_MIN_H){
       let f=0;
       for(let x=0;x<ancho;x++){
         let m=0;
         for(let yy=Math.max(0,y-2);yy<=Math.min(alto-1,y+2);yy++) m=Math.max(m,Math.abs(brillo[y][x]-brillo[yy][x]));
-        if(m>CONFIG.ECO_UMBRAL_H*0.5)f++;
+        if(m>umbralAdaptH*0.5)f++;
       }
       if(f/ancho>=CONFIG.OPTICA_CONTINUIDAD){ lineasH.push(y); ult=y; }
     }
   }
   ult = -9999;
   for(let x=0;x<ancho;x++){
-    if(ecoV[x]>CONFIG.ECO_UMBRAL_V && x-ult>=CONFIG.OPTICA_DISTANCIA_MIN_V){
+    if(ecoV[x]>umbralAdaptV && x-ult>=CONFIG.OPTICA_DISTANCIA_MIN_V){
       let f=0;
       for(let y=0;y<alto;y++){
         let m=0;
         for(let xx=Math.max(0,x-2);xx<=Math.min(ancho-1,x+2);xx++) m=Math.max(m,Math.abs(brillo[y][x]-brillo[y][xx]));
-        if(m>CONFIG.ECO_UMBRAL_V*0.5)f++;
+        if(m>umbralAdaptV*0.5)f++;
       }
       if(f/alto>=CONFIG.OPTICA_CONTINUIDAD){ lineasV.push(x); ult=x; }
     }
@@ -354,6 +389,13 @@ function analizarTodo() {
   celdas = [];
   const numFilas = lineasH.length - 1;
   const numColumnas = lineasV.length - 1;
+
+  // Canvas oculto para colores (sin zoom)
+  const canvasColor = document.createElement('canvas');
+  canvasColor.width = ancho;
+  canvasColor.height = alto;
+  const ctxColor = canvasColor.getContext('2d');
+  ctxColor.drawImage(imagenActual, 0, 0);
   
   if(numFilas > 0 && numColumnas > 0){
     matrizTexto = Array(numFilas).fill().map(() => Array(numColumnas).fill(''));
@@ -363,7 +405,7 @@ function analizarTodo() {
       for(let c=0;c<numColumnas;c++){
         const x1 = lineasV[c], y1 = lineasH[f];
         const x2 = lineasV[c+1], y2 = lineasH[f+1];
-        matrizColores[f][c] = detectarColorDominante(x1, y1, x2, y2);
+        matrizColores[f][c] = detectarColorDominante(x1, y1, x2, y2, ctxColor);
         celdas.push({ fila:f, col:c, x1, y1, x2, y2 });
       }
     }
@@ -397,7 +439,6 @@ async function cargarTesseract() {
       cacheMethod: 'none',
       gzip: false
     });
-    // Parámetros óptimos
     await TESS.motor.setParameters({
       preserve_interword_spaces: '1',
       tessedit_pageseg_mode: '6'
@@ -412,7 +453,7 @@ async function cargarTesseract() {
 }
 
 // ============================================
-// MÉTODO 1: LEER RÁPIDO (OCR Global)
+// MÉTODO 1: LEER RÁPIDO
 // ============================================
 async function leerRapido() {
   if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
@@ -420,38 +461,27 @@ async function leerRapido() {
   if(!TESS.listo) return;
 
   log('⚡ MÉTODO RÁPIDO (OCR Global)', 'etapa');
-  log('   Preparando imagen con líneas negras...', 'info');
 
-  // Crear copia con líneas negras puras
   const lc = document.createElement('canvas');
-  lc.width = lienzo.width;
-  lc.height = lienzo.height;
+  lc.width = anchoGlobal;
+  lc.height = altoGlobal;
   const c = lc.getContext('2d');
   c.drawImage(imagenActual, 0, 0);
 
-  // Dibujar líneas negras gruesas
   c.strokeStyle = '#000000';
   c.lineWidth = 2;
   lineasH.forEach(y => { c.beginPath(); c.moveTo(0, y); c.lineTo(lc.width, y); c.stroke(); });
   lineasV.forEach(x => { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, lc.height); c.stroke(); });
 
-  // Binarizar
-  log('   Binarizando...', 'info');
   binarizarCanvas(lc);
 
-  // Leer toda la imagen
-  log('   Tesseract leyendo imagen completa...', 'info');
+  log('   Tesseract leyendo...', 'info');
   const t0 = performance.now();
   const r = await TESS.motor.recognize(lc);
   const tiempo = Math.round((performance.now() - t0) / 1000);
-
   log(`   ✅ Lectura en ${tiempo}s (confianza ${Math.round(r.data.confidence)}%)`, 'exito');
 
-  // Tesseract devuelve bloques de texto con coordenadas
   const blocks = r.data.blocks || [];
-  log(`   📦 Bloques detectados: ${blocks.length}`, 'info');
-
-  // Asignar bloques a celdas por coordenadas
   let asignados = 0;
   for (const block of blocks) {
     if (!block.paragraphs) continue;
@@ -459,12 +489,8 @@ async function leerRapido() {
       if (!para.lines) continue;
       for (const line of para.lines) {
         if (!line.words || line.words.length === 0) continue;
-
-        // Centro del bloque de texto
         const cx = (line.bbox.x0 + line.bbox.x1) / 2;
         const cy = (line.bbox.y0 + line.bbox.y1) / 2;
-
-        // Encontrar la celda
         for (const celda of celdas) {
           if (cx >= celda.x1 && cx <= celda.x2 && cy >= celda.y1 && cy <= celda.y2) {
             const texto = line.text.trim();
@@ -479,13 +505,12 @@ async function leerRapido() {
       }
     }
   }
-
   log(`✅ ${asignados} bloques asignados`, 'exito');
   finalizarLectura();
 }
 
 // ============================================
-// MÉTODO 2: LEER MEDIO (Fila por fila)
+// MÉTODO 2: LEER MEDIO
 // ============================================
 async function leerMedio() {
   if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
@@ -493,13 +518,11 @@ async function leerMedio() {
   if(!TESS.listo) return;
 
   log('📊 MÉTODO MEDIO (Fila por fila)', 'etapa');
-  log('   Procesando fila por fila...', 'info');
 
   const t0 = performance.now();
   const numFilas = lineasH.length - 1;
 
   for (let f = 0; f < numFilas; f++) {
-    // Recortar fila completa
     const y1 = lineasH[f] + CONFIG.RECORTE_MARGEN;
     const y2 = lineasH[f + 1] - CONFIG.RECORTE_MARGEN;
     const x1 = lineasV[0];
@@ -510,26 +533,18 @@ async function leerMedio() {
     lc.height = Math.max(1, y2 - y1);
     const c = lc.getContext('2d');
     c.drawImage(imagenActual, x1, y1, lc.width, lc.height, 0, 0, lc.width, lc.height);
-
-    // Binarizar
     binarizarCanvas(lc);
 
     try {
       const r = await TESS.motor.recognize(lc);
       const blocks = r.data.blocks || [];
-
-      // Asignar bloques a columnas
       for (const block of blocks) {
         if (!block.paragraphs) continue;
         for (const para of block.paragraphs) {
           if (!para.lines) continue;
           for (const line of para.lines) {
             if (!line.words || line.words.length === 0) continue;
-
-            // Centro X en coordenadas originales
             const cx = (line.bbox.x0 + line.bbox.x1) / 2 + x1;
-
-            // Encontrar columna
             for (let c2 = 0; c2 < lineasV.length - 1; c2++) {
               if (cx >= lineasV[c2] && cx < lineasV[c2 + 1]) {
                 const texto = line.text.trim();
@@ -543,7 +558,6 @@ async function leerMedio() {
           }
         }
       }
-
       const pct = Math.round(((f + 1) / numFilas) * 100);
       log(`   Fila ${f + 1}/${numFilas} (${pct}%)`);
     } catch(e) {
@@ -557,7 +571,7 @@ async function leerMedio() {
 }
 
 // ============================================
-// MÉTODO 3: LEER PRECISO (Celda por celda)
+// MÉTODO 3: LEER PRECISO
 // ============================================
 async function leerPreciso() {
   if (celdas.length === 0) { alert('Primero toca "Analizar"'); return; }
@@ -565,27 +579,22 @@ async function leerPreciso() {
   if(!TESS.listo) return;
 
   log('🎯 MÉTODO PRECISO (Celda por celda)', 'etapa');
-  log(`   Procesando ${celdas.length} celdas...`, 'info');
-
   const t0 = performance.now();
 
   for(let i=0;i<celdas.length;i++){
     const c = celdas[i];
     const m = CONFIG.RECORTE_MARGEN;
-
-    const lc = document.createElement('canvas');
     const anchoC = Math.max(1, c.x2 - c.x1 - m*2);
     const altoC = Math.max(1, c.y2 - c.y1 - m*2);
     const escala = CONFIG.TESS_ESCALA_PRECISO;
 
+    const lc = document.createElement('canvas');
     lc.width = anchoC * escala;
     lc.height = altoC * escala;
     const cctx = lc.getContext('2d');
     cctx.drawImage(imagenActual,
       c.x1 + m, c.y1 + m, anchoC, altoC,
       0, 0, lc.width, lc.height);
-
-    // Binarizar
     binarizarCanvas(lc);
 
     try {
@@ -604,9 +613,6 @@ async function leerPreciso() {
   finalizarLectura();
 }
 
-// ============================================
-// FINALIZAR LECTURA
-// ============================================
 function finalizarLectura() {
   renderizarTabla();
   setTimeout(() => {
@@ -708,6 +714,7 @@ function exportarExcel() {
 function limpiarTodo() {
   imagenActual=null; lineasH=[]; lineasV=[]; celdas=[];
   matrizTexto=[]; matrizColores=[];
+  brilloGlobal = null;
   zoom=1; desplazamiento={x:0,y:0};
   ctx.clearRect(0,0,lienzo.width,lienzo.height);
   logsElement.innerHTML='';
