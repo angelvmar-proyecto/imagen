@@ -3,19 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>MAR Caribe — Tablas v10.0</title>
+  <title>MAR Caribe — Tablas v10.4</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
     body { background: #0f172a; color: #f1f5f9; padding: 8px; max-width: 100vw; overflow-x: hidden; }
     h1 { font-size: 1rem; text-align: center; margin-bottom: 4px; color: #38bdf8; }
     .subtitulo { font-size: 0.7rem; color: #94a3b8; text-align: center; margin-bottom: 8px; }
-    
     .tabs { display: flex; background: #1e293b; border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
     .tab { flex: 1; padding: 10px 6px; text-align: center; color: #94a3b8; font-weight: 600; font-size: 0.8rem; cursor: pointer; border-bottom: 3px solid transparent; }
     .tab.active { color: #38bdf8; border-bottom-color: #38bdf8; background: #0f172a; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    
     .botonera { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
     button { padding: 10px 4px; border: none; border-radius: 8px; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: 44px; }
     .btn-img { background: #a855f7; color: white; }
@@ -26,79 +24,37 @@
     .btn-csv { background: #f39c12; color: white; }
     .btn-excel { background: #217346; color: white; }
     .btn-copiar { background: #3c6382; color: white; }
-    
-    .seccion-leer {
-      background: #1e293b;
-      border-radius: 10px;
-      padding: 10px;
-      margin-bottom: 8px;
-    }
-    .seccion-leer-titulo {
-      font-size: 0.75rem;
-      color: #94a3b8;
-      text-align: center;
-      margin-bottom: 6px;
-      font-weight: 600;
-      letter-spacing: 1px;
-    }
-    .botonera-leer {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-    }
+    .seccion-leer { background: #1e293b; border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+    .seccion-leer-titulo { font-size: 0.75rem; color: #94a3b8; text-align: center; margin-bottom: 6px; font-weight: 600; letter-spacing: 1px; }
+    .botonera-leer { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
     .btn-rapido { background: #f97316; color: white; }
     .btn-medio { background: #eab308; color: #1a1a1a; }
     .btn-preciso { background: #8b5cf6; color: white; }
     .btn-leer-porDefecto { box-shadow: 0 0 0 3px #eab308; }
-    
-    .area-img { width: 100%; height: 42vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; }
+    .area-img { width: 100%; height: 42vh; background: #1e293b; border-radius: 10px; overflow: auto; display: flex; align-items: flex-start; justify-content: center; margin-bottom: 8px; position: relative; }
     canvas { max-width: none; transform-origin: top left; display: block; }
-    
     .logs { background: #1e293b; border-radius: 8px; padding: 8px; height: 18vh; overflow-y: auto; font-family: monospace; font-size: 0.7rem; line-height: 1.4; }
     #entradaImagen { display: none; }
-    
     .progreso { width: 100%; height: 24px; background: #334155; border-radius: 12px; margin: 8px 0; overflow: hidden; }
     .barra-progreso { height: 100%; background: #22c55e; width: 0%; transition: width 0.3s; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: bold; }
-    
     .pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 8px 0; }
-    .paso { 
-      padding: 8px 4px; 
-      background: #1e293b; 
-      border-radius: 8px; 
-      text-align: center; 
-      border: 2px solid transparent; 
-      font-size: 0.65rem;
-      cursor: pointer;
-      transition: all 0.2s;
-      user-select: none;
-    }
-    .paso:hover { 
-      background: #334155; 
-      transform: scale(1.02);
-    }
-    .paso:active { 
-      transform: scale(0.95);
-    }
-    .paso.hecho { 
-      background: #166534; 
-      border-color: #22c55e; 
-    }
+    .paso { padding: 8px 4px; background: #1e293b; border-radius: 8px; text-align: center; border: 2px solid transparent; font-size: 0.65rem; cursor: pointer; transition: all 0.2s; user-select: none; }
+    .paso:hover { background: #334155; transform: scale(1.02); }
+    .paso:active { transform: scale(0.95); }
+    .paso.hecho { background: #166534; border-color: #22c55e; }
     .paso-texto { font-size: 0.6rem; margin-top: 2px; }
-    .paso-indicador { font-size: 0.5rem; color: #94a3b8; margin-top: 2px; }
-    
     .tabla-wrapper { background: #1e293b; border-radius: 8px; padding: 8px; max-height: 65vh; overflow: auto; }
     .tabla-resultado { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
     .tabla-resultado th, .tabla-resultado td { border: 1px solid #334155; padding: 4px 6px; text-align: left; min-width: 60px; color: #000; }
     .tabla-resultado th { background: #0a3d62; color: white; position: sticky; top: 0; z-index: 10; }
     .tabla-resultado td[contenteditable="true"]:focus { outline: 2px solid #38bdf8; }
-    
     .info-extra { font-size: 0.75rem; color: #94a3b8; text-align: center; padding: 8px; }
     .empty-state { text-align: center; padding: 40px 20px; color: #64748b; font-size: 0.85rem; }
   </style>
 </head>
 <body>
-  <h1>📊 MAR Caribe — Tablas v10.0</h1>
-  <p class="subtitulo">Cada paso es clickeable · Ejecuta individualmente</p>
+  <h1>📊 MAR Caribe — Tablas v10.4</h1>
+  <p class="subtitulo">🟡 Óptica · 🔴🔵 Ecografía · 🟣 A3 · ⚫ LIDAR</p>
 
   <div class="tabs">
     <div class="tab active" data-tab="imagen">📷 Imagen</div>
@@ -111,42 +67,15 @@
     </div>
 
     <div class="pasos" id="pasosProceso">
-      <div class="paso" id="paso1" onclick="ejecutarPasoIndividual(1)">
-        <span>🔧</span>
-        <div class="paso-texto">1.Preproc</div>
-      </div>
-      <div class="paso" id="paso2" onclick="ejecutarPasoIndividual(2)">
-        <span>🎨</span>
-        <div class="paso-texto">2.Canales</div>
-      </div>
-      <div class="paso" id="paso3" onclick="ejecutarPasoIndividual(3)">
-        <span>🔭</span>
-        <div class="paso-texto">3.Óptica</div>
-      </div>
-      <div class="paso" id="paso4" onclick="ejecutarPasoIndividual(4)">
-        <span>🔊</span>
-        <div class="paso-texto">4.Ecografía</div>
-      </div>
-      <div class="paso" id="paso5" onclick="ejecutarPasoIndividual(5)">
-        <span>📡</span>
-        <div class="paso-texto">5.Espectro</div>
-      </div>
-      <div class="paso" id="paso6" onclick="ejecutarPasoIndividual(6)">
-        <span>📐</span>
-        <div class="paso-texto">6.LIDAR</div>
-      </div>
-      <div class="paso" id="paso7" onclick="ejecutarPasoIndividual(7)">
-        <span>✏️</span>
-        <div class="paso-texto">7.Editar</div>
-      </div>
-      <div class="paso" id="paso8" onclick="ejecutarPasoIndividual(8)">
-        <span>✂️</span>
-        <div class="paso-texto">8.Recortar</div>
-      </div>
-      <div class="paso" id="paso9" onclick="ejecutarPasoIndividual(9)">
-        <span>📄</span>
-        <div class="paso-texto">9.OCR</div>
-      </div>
+      <div class="paso" id="paso1" onclick="ejecutarPasoIndividual(1)"><span>🔧</span><div class="paso-texto">1.Preproc</div></div>
+      <div class="paso" id="paso2" onclick="ejecutarPasoIndividual(2)"><span>🎨</span><div class="paso-texto">2.Canales</div></div>
+      <div class="paso" id="paso3" onclick="ejecutarPasoIndividual(3)"><span>🔭</span><div class="paso-texto">3.Óptica</div></div>
+      <div class="paso" id="paso4" onclick="ejecutarPasoIndividual(4)"><span>🔊</span><div class="paso-texto">4.Ecografía</div></div>
+      <div class="paso" id="paso5" onclick="ejecutarPasoIndividual(5)"><span>🟣</span><div class="paso-texto">5.A3</div></div>
+      <div class="paso" id="paso6" onclick="ejecutarPasoIndividual(6)"><span>📐</span><div class="paso-texto">6.LIDAR</div></div>
+      <div class="paso" id="paso7" onclick="ejecutarPasoIndividual(7)"><span>✏️</span><div class="paso-texto">7.Editar</div></div>
+      <div class="paso" id="paso8" onclick="ejecutarPasoIndividual(8)"><span>✂️</span><div class="paso-texto">8.Recortar</div></div>
+      <div class="paso" id="paso9" onclick="ejecutarPasoIndividual(9)"><span>📄</span><div class="paso-texto">9.OCR</div></div>
     </div>
 
     <div class="botonera">
@@ -186,16 +115,12 @@
   <script src="tesseract/tesseract.min.js"></script>
   <script src="js/mejoras.js"></script>
   <script src="js/app.js"></script>
-  <script src="js/patch-analizar.js"></script>
-  <script src="js/pasos-individuales.js"></script>
-  <script src="js/patch-zoom.js"></script>
-  <script src="js/patch-visual.js"></script>
-  <script src="js/patch-lineas-paso.js"></script>
-  <script src="js/patch-optica.js"></script>
-  <script src="js/patch-paso4-limpio.js"></script>
   <script src="js/ortogonalidad.js"></script>
   <script src="js/lidar-votacion.js"></script>
+  <script src="js/patch-analizar.js"></script>
+  <script src="js/pasos-individuales.js"></script>
   <script src="js/patch-boton5.js"></script>
-  <script src="js/patch-optica-v2.js"></script>
+  <script src="js/patch-paso4-limpio.js"></script>
+  <script src="js/patch-dibujo-maestro.js"></script>
 </body>
 </html>
