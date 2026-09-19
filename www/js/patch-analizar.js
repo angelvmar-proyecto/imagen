@@ -1,15 +1,12 @@
 // ==============================================
-// PATCH: Integrar preprocesamiento en analizarTodo
+// PATCH v10.0.1: Preprocesamiento CONSERVADOR
+// CRR desactivado, BS solo con colores muy fuertes
 // ==============================================
 
-// Guardar la función original
-const _analizarTodoOriginal = analizarTodo;
-
-// Sobrescribir con la versión mejorada
 analizarTodo = function() {
   if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
   log('═══════════════════════════════════', 'etapa');
-  log('🔬 ANÁLISIS CON PREPROCESAMIENTO v10.0', 'etapa');
+  log('🔬 ANÁLISIS v10.0.1 (Preproc conservador)', 'etapa');
   log('═══════════════════════════════════', 'etapa');
 
   // Crear canvas oculto con la imagen original
@@ -22,56 +19,45 @@ analizarTodo = function() {
   let imageData = ctxBase.getImageData(0, 0, canvasBase.width, canvasBase.height);
 
   // ============================================
-  // FASE 1: PREPROCESAMIENTO
+  // PREPROCESAMIENTO CONSERVADOR
   // ============================================
-  log('[PRE 1/3] 🔧 Analizando necesidad de filtros...', 'etapa');
+  log('[PRE 1/2] 🔧 Analizando...', 'etapa');
 
-  const necesitaCRR_result = necesitaCRR(imageData);
   const tieneColores_result = tieneColores(imageData);
 
-  log(`   • Ruido detectado: ${necesitaCRR_result ? 'SÍ' : 'NO'}`, 'info');
-  log(`   • Colores detectados: ${tieneColores_result ? 'SÍ' : 'NO'}`, 'info');
+  log(`   • Colores fuertes: ${tieneColores_result ? 'SÍ' : 'NO'}`, 'info');
+  log(`   • CRR: DESACTIVADO (puede dañar líneas)`, 'alerta');
 
-  // Aplicar CRR si hay ruido
-  if (necesitaCRR_result) {
-    log('[PRE 2/3] 🎯 Aplicando CRR (eliminar píxeles anómalos)...', 'etapa');
-    imageData = aplicarCRR(imageData, 80);
-    ctxBase.putImageData(imageData, 0, 0);
-    log('   ✅ CRR aplicado', 'exito');
-  } else {
-    log('[PRE 2/3] ⏭️ CRR no necesario (imagen limpia)', 'info');
-  }
+  // CRR DESACTIVADO
+  log('[PRE 2/2] ⏭️ CRR desactivado', 'info');
+  log('[PRE 2/2] ⏭️ BS: solo si colores > 30%', 'info');
 
-  // Aplicar BS si hay colores
+  // BS solo si hay MUCHOS colores
   if (tieneColores_result) {
-    log('[PRE 3/3] 🎨 Aplicando Background Subtraction...', 'etapa');
+    log('[PRE 2/2] 🎨 Aplicando BS...', 'etapa');
     imageData = aplicarBS(imageData, 30);
     ctxBase.putImageData(imageData, 0, 0);
     log('   ✅ BS aplicado', 'exito');
   } else {
-    log('[PRE 3/3] ⏭️ BS no necesario (sin colores)', 'info');
+    log('   ⏭️ BS no necesario', 'info');
   }
 
-  // Actualizar la imagen procesada globalmente
+  log('═══════════════════════════════════', 'etapa');
+  log('✅ Preprocesamiento conservador OK', 'exito');
+  log('═══════════════════════════════════', 'etapa');
+
+  // Guardar imagen procesada
   window.imagenProcesada = canvasBase;
 
-  log('═══════════════════════════════════', 'etapa');
-  log('✅ Preprocesamiento completado', 'exito');
-  log('📊 Continuando con análisis normal...', 'info');
-  log('═══════════════════════════════════', 'etapa');
-
-  // ============================================
-  // Llamar al análisis original pero usando la imagen procesada
-  // ============================================
+  // Llamar análisis original
   const _imagenOriginal = imagenActual;
   imagenActual = canvasBase;
 
   try {
     _analizarTodoOriginal();
-  } finally {
-    // No restaurar imagenActual para que OCR use la procesada
-    // imagenActual = _imagenOriginal;
+  } catch(e) {
+    log('❌ Error: ' + e.message, 'error');
   }
 };
 
-console.log('✅ Patch de análisis v10.0 cargado');
+console.log('✅ Patch v10.0.1 cargado (CRR desactivado)');

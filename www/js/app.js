@@ -338,8 +338,8 @@ function analizarTodo() {
   // ============================================
   const maxEcoH = Math.max(...ecoH);
   const maxEcoV = Math.max(...ecoV);
-  const umbralAdaptH = Math.max(20, maxEcoH * 0.40);
-  const umbralAdaptV = Math.max(20, maxEcoV * 0.40);
+  const umbralAdaptH = Math.max(18, maxEcoH * 0.30);
+  const umbralAdaptV = Math.max(18, maxEcoV * 0.30);
   log(`   📊 Eco máx H: ${Math.round(maxEcoH)} → umbral: ${Math.round(umbralAdaptH)}`, 'info');
   log(`   📊 Eco máx V: ${Math.round(maxEcoV)} → umbral: ${Math.round(umbralAdaptV)}`, 'info');
 
