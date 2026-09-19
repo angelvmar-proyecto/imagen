@@ -302,7 +302,7 @@ function limpiarTextoOCR(texto, confianza) {
 // ============================================
 // ANÁLISIS (independiente del zoom)
 // ============================================
-function analizarTodo() {
+function analizarTodoBase() {
   if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
   log('═══════════════════════════════════', 'etapa');
 

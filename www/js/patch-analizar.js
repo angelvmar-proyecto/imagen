@@ -1,15 +1,20 @@
 // ==============================================
-// PATCH v10.0.1: Preprocesamiento CONSERVADOR
-// CRR desactivado, BS solo con colores muy fuertes
+// MAR Caribe v10.0.2 - Nueva analizarTodo con preprocesamiento
+// Llama a analizarTodoBase() después de preprocesar
 // ==============================================
 
-analizarTodo = function() {
+function analizarTodo() {
   if(!imagenActual) { log('⚠️ Carga imagen primero', 'alerta'); return; }
   log('═══════════════════════════════════', 'etapa');
-  log('🔬 ANÁLISIS v10.0.1 (Preproc conservador)', 'etapa');
+  log('🔬 ANÁLISIS v10.0.2 (Preproc + Análisis)', 'etapa');
   log('═══════════════════════════════════', 'etapa');
 
-  // Crear canvas oculto con la imagen original
+  // ============================================
+  // FASE 1: PREPROCESAMIENTO CONSERVADOR
+  // ============================================
+  log('[PRE 1/2] 🔧 Analizando necesidad de filtros...', 'etapa');
+
+  // Crear canvas con la imagen original
   const canvasBase = document.createElement('canvas');
   canvasBase.width = imagenActual.width;
   canvasBase.height = imagenActual.height;
@@ -18,46 +23,46 @@ analizarTodo = function() {
 
   let imageData = ctxBase.getImageData(0, 0, canvasBase.width, canvasBase.height);
 
-  // ============================================
-  // PREPROCESAMIENTO CONSERVADOR
-  // ============================================
-  log('[PRE 1/2] 🔧 Analizando...', 'etapa');
-
+  // Detectar colores
   const tieneColores_result = tieneColores(imageData);
+  log('   • Colores fuertes: ' + (tieneColores_result ? 'SÍ' : 'NO'), 'info');
+  log('   • CRR: DESACTIVADO (puede dañar líneas)', 'alerta');
 
-  log(`   • Colores fuertes: ${tieneColores_result ? 'SÍ' : 'NO'}`, 'info');
-  log(`   • CRR: DESACTIVADO (puede dañar líneas)`, 'alerta');
-
-  // CRR DESACTIVADO
-  log('[PRE 2/2] ⏭️ CRR desactivado', 'info');
-  log('[PRE 2/2] ⏭️ BS: solo si colores > 30%', 'info');
-
-  // BS solo si hay MUCHOS colores
+  // Aplicar BS solo si hay muchos colores
   if (tieneColores_result) {
-    log('[PRE 2/2] 🎨 Aplicando BS...', 'etapa');
+    log('[PRE 2/2] 🎨 Aplicando Background Subtraction...', 'etapa');
     imageData = aplicarBS(imageData, 30);
     ctxBase.putImageData(imageData, 0, 0);
     log('   ✅ BS aplicado', 'exito');
   } else {
-    log('   ⏭️ BS no necesario', 'info');
+    log('[PRE 2/2] ⏭️ Sin filtros adicionales necesarios', 'info');
   }
 
   log('═══════════════════════════════════', 'etapa');
-  log('✅ Preprocesamiento conservador OK', 'exito');
+  log('✅ Preprocesamiento completado', 'exito');
   log('═══════════════════════════════════', 'etapa');
 
-  // Guardar imagen procesada
-  window.imagenProcesada = canvasBase;
+  // ============================================
+  // FASE 2: ANÁLISIS CON IMAGEN PROCESADA
+  // ============================================
+  log('📊 Ejecutando análisis base...', 'info');
 
-  // Llamar análisis original
-  const _imagenOriginal = imagenActual;
+  // Guardar imagen actual y reemplazar con la procesada
+  const imagenGuardada = imagenActual;
   imagenActual = canvasBase;
 
   try {
-    _analizarTodoOriginal();
-  } catch(e) {
-    log('❌ Error: ' + e.message, 'error');
+    // Llamar a la función base
+    if (typeof analizarTodoBase === 'function') {
+      analizarTodoBase();
+    } else {
+      throw new Error('analizarTodoBase no está definida');
+    }
+  } finally {
+    // NO restaurar para que el OCR use la imagen procesada
+    // imagenActual = imagenGuardada;
+    window.imagenProcesada = canvasBase;
   }
-};
+}
 
-console.log('✅ Patch v10.0.1 cargado (CRR desactivado)');
+console.log('✅ analizarTodo v10.0.2 cargada');
