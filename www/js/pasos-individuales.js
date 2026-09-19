@@ -256,8 +256,8 @@ async function ejecutarPaso4Ecografia() {
   // Umbral adaptativo
   const maxEcoH = Math.max(...ecoH);
   const maxEcoV = Math.max(...ecoV);
-  const umbralH = Math.max(18, maxEcoH * 0.30);
-  const umbralV = Math.max(18, maxEcoV * 0.30);
+  const umbralH = Math.max(15, maxEcoH * 0.20);
+  const umbralV = Math.max(15, maxEcoV * 0.20);
 
   log('   📊 Umbral adaptativo H: ' + Math.round(umbralH), 'info');
   log('   📊 Umbral adaptativo V: ' + Math.round(umbralV), 'info');
@@ -266,7 +266,7 @@ async function ejecutarPaso4Ecografia() {
   const lineasH = [];
   let ult = -9999;
   for(let y=0; y<alto; y++) {
-    if(ecoH[y] > umbralH && y - ult >= 24) {
+    if(ecoH[y] > umbralH && y - ult >= 18) {
       let f = 0;
       for(let x=0; x<ancho; x++) {
         let m=0;
@@ -275,7 +275,7 @@ async function ejecutarPaso4Ecografia() {
         }
         if(m > umbralH * 0.5) f++;
       }
-      if(f/ancho >= 0.55) {
+      if(f/ancho >= 0.40) {
         lineasH.push(y);
         ult = y;
       }
@@ -286,7 +286,7 @@ async function ejecutarPaso4Ecografia() {
   const lineasV = [];
   ult = -9999;
   for(let x=0; x<ancho; x++) {
-    if(ecoV[x] > umbralV && x - ult >= 22) {
+    if(ecoV[x] > umbralV && x - ult >= 16) {
       let f = 0;
       for(let y=0; y<alto; y++) {
         let m=0;
@@ -295,7 +295,7 @@ async function ejecutarPaso4Ecografia() {
         }
         if(m > umbralV * 0.5) f++;
       }
-      if(f/alto >= 0.55) {
+      if(f/alto >= 0.40) {
         lineasV.push(x);
         ult = x;
       }
