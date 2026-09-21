@@ -1,7 +1,4 @@
 node_modules/
 android/
-ios/
-dist/
-build/
-.gradle/
-*.apk
+*.log
+.DS_Store

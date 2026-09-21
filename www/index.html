@@ -1,131 +1,22 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR Mar Caribe - Dinámico</title>
-    <!-- Tesseract.js desde CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@v2.1.1/dist/tesseract.min.js"></script>
-    <!-- SheetJS (xlsx) para leer la plantilla de Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #121212;
-            color: #e0e0e0;
-            margin: 0;
-            padding: 10px;
-        }
-        h2 {
-            color: #00bcd4;
-            text-align: center;
-            font-size: 18px;
-        }
-        .card {
-            background: #1e1e1e;
-            padding: 12px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-        }
-        label {
-            font-size: 13px;
-            color: #b0bec5;
-            display: block;
-            margin-bottom: 5px;
-        }
-        input[type="file"] {
-            width: 100%;
-            padding: 8px;
-            background: #2c2c2c;
-            color: #fff;
-            border: 1px solid #444;
-            border-radius: 4px;
-            box-sizing: border-box;
-            margin-bottom: 10px;
-        }
-        button {
-            width: 100%;
-            background: #00bcd4;
-            color: #000;
-            border: none;
-            padding: 12px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 14px;
-            cursor: pointer;
-            margin-top: 5px;
-        }
-        button.export-btn {
-            background: #4CAF50;
-            color: #fff;
-            margin-top: 10px;
-        }
-        .table-container {
-            width: 100%;
-            overflow-x: auto;
-            margin-top: 15px;
-            border: 1px solid #333;
-            border-radius: 4px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            white-space: nowrap;
-        }
-        th, td {
-            border: 1px solid #333;
-            padding: 6px 8px;
-            text-align: left;
-            font-size: 11px;
-        }
-        th {
-            background: #222;
-            color: #00bcd4;
-        }
-        #ocr-status-global {
-            text-align: center;
-            font-size: 12px;
-            color: #ffeb3b;
-            margin-top: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Imagen OCR</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+    h1 { font-size: 20px; }
+    button { padding: 15px 30px; font-size: 18px; margin: 10px 0; width: 100%; }
+    #resultado { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 60vh; overflow: auto; }
+    #estado { color: #666; margin-top: 10px; font-size: 14px; }
+  </style>
 </head>
 <body>
-
-    <h2>OCR Mar Caribe - Dual Excel / Imagen</h2>
-
-    <div class="card">
-        <label>1. Seleccionar Imagen de WhatsApp:</label>
-        <input type="file" id="imageFile" accept="image/*">
-
-        <label>2. Seleccionar Plantilla Excel (Coordenadas y Columnas):</label>
-        <input type="file" id="excelFile" accept=".xlsx, .xls, .json">
-
-        <button onclick="ejecutarCalibracionDual()">🚀 Iniciar Escaneo OCR Dinámico</button>
-        <div id="ocr-status-global"></div>
-    </div>
-
-    <div class="card">
-        <label>Resultados de la Extracción:</label>
-        <div class="table-container">
-            <table id="tabla-resultados">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Esperando ejecución...</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td colspan="2" style="text-align:center; color:#777;">Sube tus archivos y presiona iniciar.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <button class="export-btn" onclick="exportarLogAprendizajeJSON()">📥 Exportar Aprendizaje General (.JSON)</button>
-    </div>
-
-    <script src="js/app.js"></script>
+  <h1>OCR Timeshare</h1>
+  <button id="btnEscanear">📷 Escanear Tabla</button>
+  <div id="estado">Listo</div>
+  <div id="resultado"></div>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
