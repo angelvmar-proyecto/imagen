@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -28,8 +27,15 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Capacitor sync
-        run: npx cap sync android
+      - name: Regenerar carpeta de plugins cordova
+        run: |
+          rm -rf android/capacitor-cordova-android-plugins
+          npx cap sync android
+
+      - name: Verificar que cordova.variables.gradle existe
+        run: |
+          ls -la android/capacitor-cordova-android-plugins/
+          cat android/capacitor-cordova-android-plugins/cordova.variables.gradle || echo "NO EXISTE"
 
       - name: Build debug APK
         working-directory: android
