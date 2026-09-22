@@ -3,6 +3,9 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { PaddleOcrService } from 'paddleocr';
 import * as ort from 'onnxruntime-web';
 
+// Configurar la ruta de los archivos WASM de ONNX Runtime (usando CDN)
+ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/';
+
 const btn = document.getElementById('btnEscanear');
 const estado = document.getElementById('estado');
 const resultado = document.getElementById('resultado');
@@ -27,12 +30,12 @@ async function initOCR() {
   estado.textContent = 'Cargando modelos ONNX... (esto puede tardar)';
 
   try {
-    // Leer modelos como base64 (los archivos están en www/models/)
+    // Leer modelos como base64 desde los assets de la app
     const detBase64 = await Filesystem.readFile({
       path: 'public/models/det.onnx',
       directory: Directory.Data
     });
-    
+
     const recBase64 = await Filesystem.readFile({
       path: 'public/models/rec.onnx',
       directory: Directory.Data
@@ -89,7 +92,7 @@ async function runOCR(imageUri) {
       img.onerror = reject;
     });
 
-    // Dibujar en canvas para obtener ImageData (RGB)
+    // Dibujar en canvas para obtener ImageData (RGBA)
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
@@ -104,17 +107,11 @@ async function runOCR(imageUri) {
       width: imageData.width,
       height: imageData.height,
       data: imageData.data, // RGBA Uint8Array
-    }, {
-      onProgress(event) {
-        if (event.type === 'rec' && event.stage === 'item') {
-          estado.textContent = `Reconociendo: ${event.result?.text || ''}`;
-        }
-      }
     });
 
     // Extraer el texto final
-    const finalText = paddleOcrService.processRecognition(result).text;
-    
+    const finalText = result.text;
+
     estado.textContent = 'Completado';
     resultado.textContent = finalText;
 
@@ -128,7 +125,7 @@ async function runOCR(imageUri) {
 btn.addEventListener('click', async () => {
   try {
     await initOCR();
-    
+
     estado.textContent = 'Abriendo cámara...';
     const foto = await Camera.getPhoto({
       quality: 90,
