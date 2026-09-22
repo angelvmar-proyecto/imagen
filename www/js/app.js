@@ -36,19 +36,40 @@ async function initOCR() {
   }
 }
 
-async function runOCR(imageUri) {
+// Guarda la imagen y devuelve SOLO el nombre del archivo
+async function guardarImagen(foto) {
+  const fileName = `ocr_${Date.now()}.jpeg`;
+  await Filesystem.writeFile({
+    path: fileName,
+    data: foto.base64String,
+    directory: Directory.Data
+  });
+  return fileName; // ← Solo el nombre, no la URI completa
+}
+
+async function runOCR(fileName) {
   try {
     await initOCR();
     if (!ocr) return;
+
     log('Preparando imagen...');
-    const imageBase64 = await Filesystem.readFile({ path: imageUri, directory: Directory.Data });
+
+    // Leer usando SOLO el nombre del archivo
+    const imageBase64 = await Filesystem.readFile({
+      path: fileName,
+      directory: Directory.Data
+    });
+
     const img = new Image();
     img.src = `data:image/jpeg;base64,${imageBase64.data}`;
     await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+
     const response = await fetch(img.src);
     const blob = await response.blob();
+
     log('Ejecutando OCR...');
     const [result] = await ocr.predict(blob);
+
     log('Completado');
     resultado.textContent = result.text || '(sin texto detectado)';
   } catch (error) {
@@ -59,18 +80,28 @@ async function runOCR(imageUri) {
 document.getElementById('btnCamara').addEventListener('click', async () => {
   try {
     log('Abriendo cámara...');
-    const foto = await Camera.getPhoto({ quality: 90, allowEditing: false, resultType: CameraResultType.Base64, source: CameraSource.Camera });
-    const savedFile = await Filesystem.writeFile({ path: `ocr_${Date.now()}.jpeg`, data: foto.base64String, directory: Directory.Data });
-    await runOCR(savedFile.uri);
+    const foto = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Camera
+    });
+    const fileName = await guardarImagen(foto);
+    await runOCR(fileName);
   } catch (error) { logError(`Error cámara: ${error.message}`); }
 });
 
 document.getElementById('btnGaleria').addEventListener('click', async () => {
   try {
     log('Abriendo galería...');
-    const foto = await Camera.getPhoto({ quality: 90, allowEditing: false, resultType: CameraResultType.Base64, source: CameraSource.Photos });
-    const savedFile = await Filesystem.writeFile({ path: `ocr_${Date.now()}.jpeg`, data: foto.base64String, directory: Directory.Data });
-    await runOCR(savedFile.uri);
+    const foto = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Photos
+    });
+    const fileName = await guardarImagen(foto);
+    await runOCR(fileName);
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
