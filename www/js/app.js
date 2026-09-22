@@ -26,11 +26,14 @@ async function initOCR() {
   log('Cargando modelo OCR desde archivos locales...');
   try {
     ocr = await PaddleOCR.create({
-      // Usar rutas locales en lugar de lang/ocrVersion
-      textDetectionModelAsset: "/models/det.onnx",
-      textRecognitionModelAsset: "/models/en_rec.onnx",
-      // El diccionario también puede ser necesario
-      textRecognitionCharactersDictionaryAsset: "/models/en_dict.txt",
+      textDetectionModelName: "my_det_model",
+      textDetectionModelAsset: {
+        url: "/models/my_det_model.tar"
+      },
+      textRecognitionModelName: "my_rec_model",
+      textRecognitionModelAsset: {
+        url: "/models/my_rec_model.tar"
+      },
       ortOptions: { backend: "wasm" }
     });
     log('Modelo cargado. Listo.');
