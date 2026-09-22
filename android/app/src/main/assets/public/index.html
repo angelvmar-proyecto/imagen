@@ -8,15 +8,36 @@
     body { font-family: sans-serif; padding: 20px; background: #fafafa; }
     h1 { font-size: 20px; }
     button { padding: 15px 30px; font-size: 18px; margin: 10px 0; width: 100%; }
-    #resultado { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 60vh; overflow: auto; }
     #estado { color: #666; margin-top: 10px; font-size: 14px; }
+    #resultado { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 50vh; overflow: auto; }
+    #debug { white-space: pre-wrap; background: #ffe0e0; padding: 10px; margin-top: 10px; font-size: 11px; color: #a00; max-height: 30vh; overflow: auto; display: none; }
   </style>
 </head>
 <body>
   <h1>OCR Timeshare</h1>
   <button id="btnEscanear">📷 Escanear Tabla</button>
-  <div id="estado">Listo</div>
+  <div id="estado">Cargando...</div>
   <div id="resultado"></div>
+  <div id="debug"></div>
+
+  <script>
+    // Capturar errores globales y mostrarlos en pantalla
+    window.addEventListener('error', (e) => {
+      const dbg = document.getElementById('debug');
+      if (dbg) {
+        dbg.style.display = 'block';
+        dbg.textContent += `[ERROR GLOBAL] ${e.message}\n  en ${e.filename}:${e.lineno}\n\n`;
+      }
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      const dbg = document.getElementById('debug');
+      if (dbg) {
+        dbg.style.display = 'block';
+        dbg.textContent += `[PROMESA RECHAZADA] ${e.reason}\n\n`;
+      }
+    });
+    console.log('Script inline cargado, esperando app.js...');
+  </script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
