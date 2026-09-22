@@ -186,61 +186,29 @@ async function runOCR(base64) {
       }
     }
 
-// ===================== MOSTRAR RESULTADO =====================
-setProgreso(100, `OCR completado en ${segundos}s`);
-log(`OCR completado en ${segundos}s`);
+    // ===================== MOSTRAR RESULTADO =====================
+    setProgreso(100, `OCR completado en ${segundos}s`);
+    log(`OCR completado en ${segundos}s`);
 
-// El resultado es un array: [0].items contiene los items detectados
-let items = [];
-if (Array.isArray(resultadoCrudo) && resultadoCrudo[0] && resultadoCrudo[0].items) {
-  items = resultadoCrudo[0].items;
-} else if (resultadoCrudo && resultadoCrudo.items) {
-  items = resultadoCrudo.items;
-}
+    // Extraer texto de múltiples formas posibles
+    let textoFinal = '';
 
-logDiag("ITEMS_EXTRAIDOS", { cantidad: items.length });
+    if (Array.isArray(resultadoCrudo) && resultadoCrudo[0]) {
+      textoFinal = resultadoCrudo[0].text || '';
+    } else if (resultadoCrudo && resultadoCrudo.text) {
+      textoFinal = resultadoCrudo.text;
+    } else if (resultadoCrudo && resultadoCrudo.items && resultadoCrudo.items.length > 0) {
+      textoFinal = resultadoCrudo.items.map(i => i.text).join('\n');
+    }
 
-// Ordenar los items por posición (arriba→abajo, izquierda→derecha)
-items.sort((a, b) => {
-  const ay = a.poly[0][1];
-  const by = b.poly[0][1];
-  const ax = a.poly[0][0];
-  const bx = b.poly[0][0];
-  if (Math.abs(ay - by) < 10) return ax - bx;
-  return ay - by;
-});
+    logDiag("TEXTO_FINAL", { length: textoFinal.length, preview: textoFinal.substring(0, 200) });
 
-// Agrupar por filas (misma Y aproximada)
-const filas = [];
-let filaActual = [];
-let ultimaY = -100;
-
-items.forEach(item => {
-  const y = item.poly[0][1];
-  if (Math.abs(y - ultimaY) > 10) {
-    if (filaActual.length > 0) filas.push(filaActual);
-    filaActual = [];
-    ultimaY = y;
-  }
-  filaActual.push(item);
-});
-if (filaActual.length > 0) filas.push(filaActual);
-
-logDiag("FILAS_DETECTADAS", { cantidad: filas.length });
-
-// Construir el texto final: cada fila separada por tabulación
-const textoFinal = filas.map(fila => {
-  return fila.map(item => item.text).join('\t');
-}).join('\n');
-
-logDiag("TEXTO_FINAL", { length: textoFinal.length, preview: textoFinal.substring(0, 300) });
-
-if (textoFinal) {
-  mostrarTabla(textoFinal);
-} else {
-  resultado.style.display = 'block';
-  resultado.textContent = '(sin texto detectado - revisa los DIAG arriba)';
-}
+    if (textoFinal) {
+      mostrarTabla(textoFinal);
+    } else {
+      resultado.style.display = 'block';
+      resultado.textContent = '(sin texto detectado - revisa los DIAG arriba)';
+    }
 
     setTimeout(() => mostrarBarra(false), 3000);
 
