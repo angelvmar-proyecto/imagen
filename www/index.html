@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Imagen OCR</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
-    h1 { font-size: 20px; }
-    button { padding: 15px 30px; font-size: 16px; margin: 5px 0; width: 100%; }
-    #estado { color: #666; margin-top: 10px; font-size: 14px; }
-    #resultado { margin-top: 20px; font-size: 12px; }
-    #resultado img { max-width: 100%; border: 1px solid #ccc; }
-    #debug { white-space: pre-wrap; background: #ffe0e0; padding: 10px; margin-top: 10px; font-size: 11px; color: #a00; max-height: 30vh; overflow: auto; display: none; }
+    body { font-family: sans-serif; padding: 10px; background: #fafafa; }
+    h1 { font-size: 18px; }
+    button { padding: 12px; font-size: 14px; margin: 3px 0; width: 100%; }
+    #estado { color: #666; margin-top: 10px; font-size: 13px; }
+    #resultado { white-space: pre-wrap; background: #f0f0f0; padding: 8px; margin-top: 10px; font-size: 12px; max-height: 30vh; overflow: auto; }
+    #debug { white-space: pre-wrap; background: #ffe0e0; padding: 8px; margin-top: 8px; font-size: 10px; color: #a00; max-height: 25vh; overflow: auto; display: none; }
+    #panelPruebas { margin: 10px 0; padding: 8px; background: #e8f4ff; border: 1px solid #a0c8e8; }
+    #panelPruebas button { background: #d0e8ff; font-size: 11px; padding: 6px; }
   </style>
 </head>
 <body>
@@ -19,23 +20,15 @@
   <button id="btnCamara">📷 Tomar Foto</button>
   <button id="btnGaleria">🖼️ Elegir de Galería</button>
   <div id="estado">Cargando...</div>
+  <div id="panelPruebas">
+    <strong>Probar configuraciones de modelo:</strong>
+  </div>
   <div id="resultado"></div>
   <div id="debug"></div>
-
   <script>
     window.addEventListener('error', (e) => {
       const dbg = document.getElementById('debug');
-      if (dbg) {
-        dbg.style.display = 'block';
-        dbg.textContent += `[ERROR GLOBAL] ${e.message}\n  en ${e.filename}:${e.lineno}\n\n`;
-      }
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      const dbg = document.getElementById('debug');
-      if (dbg) {
-        dbg.style.display = 'block';
-        dbg.textContent += `[PROMESA] ${e.reason}\n\n`;
-      }
+      if (dbg) { dbg.style.display = 'block'; dbg.textContent += `[ERROR GLOBAL] ${e.message}\n\n`; }
     });
   </script>
   <script type="module" src="/js/app.js"></script>
