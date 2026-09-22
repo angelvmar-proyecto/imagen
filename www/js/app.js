@@ -5,7 +5,6 @@ import { PaddleOCR } from '@paddleocr/paddleocr-js';
 const estado = document.getElementById('estado');
 const resultado = document.getElementById('resultado');
 const debug = document.getElementById('debug');
-const panelPruebas = document.getElementById('panelPruebas');
 
 let ocr = null;
 
@@ -22,51 +21,30 @@ function logError(msg) {
   }
 }
 
-// Las 10 variantes a probar
-const variantes = [
-  { nombre: "v5_mobile_det/rec", fn: () => PaddleOCR.create({ textDetectionModelName: "PP-OCRv5_mobile_det", textRecognitionModelName: "PP-OCRv5_mobile_rec" }) },
-  { nombre: "v6_small via lang", fn: () => PaddleOCR.create({ lang: "ch", ocrVersion: "PP-OCRv6" }) },
-  { nombre: "v6_tiny via lang", fn: () => PaddleOCR.create({ lang: "ch", ocrVersion: "PP-OCRv6_tiny" }) },
-  { nombre: "v6_tiny_det/rec", fn: () => PaddleOCR.create({ textDetectionModelName: "PP-OCRv6_tiny_det", textRecognitionModelName: "PP-OCRv6_tiny_rec" }) },
-  { nombre: "v6_small_det/rec", fn: () => PaddleOCR.create({ textDetectionModelName: "PP-OCRv6_small_det", textRecognitionModelName: "PP-OCRv6_small_rec" }) },
-  { nombre: "v5_server_det/rec", fn: () => PaddleOCR.create({ textDetectionModelName: "PP-OCRv5_server_det", textRecognitionModelName: "PP-OCRv5_server_rec" }) },
-  { nombre: "v5_mobile via lang ch", fn: () => PaddleOCR.create({ lang: "ch", ocrVersion: "PP-OCRv5" }) },
-  { nombre: "v5_mobile via lang en", fn: () => PaddleOCR.create({ lang: "en", ocrVersion: "PP-OCRv5" }) },
-  { nombre: "v6_small via lang es", fn: () => PaddleOCR.create({ lang: "es", ocrVersion: "PP-OCRv6" }) },
-  { nombre: "v6_small via lang en", fn: () => PaddleOCR.create({ lang: "en", ocrVersion: "PP-OCRv6" }) }
-];
+// Inicializar OCR con el modelo integrado PP-OCRv6 (soporta español)
+async function initOCR() {
+  if (ocr) return;
 
-// Crear botones de prueba
-if (panelPruebas) {
-  variantes.forEach((v, i) => {
-    const btn = document.createElement('button');
-    btn.textContent = `Probar: ${v.nombre}`;
-    btn.style.padding = '8px';
-    btn.style.fontSize = '12px';
-    btn.style.margin = '2px';
-    btn.onclick = async () => {
-      ocr = null;
-      log(`Probando: ${v.nombre}...`);
-      try {
-        ocr = await v.fn();
-        log(`✅ FUNCIONA: ${v.nombre}`);
-        resultado.textContent = `Configuración exitosa:\n${v.nombre}`;
-      } catch (e) {
-        log(`❌ Falló: ${v.nombre}`);
-        logError(`Error [${v.nombre}]: ${e.message}`);
+  log('Cargando modelo OCR...');
+  try {
+    ocr = await PaddleOCR.create({
+      lang: "ch", // 'ch' usa el modelo v6 que incluye latino (español)
+      ocrVersion: "PP-OCRv6",
+      ortOptions: {
+        backend: "wasm"
       }
-    };
-    panelPruebas.appendChild(btn);
-  });
+    });
+    log('Modelo cargado. Listo para escanear.');
+  } catch (error) {
+    logError(`Error al cargar: ${error.message}`);
+  }
 }
 
-// Funciones de OCR (solo funcionan si ocr está cargado)
 async function runOCR(imageUri) {
-  if (!ocr) {
-    logError('❌ Primero carga un modelo con los botones de prueba.');
-    return;
-  }
   try {
+    await initOCR();
+    if (!ocr) return;
+
     log('Preparando imagen...');
     const imageBase64 = await Filesystem.readFile({ path: imageUri, directory: Directory.Data });
     const img = new Image();
@@ -74,8 +52,10 @@ async function runOCR(imageUri) {
     await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
     const response = await fetch(img.src);
     const blob = await response.blob();
+
     log('Ejecutando OCR...');
     const [result] = await ocr.predict(blob);
+
     log('Completado');
     resultado.textContent = result.text || '(sin texto detectado)';
   } catch (error) {
@@ -83,7 +63,7 @@ async function runOCR(imageUri) {
   }
 }
 
-// Botones de cámara/galería
+// Botones
 document.getElementById('btnCamara').addEventListener('click', async () => {
   try {
     log('Abriendo cámara...');
@@ -102,4 +82,4 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
-log('app.js cargado. Prueba las variantes en el panel.');
+log('app.js cargado. Pulsa un botón.');
