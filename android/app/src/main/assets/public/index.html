@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Imagen OCR</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+    h1 { font-size: 20px; }
+    button { padding: 15px 30px; font-size: 18px; margin: 10px 0; width: 100%; }
+    #resultado { white-space: pre-wrap; background: #f0f0f0; padding: 10px; margin-top: 20px; font-size: 12px; max-height: 60vh; overflow: auto; }
+    #estado { color: #666; margin-top: 10px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <h1>OCR Timeshare</h1>
+  <button id="btnEscanear">📷 Escanear Tabla</button>
+  <div id="estado">Listo</div>
+  <div id="resultado"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
