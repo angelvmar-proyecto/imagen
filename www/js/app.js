@@ -21,18 +21,14 @@ function logError(msg) {
   }
 }
 
-// Inicializar OCR con el modelo integrado PP-OCRv6 (soporta español)
 async function initOCR() {
   if (ocr) return;
-
-  log('Cargando modelo OCR...');
+  log('Cargando modelo OCR (inglés)...');
   try {
     ocr = await PaddleOCR.create({
-      lang: "ch", // 'ch' usa el modelo v6 que incluye latino (español)
-      ocrVersion: "PP-OCRv6",
-      ortOptions: {
-        backend: "wasm"
-      }
+      lang: "en",
+      ocrVersion: "PP-OCRv5",
+      ortOptions: { backend: "wasm" }
     });
     log('Modelo cargado. Listo para escanear.');
   } catch (error) {
@@ -44,7 +40,6 @@ async function runOCR(imageUri) {
   try {
     await initOCR();
     if (!ocr) return;
-
     log('Preparando imagen...');
     const imageBase64 = await Filesystem.readFile({ path: imageUri, directory: Directory.Data });
     const img = new Image();
@@ -52,10 +47,8 @@ async function runOCR(imageUri) {
     await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
     const response = await fetch(img.src);
     const blob = await response.blob();
-
     log('Ejecutando OCR...');
     const [result] = await ocr.predict(blob);
-
     log('Completado');
     resultado.textContent = result.text || '(sin texto detectado)';
   } catch (error) {
@@ -63,7 +56,6 @@ async function runOCR(imageUri) {
   }
 }
 
-// Botones
 document.getElementById('btnCamara').addEventListener('click', async () => {
   try {
     log('Abriendo cámara...');
