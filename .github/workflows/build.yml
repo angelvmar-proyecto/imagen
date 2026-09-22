@@ -30,6 +30,12 @@ jobs:
       - name: Capacitor sync
         run: npx cap sync android
 
+      - name: Eliminar referencia a cordova-android-plugins
+        run: |
+          sed -i '/cordova-android-plugins/d' android/app/capacitor.build.gradle
+          echo "=== capacitor.build.gradle después del fix ==="
+          cat android/app/capacitor.build.gradle
+
       - name: Build debug APK
         working-directory: android
         run: |
