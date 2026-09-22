@@ -28,7 +28,7 @@ async function initOCR() {
     // 'latin' incluye español, inglés, francés, etc.
     ocr = await PaddleOCR.create({
       lang: 'es', 
-      ocrVersion: 'PP-OCRv5',
+      ocrVersion: 'PP-OCRv6',
       ortOptions: {
         backend: 'wasm' // Forzamos WASM en lugar de WebGPU para compatibilidad
       }
