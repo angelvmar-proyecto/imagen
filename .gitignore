@@ -3,3 +3,5 @@
 package-lock.json
 android/capacitor-cordova-android-plugins/
 android/app/src/main/assets/public/
+dist/models/*.tar
+www/models/*.tar
