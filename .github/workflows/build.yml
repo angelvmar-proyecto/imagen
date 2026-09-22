@@ -27,8 +27,17 @@ jobs:
         run: |
           rm -f package-lock.json
           npm install --legacy-peer-deps --no-package-lock
-          # Forzar binarios nativos de Linux (bug de npm con deps opcionales)
           npm install --no-save --force @rollup/rollup-linux-x64-gnu @esbuild/linux-x64
+
+      - name: Patch ONNX plugin (compileSdk 36 + Java 21)
+        run: |
+          FILE="node_modules/@cantoo/capacitor-onnx/android/build.gradle"
+          sed -i 's/compileSdk 34/compileSdk 36/g' "$FILE"
+          sed -i 's/targetSdk 34/targetSdk 36/g' "$FILE"
+          sed -i 's/JavaVersion.VERSION_17/JavaVersion.VERSION_21/g' "$FILE"
+          sed -i "s/jvmTarget = '17'/jvmTarget = '21'/g" "$FILE"
+          echo "=== build.gradle del plugin ONNX después del parche ==="
+          grep -E "compileSdk|targetSdk|JavaVersion|jvmTarget" "$FILE"
 
       - name: Build web (Vite)
         run: npm run build
