@@ -1,0 +1,10 @@
+model_name: my_rec_model
+PreProcess:
+  transform_ops:
+    - DecodeImage:
+        channel_first: false
+        img_mode: BGR
+    - RecResizeImg:
+        image_shape: [3, 48, 320]
+PostProcess:
+  name: CTCLabelDecode
