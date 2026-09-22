@@ -6,5 +6,9 @@
 	{
 		"pkg": "@capacitor/filesystem",
 		"classpath": "com.capacitorjs.plugins.filesystem.FilesystemPlugin"
+	},
+	{
+		"pkg": "@cantoo/capacitor-onnx",
+		"classpath": "com.cantoo.capacitor.onnx.CapacitorOnnxPlugin"
 	}
 ]

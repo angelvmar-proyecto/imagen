@@ -7,3 +7,6 @@ project(':capacitor-camera').projectDir = new File('../node_modules/@capacitor/c
 
 include ':capacitor-filesystem'
 project(':capacitor-filesystem').projectDir = new File('../node_modules/@capacitor/filesystem/android')
+
+include ':cantoo-capacitor-onnx'
+project(':cantoo-capacitor-onnx').projectDir = new File('../node_modules/@cantoo/capacitor-onnx/android')
