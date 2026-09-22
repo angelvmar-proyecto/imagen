@@ -14,6 +14,10 @@ export default defineConfig({
         {
           src: resolve(__dirname, 'node_modules/onnxruntime-web/dist/*.wasm'),
           dest: '.'
+        },
+        {
+          src: resolve(__dirname, 'www/models/*'),
+          dest: 'models'
         }
       ]
     })

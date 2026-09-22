@@ -23,20 +23,22 @@ function logError(msg) {
 
 async function initOCR() {
   if (ocr) return;
-  log('Cargando modelo OCR (inglés)...');
+  log('Cargando modelo OCR desde archivos locales...');
   try {
     ocr = await PaddleOCR.create({
-      lang: "en",
-      ocrVersion: "PP-OCRv5",
+      // Usar rutas locales en lugar de lang/ocrVersion
+      textDetectionModelAsset: "/models/det.onnx",
+      textRecognitionModelAsset: "/models/en_rec.onnx",
+      // El diccionario también puede ser necesario
+      textRecognitionCharactersDictionaryAsset: "/models/en_dict.txt",
       ortOptions: { backend: "wasm" }
     });
-    log('Modelo cargado. Listo para escanear.');
+    log('Modelo cargado. Listo.');
   } catch (error) {
     logError(`Error al cargar: ${error.message}`);
   }
 }
 
-// Guarda la imagen y devuelve SOLO el nombre del archivo
 async function guardarImagen(foto) {
   const fileName = `ocr_${Date.now()}.jpeg`;
   await Filesystem.writeFile({
@@ -44,7 +46,7 @@ async function guardarImagen(foto) {
     data: foto.base64String,
     directory: Directory.Data
   });
-  return fileName; // ← Solo el nombre, no la URI completa
+  return fileName;
 }
 
 async function runOCR(fileName) {
@@ -53,8 +55,6 @@ async function runOCR(fileName) {
     if (!ocr) return;
 
     log('Preparando imagen...');
-
-    // Leer usando SOLO el nombre del archivo
     const imageBase64 = await Filesystem.readFile({
       path: fileName,
       directory: Directory.Data
@@ -105,4 +105,4 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
-log('app.js cargado. Pulsa un botón.');
+log('app.js cargado.');
