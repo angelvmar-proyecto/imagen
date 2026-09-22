@@ -8,13 +8,13 @@
     "open": "npx cap open android"
   },
   "dependencies": {
-    "@capacitor/core": "^8.3.1",
-    "@capacitor/camera": "^8.0.0",
-    "@capacitor/filesystem": "^8.0.0",
-    "@cantoo/capacitor-onnx": "^3.2.3"
+    "@capacitor/core": "8.5.2",
+    "@capacitor/camera": "8.0.0",
+    "@capacitor/filesystem": "8.0.0",
+    "@cantoo/capacitor-onnx": "3.2.3"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.3.1",
-    "@capacitor/android": "^8.3.1"
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/android": "8.5.2"
   }
 }
