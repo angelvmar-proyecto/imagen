@@ -25,23 +25,22 @@ function logError(msg) {
   }
 }
 
-// -------------------------------------------------------------
-// Barra de progreso
-// -------------------------------------------------------------
-function mostrarBarra(visible) {
-  barraContenedor.style.display = visible ? 'block' : 'none';
-  barraTexto.textContent = '';
+function logDiag(nombre, valor) {
+  const msg = `[DIAG ${nombre}] ${JSON.stringify(valor)}`;
+  console.log(msg);
+  if (debug) {
+    debug.style.display = 'block';
+    debug.textContent += msg + '\n';
+  }
 }
 
-function setProgreso(porcentaje, texto) {
-  barraProgreso.style.width = porcentaje + '%';
-  barraProgreso.textContent = porcentaje + '%';
-  if (texto) barraTexto.textContent = texto;
+function mostrarBarra(v) { barraContenedor.style.display = v ? 'block' : 'none'; }
+function setProgreso(p, t) {
+  barraProgreso.style.width = p + '%';
+  barraProgreso.textContent = p + '%';
+  if (t) barraTexto.textContent = t;
 }
 
-// -------------------------------------------------------------
-// Inicialización del OCR
-// -------------------------------------------------------------
 async function initOCR() {
   if (ocr) return;
   log('Cargando modelo OCR...');
@@ -55,6 +54,7 @@ async function initOCR() {
       textRecognitionModelAsset: { url: "/models/my_rec_model.tar" },
       ortOptions: { backend: "wasm" }
     });
+    logDiag("INIT", "OK");
     setProgreso(10, 'Modelo cargado');
     log('Modelo cargado. Listo.');
   } catch (error) {
@@ -63,16 +63,12 @@ async function initOCR() {
   }
 }
 
-// -------------------------------------------------------------
-// Redimensionar imagen
-// -------------------------------------------------------------
-async function redimensionarImagen(base64, maxLado = 1024) {
+async function redimensionarImagen(base64, maxLado = 800) {
   const img = new Image();
   img.src = `data:image/jpeg;base64,${base64}`;
   await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
 
-  let w = img.width;
-  let h = img.height;
+  let w = img.width, h = img.height;
   if (w > maxLado || h > maxLado) {
     const escala = Math.min(maxLado / w, maxLado / h);
     w = Math.round(w * escala);
@@ -86,92 +82,134 @@ async function redimensionarImagen(base64, maxLado = 1024) {
   ctx.drawImage(img, 0, 0, w, h);
 
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
+    canvas.toBlob((blob) => resolve({ blob, w, h }), 'image/jpeg', 0.7);
   });
 }
 
-// -------------------------------------------------------------
-// Mostrar resultados en tabla estilo Excel
-// -------------------------------------------------------------
 function mostrarTabla(texto) {
-  // Limpiar tabla anterior
   tablaResultado.innerHTML = '';
-
   if (!texto || !texto.trim()) {
     resultado.style.display = 'block';
     resultado.textContent = '(sin texto detectado)';
     return;
   }
-
-  // Dividir por líneas y luego por espacios múltiples o tabulaciones
   const lineas = texto.split(/\r?\n/).filter(l => l.trim());
-
   lineas.forEach((linea, i) => {
     const tr = document.createElement('tr');
     const tdNum = document.createElement('td');
     tdNum.className = 'col-num';
     tdNum.textContent = i + 1;
     tr.appendChild(tdNum);
-
-    // Dividir por 2+ espacios o tabulaciones
-    const celdas = linea.split(/\t+|\s{2,}/);
-
-    celdas.forEach(celda => {
+    linea.split(/\t+|\s{2,}/).forEach(celda => {
       const td = document.createElement('td');
       td.textContent = celda.trim();
       tr.appendChild(td);
     });
-
     tablaResultado.appendChild(tr);
   });
-
   tablaContenedor.style.display = 'block';
-  // También mostrar el texto plano como respaldo
   resultado.style.display = 'block';
   resultado.textContent = texto;
 }
 
-// -------------------------------------------------------------
-// Pipeline principal
-// -------------------------------------------------------------
 async function runOCR(base64) {
   try {
     await initOCR();
     if (!ocr) return;
 
-    setProgreso(15, 'Redimensionando imagen...');
-    log('Redimensionando imagen...');
-    const blob = await redimensionarImagen(base64, 1024);
-    log('Imagen lista: ' + Math.round(blob.size / 1024) + ' KB');
+    // ===================== DIAGNÓSTICO 1: Imagen original =====================
+    logDiag("1_IMAGEN_ORIGINAL", {
+      bytes: Math.round(base64.length * 0.75),
+      kb: Math.round(base64.length * 0.75 / 1024)
+    });
 
+    // ===================== DIAGNÓSTICO 2: Redimensión =====================
+    setProgreso(15, 'Redimensionando imagen...');
+    const { blob, w, h } = await redimensionarImagen(base64, 800);
+    logDiag("2_IMAGEN_REDIMENSIONADA", {
+      ancho: w,
+      alto: h,
+      kb: Math.round(blob.size / 1024)
+    });
+
+    // ===================== DIAGNÓSTICO 3: Tipo de blob =====================
+    logDiag("3_BLOB_TYPE", { type: blob.type, size: blob.size });
+
+    // ===================== DIAGNÓSTICO 4: Inicio del OCR =====================
+    logDiag("4_INICIO_OCR", "enviando blob a paddleocr");
     setProgreso(25, 'Ejecutando OCR...');
     const inicio = Date.now();
-
-    // Contador de tiempo mientras corre el OCR
     const intervalId = setInterval(() => {
       const seg = Math.floor((Date.now() - inicio) / 1000);
-      // Simular avance entre 25% y 90%
-      const pct = Math.min(90, 25 + seg * 3);
-      setProgreso(pct, `Ejecutando OCR... ${seg}s (puede tardar 60-90s la primera vez)`);
+      setProgreso(Math.min(90, 25 + seg * 3), `Ejecutando OCR... ${seg}s`);
     }, 1000);
 
-    setProgreso(25, 'Ejecutando OCR...');
-    const [result] = await ocr.predict(blob);
-
+    // ===================== DIAGNÓSTICO 5: Probar sin parámetros =====================
+    logDiag("5_LLAMADA_OCR", "sin parámetros extra");
+    const resultadoCrudo = await ocr.predict(blob);
     clearInterval(intervalId);
+
     const segundos = Math.round((Date.now() - inicio) / 1000);
+    logDiag("6_TIEMPO_OCR", { segundos });
+
+    // ===================== DIAGNÓSTICO 7: Estructura completa del resultado =====================
+    logDiag("7_RESULTADO_TIPO", typeof resultadoCrudo);
+    logDiag("8_RESULTADO_KEYS", resultadoCrudo ? Object.keys(resultadoCrudo) : "null");
+
+    // ===================== DIAGNÓSTICO 9: Contenido completo =====================
+    try {
+      logDiag("9_RESULTADO_COMPLETO", JSON.stringify(resultadoCrudo).substring(0, 2000));
+    } catch (e) {
+      logDiag("9_RESULTADO_ERROR", "no se puede stringificar: " + e.message);
+    }
+
+    // ===================== DIAGNÓSTICO 10: Análisis detallado =====================
+    if (resultadoCrudo) {
+      // Si es array
+      if (Array.isArray(resultadoCrudo)) {
+        logDiag("10_ES_ARRAY", { length: resultadoCrudo.length });
+        resultadoCrudo.forEach((item, idx) => {
+          logDiag(`10_ITEM_${idx}`, {
+            keys: item ? Object.keys(item) : "null",
+            text: item?.text,
+            items: item?.items ? item.items.length : 0
+          });
+        });
+      } 
+      // Si es objeto
+      else if (typeof resultadoCrudo === 'object') {
+        logDiag("10_ES_OBJETO", {
+          text: resultadoCrudo.text,
+          tieneItems: !!resultadoCrudo.items,
+          itemsLength: resultadoCrudo.items ? resultadoCrudo.items.length : 0
+        });
+      }
+    }
+
+    // ===================== MOSTRAR RESULTADO =====================
     setProgreso(100, `OCR completado en ${segundos}s`);
     log(`OCR completado en ${segundos}s`);
 
-    // Mostrar resultados
-    if (result && result.text) {
-      mostrarTabla(result.text);
-    } else {
-      resultado.style.display = 'block';
-      resultado.textContent = '(sin texto detectado)';
+    // Extraer texto de múltiples formas posibles
+    let textoFinal = '';
+
+    if (Array.isArray(resultadoCrudo) && resultadoCrudo[0]) {
+      textoFinal = resultadoCrudo[0].text || '';
+    } else if (resultadoCrudo && resultadoCrudo.text) {
+      textoFinal = resultadoCrudo.text;
+    } else if (resultadoCrudo && resultadoCrudo.items && resultadoCrudo.items.length > 0) {
+      textoFinal = resultadoCrudo.items.map(i => i.text).join('\n');
     }
 
-    // Ocultar barra después de 3 segundos
+    logDiag("TEXTO_FINAL", { length: textoFinal.length, preview: textoFinal.substring(0, 200) });
+
+    if (textoFinal) {
+      mostrarTabla(textoFinal);
+    } else {
+      resultado.style.display = 'block';
+      resultado.textContent = '(sin texto detectado - revisa los DIAG arriba)';
+    }
+
     setTimeout(() => mostrarBarra(false), 3000);
 
   } catch (error) {
@@ -181,17 +219,12 @@ async function runOCR(base64) {
   }
 }
 
-// -------------------------------------------------------------
-// Botones
-// -------------------------------------------------------------
 document.getElementById('btnCamara').addEventListener('click', async () => {
   try {
     log('Abriendo cámara...');
     const foto = await Camera.getPhoto({
-      quality: 70,
-      allowEditing: false,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Camera
+      quality: 70, allowEditing: false,
+      resultType: CameraResultType.Base64, source: CameraSource.Camera
     });
     await runOCR(foto.base64String);
   } catch (error) { logError(`Error cámara: ${error.message}`); }
@@ -201,10 +234,8 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   try {
     log('Abriendo galería...');
     const foto = await Camera.getPhoto({
-      quality: 70,
-      allowEditing: false,
-      resultType: CameraResultType.Base64,
-      source: CameraSource.Photos
+      quality: 70, allowEditing: false,
+      resultType: CameraResultType.Base64, source: CameraSource.Photos
     });
     await runOCR(foto.base64String);
   } catch (error) { logError(`Error galería: ${error.message}`); }
