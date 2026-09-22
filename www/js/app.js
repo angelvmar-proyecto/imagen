@@ -1,92 +1,134 @@
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Filesystem, Directory } from '@capacitor/filesystem';
-import { CapacitorONNX } from '@cantoo/capacitor-onnx';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { PaddleOcrService } from 'paddleocr';
+import * as ort from 'onnxruntime-web';
 
 const btn = document.getElementById('btnEscanear');
 const estado = document.getElementById('estado');
 const resultado = document.getElementById('resultado');
 
-let sessionId = null;
+let paddleOcrService = null;
 
-async function initONNX() {
-  if (sessionId) return sessionId;
-  estado.textContent = 'Cargando modelo ONNX...';
-  const modelPath = 'models/ocr_model.onnx';
-  sessionId = await CapacitorONNX.loadModel({
-    modelPath: modelPath,
-    executionProvider: 'cpu'
-  });
-  estado.textContent = 'Modelo cargado';
-  return sessionId;
-}
-
-async function preprocessImage(imageUri) {
-  const imageData = await Filesystem.readFile({
-    path: imageUri,
-    directory: Directory.Data
-  });
-
-  const img = new Image();
-  img.src = `data:image/jpeg;base64,${imageData.data}`;
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = reject;
-  });
-
-  const targetW = 640;
-  const targetH = 640;
-  const canvas = document.createElement('canvas');
-  canvas.width = targetW;
-  canvas.height = targetH;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, targetW, targetH);
-
-  const imageDataObj = ctx.getImageData(0, 0, targetW, targetH);
-  const data = imageDataObj.data;
-  const float32Data = new Float32Array(1 * 3 * targetH * targetW);
-  const mean = [0.485, 0.456, 0.406];
-  const std = [0.229, 0.224, 0.225];
-
-  for (let h = 0; h < targetH; h++) {
-    for (let w = 0; w < targetW; w++) {
-      const idx = (h * targetW + w) * 4;
-      for (let c = 0; c < 3; c++) {
-        const value = data[idx + c] / 255.0;
-        const normalized = (value - mean[c]) / std[c];
-        const tensorIdx = c * (targetH * targetW) + h * targetW + w;
-        float32Data[tensorIdx] = normalized;
-      }
-    }
+// Utilidad para convertir base64 a ArrayBuffer
+function base64ToArrayBuffer(base64) {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
-
-  return { data: float32Data, dims: [1, 3, targetH, targetW] };
+  return bytes.buffer;
 }
 
-async function runOCR(imageUri) {
+// Inicialización: Cargar modelos y diccionario
+async function initOCR() {
+  if (paddleOcrService) return;
+
+  estado.textContent = 'Cargando modelos ONNX... (esto puede tardar)';
+
   try {
-    estado.textContent = 'Preprocesando imagen...';
-    const inputTensor = await preprocessImage(imageUri);
-
-    estado.textContent = 'Ejecutando ONNX...';
-    const sid = await initONNX();
-
-    const output = await CapacitorONNX.runInference({
-      sessionId: sid,
-      inputName: 'input',
-      inputData: Array.from(inputTensor.data),
-      inputDims: inputTensor.dims
+    // Leer modelos como base64 (los archivos están en www/models/)
+    const detBase64 = await Filesystem.readFile({
+      path: 'public/models/det.onnx',
+      directory: Directory.Data
+    });
+    
+    const recBase64 = await Filesystem.readFile({
+      path: 'public/models/rec.onnx',
+      directory: Directory.Data
     });
 
-    estado.textContent = 'Completado';
-    resultado.textContent = JSON.stringify(output, null, 2);
+    // Leer el diccionario como texto
+    const dictText = await Filesystem.readFile({
+      path: 'public/models/latin_dict.txt',
+      directory: Directory.Data,
+      encoding: Encoding.UTF8
+    });
+
+    const charactersDictionary = dictText.data.trimEnd().split(/\r?\n/);
+
+    // Inicializar el servicio de PaddleOCR
+    paddleOcrService = await PaddleOcrService.createInstance({
+      ort,
+      detection: {
+        modelBuffer: base64ToArrayBuffer(detBase64.data),
+      },
+      recognition: {
+        modelBuffer: base64ToArrayBuffer(recBase64.data),
+        charactersDictionary: charactersDictionary,
+        imageHeight: 48,
+      },
+    });
+
+    estado.textContent = 'Modelos cargados. Listo para escanear.';
   } catch (error) {
-    estado.textContent = 'Error: ' + error.message;
+    estado.textContent = `Error al cargar modelos: ${error.message}`;
     console.error(error);
   }
 }
 
+// Pipeline principal de OCR
+async function runOCR(imageUri) {
+  try {
+    await initOCR();
+    if (!paddleOcrService) return;
+
+    estado.textContent = 'Preparando imagen...';
+
+    // Leer la imagen capturada como base64
+    const imageBase64 = await Filesystem.readFile({
+      path: imageUri,
+      directory: Directory.Data
+    });
+
+    // Crear un elemento imagen para obtener los datos de píxeles
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${imageBase64.data}`;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    // Dibujar en canvas para obtener ImageData (RGB)
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+
+    estado.textContent = 'Ejecutando OCR...';
+
+    // PaddleOCR espera un objeto con width, height y data (Uint8Array)
+    const result = await paddleOcrService.recognize({
+      width: imageData.width,
+      height: imageData.height,
+      data: imageData.data, // RGBA Uint8Array
+    }, {
+      onProgress(event) {
+        if (event.type === 'rec' && event.stage === 'item') {
+          estado.textContent = `Reconociendo: ${event.result?.text || ''}`;
+        }
+      }
+    });
+
+    // Extraer el texto final
+    const finalText = paddleOcrService.processRecognition(result).text;
+    
+    estado.textContent = 'Completado';
+    resultado.textContent = finalText;
+
+  } catch (error) {
+    estado.textContent = `Error: ${error.message}`;
+    console.error(error);
+  }
+}
+
+// Evento del botón
 btn.addEventListener('click', async () => {
   try {
+    await initOCR();
+    
     estado.textContent = 'Abriendo cámara...';
     const foto = await Camera.getPhoto({
       quality: 90,
@@ -103,7 +145,7 @@ btn.addEventListener('click', async () => {
 
     await runOCR(savedFile.uri);
   } catch (error) {
-    estado.textContent = 'Error: ' + error.message;
+    estado.textContent = `Error: ${error.message}`;
     console.error(error);
   }
 });
