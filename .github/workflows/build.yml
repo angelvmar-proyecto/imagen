@@ -30,16 +30,15 @@ jobs:
       - name: Capacitor sync
         run: npx cap sync android
 
-      - name: Eliminar referencia a cordova-android-plugins
+      - name: Limpiar caché de Gradle
+        working-directory: android
         run: |
-          sed -i '/cordova-android-plugins/d' android/app/capacitor.build.gradle
-          echo "=== capacitor.build.gradle después del fix ==="
-          cat android/app/capacitor.build.gradle
+          chmod +x gradlew
+          ./gradlew clean --no-daemon
 
       - name: Build debug APK
         working-directory: android
         run: |
-          chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
