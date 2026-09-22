@@ -1,7 +1,7 @@
 {
   "appId": "com.angelvmar.imagen",
   "appName": "Imagen OCR",
-  "webDir": "www",
+  "webDir": "dist",
   "server": {
     "androidScheme": "https"
   }

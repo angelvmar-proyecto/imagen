@@ -1,9 +1,5 @@
 [
 	{
-		"pkg": "@cantoo/capacitor-onnx",
-		"classpath": "com.cantoo.capacitor.onnx.CapacitorOnnxPlugin"
-	},
-	{
 		"pkg": "@capacitor/camera",
 		"classpath": "com.capacitorjs.plugins.camera.CameraPlugin"
 	},

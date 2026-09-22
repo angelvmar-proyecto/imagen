@@ -1,9 +1,12 @@
-// SIN IMPORTS — usamos window.Capacitor.Plugins
-// Capacitor expone los plugins globalmente cuando corre en Android/iOS.
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { PaddleOCR } from '@paddleocr/paddleocr-js';
 
 const estado = document.getElementById('estado');
 const resultado = document.getElementById('resultado');
 const debug = document.getElementById('debug');
+
+let ocr = null;
 
 function log(msg) {
   console.log(msg);
@@ -16,50 +19,98 @@ function logError(msg) {
   debug.textContent += `[app.js] ${msg}\n`;
 }
 
-log('app.js cargado');
+// Inicializar PaddleOCR (Español)
+async function initOCR() {
+  if (ocr) return;
 
-// Acceder a los plugins de Capacitor desde window
-const CapacitorPlugins = window.Capacitor?.Plugins;
-if (!CapacitorPlugins) {
-  logError('❌ window.Capacitor.Plugins no está disponible');
-} else {
-  log('✅ Plugins de Capacitor detectados: ' + Object.keys(CapacitorPlugins).join(', '));
+  log('Cargando modelos OCR... (~20s la primera vez)');
+  try {
+    // 'latin' incluye español, inglés, francés, etc.
+    ocr = await PaddleOCR.create({
+      lang: 'latin', 
+      ocrVersion: 'PP-OCRv5',
+      ortOptions: {
+        backend: 'wasm' // Forzamos WASM en lugar de WebGPU para compatibilidad
+      }
+    });
+    log('Modelos cargados. Listo.');
+  } catch (error) {
+    logError(`Error al cargar modelos: ${error.message}`);
+  }
 }
 
-const { Camera, Filesystem } = CapacitorPlugins || {};
+async function runOCR(imageUri) {
+  try {
+    await initOCR();
+    if (!ocr) return;
 
-const btn = document.getElementById('btnEscanear');
-if (!btn) {
-  logError('❌ No se encontró #btnEscanear');
-} else {
-  log('✅ Botón encontrado. Listo.');
+    log('Preparando imagen...');
+    const imageBase64 = await Filesystem.readFile({
+      path: imageUri,
+      directory: Directory.Data
+    });
+
+    const img = new Image();
+    img.src = `data:image/jpeg;base64,${imageBase64.data}`;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+
+    // Convertir a Blob para PaddleOCR
+    const response = await fetch(img.src);
+    const blob = await response.blob();
+
+    log('Ejecutando OCR...');
+    const [result] = await ocr.predict(blob);
+
+    log('Completado');
+    resultado.textContent = result.text || '(sin texto detectado)';
+    
+  } catch (error) {
+    logError(`Error OCR: ${error.message}`);
+  }
 }
 
-if (btn && Camera && Filesystem) {
-  btn.addEventListener('click', async () => {
-    try {
-      log('Abriendo cámara...');
+// Botones
+document.getElementById('btnCamara').addEventListener('click', async () => {
+  try {
+    log('Abriendo cámara...');
+    const foto = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Camera
+    });
+    const savedFile = await Filesystem.writeFile({
+      path: `ocr_${Date.now()}.jpeg`,
+      data: foto.base64String,
+      directory: Directory.Data
+    });
+    await runOCR(savedFile.uri);
+  } catch (error) {
+    logError(`Error cámara: ${error.message}`);
+  }
+});
 
-      const foto = await Camera.getPhoto({
-        quality: 90,
-        allowEditing: false,
-        resultType: 'base64',           // string en vez de enum
-        source: 'CAMERA'                 // string en vez de enum
-      });
+document.getElementById('btnGaleria').addEventListener('click', async () => {
+  try {
+    log('Abriendo galería...');
+    const foto = await Camera.getPhoto({
+      quality: 90,
+      allowEditing: false,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Photos
+    });
+    const savedFile = await Filesystem.writeFile({
+      path: `ocr_${Date.now()}.jpeg`,
+      data: foto.base64String,
+      directory: Directory.Data
+    });
+    await runOCR(savedFile.uri);
+  } catch (error) {
+    logError(`Error galería: ${error.message}`);
+  }
+});
 
-      log('✅ Foto capturada. ' + (foto.base64String?.length || 0) + ' bytes');
-
-      const savedFile = await Filesystem.writeFile({
-        path: `ocr_${Date.now()}.jpeg`,
-        data: foto.base64String,
-        directory: 'DATA'                // string en vez de enum
-      });
-
-      log('✅ Archivo guardado: ' + savedFile.uri);
-      resultado.textContent = 'Foto capturada. OCR aún no conectado.';
-    } catch (error) {
-      logError(`Error: ${error.message || error}`);
-      console.error(error);
-    }
-  });
-}
+log('app.js cargado. Listo para escanear.');

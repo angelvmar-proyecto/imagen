@@ -1,0 +1,23 @@
+import { defineConfig } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
+
+export default defineConfig({
+  root: 'www',
+  build: {
+    outDir: '../dist',
+    emptyOutDir: true,
+  },
+  plugins: [
+    viteStaticCopy({
+      targets: [
+        {
+          src: 'node_modules/onnxruntime-web/dist/*.wasm',
+          dest: '.'
+        }
+      ]
+    })
+  ],
+  server: {
+    port: 3000,
+  },
+});

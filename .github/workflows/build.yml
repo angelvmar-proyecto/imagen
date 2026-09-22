@@ -16,7 +16,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          registry-url: 'https://registry.npmjs.org'
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -24,34 +23,13 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Limpiar caché de npm
-        run: |
-          npm cache clean --force
-          rm -rf ~/.npm
-          rm -f package-lock.json
-
       - name: Install dependencies
         run: |
-          npm config set registry https://registry.npmjs.org/
+          rm -f package-lock.json
           npm install --legacy-peer-deps --no-package-lock
 
-      - name: Verificar contenido de @capacitor/android
-        run: |
-          echo "=== Contenido de node_modules/@capacitor/android ==="
-          ls -la node_modules/@capacitor/android/
-          echo ""
-          echo "=== Versión del package.json instalado ==="
-          cat node_modules/@capacitor/android/package.json | grep version
-          echo ""
-          FILE="node_modules/@capacitor/android/capacitor/src/main/java/com/getcapacitor/plugin/SystemBars.java"
-          if [ -f "$FILE" ]; then
-            echo "✅ SystemBars.java existe ($(wc -l < $FILE) líneas)"
-          else
-            echo "❌ SystemBars.java NO existe"
-            echo "Buscando SystemBars en todo @capacitor:"
-            find node_modules/@capacitor -name "SystemBars*" 2>/dev/null || echo "No encontrado"
-            exit 1
-          fi
+      - name: Build web (Vite)
+        run: npm run build
 
       - name: Capacitor sync
         run: npx cap sync android
@@ -60,7 +38,7 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --refresh-dependencies
+          ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

@@ -2,9 +2,6 @@
 include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/@capacitor/android/capacitor')
 
-include ':cantoo-capacitor-onnx'
-project(':cantoo-capacitor-onnx').projectDir = new File('../node_modules/@cantoo/capacitor-onnx/android')
-
 include ':capacitor-camera'
 project(':capacitor-camera').projectDir = new File('../node_modules/@capacitor/camera/android')
 
