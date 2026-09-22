@@ -1,5 +1,5 @@
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
-import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { PaddleOcrService } from 'paddleocr';
 import * as ort from 'onnxruntime-web';
 
@@ -12,52 +12,36 @@ const resultado = document.getElementById('resultado');
 
 let paddleOcrService = null;
 
-// Utilidad para convertir base64 a ArrayBuffer
-function base64ToArrayBuffer(base64) {
-  const binaryString = window.atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-// Inicialización: Cargar modelos y diccionario
+// --------------------------------------------------------------
+// Inicialización: Cargar modelos ONNX solo cuando se necesiten
+// --------------------------------------------------------------
 async function initOCR() {
   if (paddleOcrService) return;
 
-  estado.textContent = 'Cargando modelos ONNX... (esto puede tardar)';
+  estado.textContent = 'Cargando modelos ONNX... (esto puede tardar ~20s la primera vez)';
 
   try {
-    // Leer modelos como base64 desde los assets de la app
-    const detBase64 = await Filesystem.readFile({
-      path: 'public/models/det.onnx',
-      directory: Directory.Data
-    });
+    // Los modelos están en www/models/ y se acceden como assets del WebView
+    const detResponse = await fetch('./models/det.onnx');
+    if (!detResponse.ok) throw new Error(`No se pudo cargar det.onnx: ${detResponse.status}`);
+    const detBuffer = await detResponse.arrayBuffer();
 
-    const recBase64 = await Filesystem.readFile({
-      path: 'public/models/rec.onnx',
-      directory: Directory.Data
-    });
+    const recResponse = await fetch('./models/rec.onnx');
+    if (!recResponse.ok) throw new Error(`No se pudo cargar rec.onnx: ${recResponse.status}`);
+    const recBuffer = await recResponse.arrayBuffer();
 
-    // Leer el diccionario como texto
-    const dictText = await Filesystem.readFile({
-      path: 'public/models/latin_dict.txt',
-      directory: Directory.Data,
-      encoding: Encoding.UTF8
-    });
+    const dictResponse = await fetch('./models/latin_dict.txt');
+    if (!dictResponse.ok) throw new Error(`No se pudo cargar latin_dict.txt: ${dictResponse.status}`);
+    const dictText = await dictResponse.text();
+    const charactersDictionary = dictText.trimEnd().split(/\r?\n/);
 
-    const charactersDictionary = dictText.data.trimEnd().split(/\r?\n/);
-
-    // Inicializar el servicio de PaddleOCR
     paddleOcrService = await PaddleOcrService.createInstance({
       ort,
       detection: {
-        modelBuffer: base64ToArrayBuffer(detBase64.data),
+        modelBuffer: detBuffer,
       },
       recognition: {
-        modelBuffer: base64ToArrayBuffer(recBase64.data),
+        modelBuffer: recBuffer,
         charactersDictionary: charactersDictionary,
         imageHeight: 48,
       },
@@ -70,7 +54,9 @@ async function initOCR() {
   }
 }
 
+// --------------------------------------------------------------
 // Pipeline principal de OCR
+// --------------------------------------------------------------
 async function runOCR(imageUri) {
   try {
     await initOCR();
@@ -78,13 +64,11 @@ async function runOCR(imageUri) {
 
     estado.textContent = 'Preparando imagen...';
 
-    // Leer la imagen capturada como base64
     const imageBase64 = await Filesystem.readFile({
       path: imageUri,
       directory: Directory.Data
     });
 
-    // Crear un elemento imagen para obtener los datos de píxeles
     const img = new Image();
     img.src = `data:image/jpeg;base64,${imageBase64.data}`;
     await new Promise((resolve, reject) => {
@@ -92,7 +76,6 @@ async function runOCR(imageUri) {
       img.onerror = reject;
     });
 
-    // Dibujar en canvas para obtener ImageData (RGBA)
     const canvas = document.createElement('canvas');
     canvas.width = img.width;
     canvas.height = img.height;
@@ -102,14 +85,12 @@ async function runOCR(imageUri) {
 
     estado.textContent = 'Ejecutando OCR...';
 
-    // PaddleOCR espera un objeto con width, height y data (Uint8Array)
     const result = await paddleOcrService.recognize({
       width: imageData.width,
       height: imageData.height,
-      data: imageData.data, // RGBA Uint8Array
+      data: imageData.data,
     });
 
-    // Extraer el texto final
     const finalText = result.text;
 
     estado.textContent = 'Completado';
@@ -121,11 +102,11 @@ async function runOCR(imageUri) {
   }
 }
 
+// --------------------------------------------------------------
 // Evento del botón
+// --------------------------------------------------------------
 btn.addEventListener('click', async () => {
   try {
-    await initOCR();
-
     estado.textContent = 'Abriendo cámara...';
     const foto = await Camera.getPhoto({
       quality: 90,
