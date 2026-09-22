@@ -1,0 +1,39 @@
+body {
+    background-color: #121212;
+    color: #e0e0e0;
+    font-family: sans-serif;
+    padding: 15px;
+    margin: 0;
+}
+.container {
+    max-width: 100%;
+}
+.card-upload {
+    background: #1e1e1e;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 15px;
+}
+input, button {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    margin-bottom: 15px;
+    padding: 10px;
+    background: #2d2d2d;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 4px;
+}
+button {
+    background: #00bcd4;
+    color: #000;
+    font-weight: bold;
+    cursor: pointer;
+}
+table th, table td {
+    padding: 8px;
+    text-align: left;
+    font-size: 12px;
+    border-color: #444;
+}
