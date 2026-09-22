@@ -27,7 +27,7 @@ jobs:
         run: |
           rm -f package-lock.json
           npm install --legacy-peer-deps --no-package-lock
-          # Forzar los binarios nativos de Linux que fallan en CI
+          # Forzar binarios nativos de Linux (bug de npm con deps opcionales)
           npm install --no-save --force @rollup/rollup-linux-x64-gnu @esbuild/linux-x64
 
       - name: Build web (Vite)
