@@ -10,27 +10,30 @@ let ocr = null;
 
 function log(msg) {
   console.log(msg);
-  estado.textContent = msg;
+  if (estado) estado.textContent = msg;
 }
 
 function logError(msg) {
   console.error(msg);
-  debug.style.display = 'block';
-  debug.textContent += `[app.js] ${msg}\n`;
+  if (debug) {
+    debug.style.display = 'block';
+    debug.textContent += `[app.js] ${msg}\n`;
+  }
 }
 
-// Inicializar PaddleOCR (Español)
+// Inicializar PaddleOCR usando nombres de modelo explícitos para PP-OCRv6
 async function initOCR() {
   if (ocr) return;
 
-  log('Cargando modelos OCR... (~20s la primera vez)');
+  log('Cargando modelos OCR (PP-OCRv6)...');
   try {
-    // 'latin' incluye español, inglés, francés, etc.
     ocr = await PaddleOCR.create({
-      lang: 'ch', 
-      ocrVersion: 'PP-OCRv6',
+      // Usamos los nombres explícitos de los modelos de PP-OCRv6,
+      // que incluyen un único modelo unificado para 50 idiomas (incluido el español).
+      textDetectionModelName: "PP-OCRv6_tiny_det",
+      textRecognitionModelName: "PP-OCRv6_tiny_rec",
       ortOptions: {
-        backend: 'wasm' // Forzamos WASM en lugar de WebGPU para compatibilidad
+        backend: "wasm" // Forzamos WASM para máxima compatibilidad
       }
     });
     log('Modelos cargados. Listo.');
@@ -57,7 +60,6 @@ async function runOCR(imageUri) {
       img.onerror = reject;
     });
 
-    // Convertir a Blob para PaddleOCR
     const response = await fetch(img.src);
     const blob = await response.blob();
 
