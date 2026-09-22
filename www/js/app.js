@@ -38,16 +38,13 @@ async function initOCR() {
   }
 }
 
-// Redimensionar la imagen a un tamaño máximo para evitar OOM
-async function redimensionarImagen(base64, maxLado = 1280) {
+async function redimensionarImagen(base64, maxLado = 1024) {
   const img = new Image();
   img.src = `data:image/jpeg;base64,${base64}`;
   await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
 
   let w = img.width;
   let h = img.height;
-
-  // Reducir si es más grande que maxLado
   if (w > maxLado || h > maxLado) {
     const escala = Math.min(maxLado / w, maxLado / h);
     w = Math.round(w * escala);
@@ -60,7 +57,6 @@ async function redimensionarImagen(base64, maxLado = 1280) {
   const ctx = canvas.getContext('2d');
   ctx.drawImage(img, 0, 0, w, h);
 
-  // Devolver como blob JPEG con calidad 0.7 (más ligero)
   return new Promise((resolve) => {
     canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.7);
   });
@@ -72,20 +68,32 @@ async function runOCR(base64) {
     if (!ocr) return;
 
     log('Redimensionando imagen...');
-    const blob = await redimensionarImagen(base64, 1280);
+    const blob = await redimensionarImagen(base64, 1024);
+    log('Imagen lista: ' + Math.round(blob.size / 1024) + ' KB');
 
-    if (!blob) {
-      logError('No se pudo redimensionar la imagen');
-      return;
-    }
+    // Contador visual mientras se ejecuta el OCR
+    const inicio = Date.now();
+    const intervalId = setInterval(() => {
+      const seg = Math.floor((Date.now() - inicio) / 1000);
+      estado.textContent = `Ejecutando OCR... ${seg}s (puede tardar hasta 90s)`;
+    }, 1000);
 
-    log('Ejecutando OCR (' + Math.round(blob.size / 1024) + ' KB)...');
+    log('Enviando a PaddleOCR...');
+    const t0 = Date.now();
     const [result] = await ocr.predict(blob);
+    const t1 = Date.now();
 
-    log('Completado');
-    resultado.textContent = result.text || '(sin texto detectado)';
+    clearInterval(intervalId);
+    log(`OCR completado en ${Math.round((t1 - t0) / 1000)}s`);
+
+    if (result && result.text) {
+      resultado.textContent = result.text;
+    } else {
+      resultado.textContent = '(sin texto detectado)';
+    }
   } catch (error) {
     logError(`Error OCR: ${error.message}`);
+    console.error(error);
   }
 }
 
@@ -93,7 +101,7 @@ document.getElementById('btnCamara').addEventListener('click', async () => {
   try {
     log('Abriendo cámara...');
     const foto = await Camera.getPhoto({
-      quality: 70, // Reducir calidad directamente desde la cámara
+      quality: 70,
       allowEditing: false,
       resultType: CameraResultType.Base64,
       source: CameraSource.Camera
