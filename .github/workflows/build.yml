@@ -27,6 +27,8 @@ jobs:
         run: |
           rm -f package-lock.json
           npm install --legacy-peer-deps --no-package-lock
+          # Forzar la instalación del binario de Rollup para Linux
+          npm install --no-save --force @rollup/rollup-linux-x64-gnu
 
       - name: Build web (Vite)
         run: npm run build
