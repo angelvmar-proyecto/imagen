@@ -3,8 +3,10 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { PaddleOcrService } from 'paddleocr';
 import * as ort from 'onnxruntime-web';
 
-// Configurar la ruta de los archivos WASM de ONNX Runtime (usando CDN)
-ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.24.3/dist/';
+// 1. Configurar ONNX Runtime para usar archivos WASM locales
+//    (esto evita problemas de CORS y rutas en el WebView)
+ort.env.wasm.wasmPaths = './wasm/';
+ort.env.wasm.numThreads = 1; // Simplifica el entorno en móvil
 
 const btn = document.getElementById('btnEscanear');
 const estado = document.getElementById('estado');
@@ -13,7 +15,7 @@ const resultado = document.getElementById('resultado');
 let paddleOcrService = null;
 
 // --------------------------------------------------------------
-// Inicialización: Cargar modelos ONNX solo cuando se necesiten
+// Inicialización: Cargar modelos ONNX
 // --------------------------------------------------------------
 async function initOCR() {
   if (paddleOcrService) return;
@@ -21,7 +23,7 @@ async function initOCR() {
   estado.textContent = 'Cargando modelos ONNX... (esto puede tardar ~20s la primera vez)';
 
   try {
-    // Los modelos están en www/models/ y se acceden como assets del WebView
+    // 2. Cargar modelos desde assets (www/models/)
     const detResponse = await fetch('./models/det.onnx');
     if (!detResponse.ok) throw new Error(`No se pudo cargar det.onnx: ${detResponse.status}`);
     const detBuffer = await detResponse.arrayBuffer();
