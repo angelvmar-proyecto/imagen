@@ -2,6 +2,7 @@
   "name": "imagen",
   "version": "1.0.0",
   "description": "OCR con ONNX Runtime para tablas de timeshare",
+  "type": "module",
   "scripts": {
     "build": "vite build",
     "sync": "npm run build && npx cap sync android",
