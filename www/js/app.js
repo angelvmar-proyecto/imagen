@@ -1,12 +1,12 @@
 // ==============================================
-// OCR Timeshare — app.js con preprocesamiento
-// PaddleOCR + CRR + BS + Retina + Contraste + Escalado
+// OCR Timeshare — app.js OPTIMIZADO
+// PaddleOCR + Preprocesamiento + Cache + Exportación
 // ==============================================
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Filesystem, Directory } from '@capacitor/filesystem';
 import { PaddleOCR } from '@paddleocr/paddleocr-js';
 
-// Referencias al DOM
 const estado = document.getElementById('estado');
 const resultado = document.getElementById('resultado');
 const debug = document.getElementById('debug');
@@ -17,6 +17,7 @@ const tablaContenedor = document.getElementById('tablaContenedor');
 const tablaResultado = document.getElementById('tablaResultado').querySelector('tbody');
 
 let ocr = null;
+let ultimoTexto = '';  // Guardar el último resultado para exportar
 
 // ==============================================
 // LOGS
@@ -57,11 +58,20 @@ function setProgreso(p, t) {
 }
 
 // ==============================================
-// INICIALIZACIÓN DEL OCR
+// CACHE DEL MODELO (Optimización 3)
 // ==============================================
+let ocrCache = null;
+
 async function initOCR() {
+  // Optimización: usar caché si ya está cargado
   if (ocr) return;
-  log('Cargando modelo OCR...');
+  if (ocrCache) {
+    ocr = ocrCache;
+    log('Modelo ya cargado (caché).');
+    return;
+  }
+
+  log('Cargando modelo OCR (~20s la primera vez)...');
   mostrarBarra(true);
   setProgreso(0, 'Cargando detector...');
   try {
@@ -72,7 +82,8 @@ async function initOCR() {
       textRecognitionModelAsset: { url: "/models/my_rec_model.tar" },
       ortOptions: { backend: "wasm" }
     });
-    logDiag("INIT", "OK");
+    ocrCache = ocr;  // Guardar en caché
+    logDiag("INIT", "OK (cacheado)");
     setProgreso(5, 'Modelo cargado');
     log('Modelo cargado. Listo.');
   } catch (error) {
@@ -82,10 +93,9 @@ async function initOCR() {
 }
 
 // ==============================================
-// PREPARAR CANVAS DESDE BASE64 + PREPROCESAMIENTO
+// PREPARAR IMAGEN CON PREPROCESAMIENTO
 // ==============================================
 async function prepararImagen(base64) {
-  // 1. Crear imagen desde base64
   const img = new Image();
   img.src = `data:image/jpeg;base64,${base64}`;
   await new Promise((resolve, reject) => {
@@ -93,7 +103,6 @@ async function prepararImagen(base64) {
     img.onerror = reject;
   });
 
-  // 2. Crear canvas del tamaño original
   let canvas = document.createElement('canvas');
   canvas.width = img.width;
   canvas.height = img.height;
@@ -102,7 +111,7 @@ async function prepararImagen(base64) {
 
   logDiag("1_IMAGEN_ORIGINAL", { ancho: img.width, alto: img.height });
 
-  // 3. Redimensionar si es muy grande (máximo 1024 px)
+  // Redimensionar si es muy grande
   const MAX = 1024;
   if (canvas.width > MAX || canvas.height > MAX) {
     const escala = Math.min(MAX / canvas.width, MAX / canvas.height);
@@ -119,14 +128,13 @@ async function prepararImagen(base64) {
     logDiag("2_REDIMENSIONADA", { ancho: w, alto: h });
   }
 
-  // 4. Aplicar preprocesamiento completo (CRR + BS + Contraste + Escalado + Retina)
+  // Preprocesamiento
   log('🔧 Aplicando preprocesamiento...');
   setProgreso(15, 'Preprocesando...');
 
-  let pre = null;
   try {
     if (typeof preprocesarCanvasCompleto === 'function') {
-      pre = preprocesarCanvasCompleto(canvas);
+      const pre = preprocesarCanvasCompleto(canvas);
       canvas = pre.canvas;
       const detalles = [];
       if (pre.stats.aplicoCRR) detalles.push('CRR');
@@ -136,19 +144,15 @@ async function prepararImagen(base64) {
       logDiag("3_PREPROC", {
         aplicado: detalles.join(' + ') || 'ninguno',
         tieneRuido: pre.stats.tieneRuido,
-        tieneColor: pre.stats.tieneColor,
-        anchoFinal: canvas.width,
-        altoFinal: canvas.height
+        tieneColor: pre.stats.tieneColor
       });
       log('   ✅ ' + (detalles.join(' + ') || 'sin cambios'));
-    } else {
-      log('   ⚠️ preprocesamiento.js no cargado, usando imagen original');
     }
   } catch (e) {
     logError(`Error en preprocesamiento: ${e.message}`);
   }
 
-  // 5. Aplicar retina global (unsharp masking)
+  // Retina global
   try {
     if (typeof aplicarRetinaGlobal === 'function' && window.PREPROC && window.PREPROC.RETINA_GLOBAL_ACTIVO) {
       setProgreso(20, 'Retina global...');
@@ -164,10 +168,72 @@ async function prepararImagen(base64) {
 }
 
 // ==============================================
-// MOSTRAR TABLA (estilo Excel)
+// AGRUPACIÓN DE FILAS (Optimización 1)
+// ==============================================
+function agruparEnFilas(items) {
+  if (items.length === 0) return [];
+
+  // Ordenar por Y y luego por X
+  items.sort((a, b) => {
+    const ay = a.poly[0][1];
+    const by = b.poly[0][1];
+    if (Math.abs(ay - by) < 5) return a.poly[0][0] - b.poly[0][0];
+    return ay - by;
+  });
+
+  // Calcular la altura mediana del texto para el umbral adaptativo
+  const alturas = items.map(i => Math.abs(i.poly[2][1] - i.poly[0][1])).filter(h => h > 0);
+  alturas.sort((a, b) => a - b);
+  const alturaMediana = alturas[Math.floor(alturas.length / 2)] || 10;
+
+  // Umbral adaptativo: 0.7 de la altura mediana, mínimo 8px
+  const umbralY = Math.max(8, Math.round(alturaMediana * 0.7));
+  logDiag("4_UMBRAL_Y", { alturaMediana, umbralY });
+
+  const filas = [];
+  let filaActual = [];
+  let ultimaY = -1000;
+
+  items.forEach(item => {
+    const y = item.poly[0][1];
+    if (Math.abs(y - ultimaY) > umbralY) {
+      if (filaActual.length > 0) filas.push(filaActual);
+      filaActual = [];
+      ultimaY = y;
+    }
+    filaActual.push(item);
+  });
+  if (filaActual.length > 0) filas.push(filaActual);
+
+  // Unir filas consecutivas que estén muy cerca (Optimización 2)
+  const filasUnidas = [];
+  for (let i = 0; i < filas.length; i++) {
+    if (filasUnidas.length === 0) {
+      filasUnidas.push(filas[i]);
+      continue;
+    }
+    // Comparar la Y promedio de la última fila unida con la actual
+    const ultimaFila = filasUnidas[filasUnidas.length - 1];
+    const yUltima = ultimaFila.reduce((s, i) => s + i.poly[0][1], 0) / ultimaFila.length;
+    const yActual = filas[i].reduce((s, i) => s + i.poly[0][1], 0) / filas[i].length;
+
+    if (yActual - yUltima < umbralY * 0.5) {
+      // Fusionar
+      filasUnidas[filasUnidas.length - 1] = ultimaFila.concat(filas[i]);
+    } else {
+      filasUnidas.push(filas[i]);
+    }
+  }
+
+  return filasUnidas;
+}
+
+// ==============================================
+// MOSTRAR TABLA
 // ==============================================
 function mostrarTabla(texto) {
   tablaResultado.innerHTML = '';
+  ultimoTexto = texto;
 
   if (!texto || !texto.trim()) {
     resultado.style.display = 'block';
@@ -198,39 +264,134 @@ function mostrarTabla(texto) {
   tablaContenedor.style.display = 'block';
   resultado.style.display = 'block';
   resultado.textContent = texto;
+
+  // Mostrar botones de exportación
+  mostrarBotonesExportacion();
 }
 
 // ==============================================
-// PIPELINE PRINCIPAL DE OCR
+// EXPORTACIÓN (Optimización 4)
+// ==============================================
+function mostrarBotonesExportacion() {
+  let contenedor = document.getElementById('botonesExportar');
+  if (contenedor) {
+    contenedor.style.display = 'grid';
+    return;
+  }
+
+  // Crear contenedor si no existe
+  contenedor = document.createElement('div');
+  contenedor.id = 'botonesExportar';
+  contenedor.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;';
+
+  // Botón Copiar (TSV)
+  const btnCopiar = document.createElement('button');
+  btnCopiar.textContent = '📋 Copiar';
+  btnCopiar.style.cssText = 'background:#3b82f6;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnCopiar.onclick = copiarTablaTSV;
+
+  // Botón CSV
+  const btnCSV = document.createElement('button');
+  btnCSV.textContent = '📊 CSV';
+  btnCSV.style.cssText = 'background:#f39c12;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnCSV.onclick = exportarCSV;
+
+  // Botón Excel
+  const btnExcel = document.createElement('button');
+  btnExcel.textContent = '📈 Excel';
+  btnExcel.style.cssText = 'background:#217346;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnExcel.onclick = exportarExcel;
+
+  contenedor.appendChild(btnCopiar);
+  contenedor.appendChild(btnCSV);
+  contenedor.appendChild(btnExcel);
+
+  tablaContenedor.parentNode.insertBefore(contenedor, tablaContenedor.nextSibling);
+}
+
+async function copiarTablaTSV() {
+  if (!ultimoTexto) return;
+  try {
+    await navigator.clipboard.writeText(ultimoTexto);
+    log('✅ Tabla copiada al portapapeles');
+  } catch (e) {
+    logError(`Error al copiar: ${e.message}`);
+  }
+}
+
+async function exportarCSV() {
+  if (!ultimoTexto) return;
+  try {
+    // Convertir tabs a CSV
+    const csv = '\uFEFF' + ultimoTexto.split('\n').map(linea => {
+      return linea.split('\t').map(c => '"' + c.replace(/"/g, '""') + '"').join(',');
+    }).join('\n');
+
+    const nombre = 'ocr_' + Date.now() + '.csv';
+    const base64 = btoa(unescape(encodeURIComponent(csv)));
+
+    await Filesystem.writeFile({
+      path: nombre,
+      data: base64,
+      directory: Directory.Documents
+    });
+    log('✅ CSV guardado en Documentos: ' + nombre);
+  } catch (e) {
+    logError(`Error al guardar CSV: ${e.message}`);
+  }
+}
+
+async function exportarExcel() {
+  if (!ultimoTexto) return;
+  try {
+    // Crear HTML simple que Excel puede abrir
+    const filas = ultimoTexto.split('\n').map(linea => {
+      return '<tr>' + linea.split('\t').map(c => '<td>' + c + '</td>').join('') + '</tr>';
+    }).join('');
+    const html = '<html><head><meta charset="utf-8"></head><body><table>' + filas + '</table></body></html>';
+
+    const nombre = 'ocr_' + Date.now() + '.xls';
+    const base64 = btoa(unescape(encodeURIComponent(html)));
+
+    await Filesystem.writeFile({
+      path: nombre,
+      data: base64,
+      directory: Directory.Documents
+    });
+    log('✅ Excel guardado en Documentos: ' + nombre);
+  } catch (e) {
+    logError(`Error al guardar Excel: ${e.message}`);
+  }
+}
+
+// ==============================================
+// PIPELINE PRINCIPAL
 // ==============================================
 async function runOCR(base64) {
   try {
     await initOCR();
     if (!ocr) return;
 
-    // 1. Preparar imagen con preprocesamiento
     const canvas = await prepararImagen(base64);
 
-    // 2. Convertir canvas a blob JPEG
     setProgreso(25, 'Ejecutando OCR...');
     const blob = await new Promise((resolve) => {
       canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
     });
 
-    logDiag("4_BLOB_FINAL", {
+    logDiag("5_BLOB_FINAL", {
       kb: Math.round(blob.size / 1024),
       ancho: canvas.width,
       alto: canvas.height
     });
 
-    // 3. Ejecutar OCR con contador visual
     const inicio = Date.now();
     const intervalId = setInterval(() => {
       const seg = Math.floor((Date.now() - inicio) / 1000);
       setProgreso(Math.min(90, 25 + seg * 3), `Ejecutando OCR... ${seg}s`);
     }, 1000);
 
-    logDiag("5_ENVIANDO_OCR", "blob a paddleocr");
+    logDiag("6_ENVIANDO_OCR", "blob a paddleocr");
     const resultadoCrudo = await ocr.predict(blob);
     clearInterval(intervalId);
 
@@ -238,7 +399,7 @@ async function runOCR(base64) {
     setProgreso(95, `OCR completado en ${segundos}s`);
     log(`OCR completado en ${segundos}s`);
 
-    // 4. Extraer items del resultado
+    // Extraer items
     let items = [];
     if (Array.isArray(resultadoCrudo) && resultadoCrudo[0] && resultadoCrudo[0].items) {
       items = resultadoCrudo[0].items;
@@ -246,7 +407,7 @@ async function runOCR(base64) {
       items = resultadoCrudo.items;
     }
 
-    logDiag("6_ITEMS_DETECTADOS", { cantidad: items.length });
+    logDiag("7_ITEMS_DETECTADOS", { cantidad: items.length });
 
     if (items.length === 0) {
       log('⚠️ Sin items detectados');
@@ -256,45 +417,19 @@ async function runOCR(base64) {
       return;
     }
 
-    // 5. Ordenar items por posición (arriba→abajo, izquierda→derecha)
-    items.sort((a, b) => {
-      const ay = a.poly[0][1];
-      const by = b.poly[0][1];
-      const ax = a.poly[0][0];
-      const bx = b.poly[0][0];
-      if (Math.abs(ay - by) < 10) return ax - bx;
-      return ay - by;
-    });
+    // Agrupar con el nuevo algoritmo
+    const filas = agruparEnFilas(items);
+    logDiag("8_FILAS_AGRUPADAS", { cantidad: filas.length });
 
-    // 6. Agrupar por filas (misma Y aproximada)
-    const filas = [];
-    let filaActual = [];
-    let ultimaY = -100;
-
-    items.forEach(item => {
-      const y = item.poly[0][1];
-      if (Math.abs(y - ultimaY) > 10) {
-        if (filaActual.length > 0) filas.push(filaActual);
-        filaActual = [];
-        ultimaY = y;
-      }
-      filaActual.push(item);
-    });
-    if (filaActual.length > 0) filas.push(filaActual);
-
-    logDiag("7_FILAS", { cantidad: filas.length });
-
-    // 7. Construir texto final con tabulaciones
     const textoFinal = filas.map(fila => {
       return fila.map(item => item.text).join('\t');
     }).join('\n');
 
-    logDiag("8_TEXTO_FINAL", {
+    logDiag("9_TEXTO_FINAL", {
       length: textoFinal.length,
       preview: textoFinal.substring(0, 200)
     });
 
-    // 8. Mostrar en tabla
     setProgreso(100, 'Completado');
     mostrarTabla(textoFinal);
 
@@ -343,4 +478,4 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
 // ==============================================
 // INICIO
 // ==============================================
-log('app.js cargado. Listo para escanear.');
+log('app.js OPTIMIZADO cargado. Listo para escanear.');
