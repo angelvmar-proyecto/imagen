@@ -1,6 +1,7 @@
 // ==============================================
 // OCR Timeshare — app.js
 // LIDAR → líneas negras + asignación por overlap
+// + LOG temporal de líneas V
 // ==============================================
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -20,9 +21,8 @@ const avisoResultado = document.getElementById('avisoResultado');
 let ocr = null;
 let ocrCache = null;
 
-// Configuración de las líneas negras
 const LINEAS_NEGRAS_ACTIVAS = true;
-const LINEAS_NEGRAS_GROSOR = 2;         // píxeles
+const LINEAS_NEGRAS_GROSOR = 2;
 
 // ==============================================
 // LOGS
@@ -175,6 +175,11 @@ function detectarCeldas(canvas) {
       ecoV: det.ecografia.lineasV.length
     });
 
+    // 🔍 LOG: líneas V de cada algoritmo
+    logDiag("6a_OPTICA_V", det.optica.lineasV);
+    logDiag("6b_A3_V", det.a3.lineasV);
+    logDiag("6c_ECO_V", det.ecografia.lineasV);
+
     setProgreso(45, 'LIDAR...');
     const lidar = ejecutarLidar(
       det.optica.lineasH, det.optica.lineasV,
@@ -183,6 +188,15 @@ function detectarCeldas(canvas) {
       brillo, ancho, alto
     );
     logDiag("7_LIDAR", { lineasH: lidar.lineasH.length, lineasV: lidar.lineasV.length });
+
+    // 🔍 LOG: líneas V finales de LIDAR + distancias entre ellas
+    logDiag("7a_LINEAS_V_FINALES", lidar.lineasV);
+
+    const distancias = [];
+    for (let i = 1; i < lidar.lineasV.length; i++) {
+      distancias.push(lidar.lineasV[i] - lidar.lineasV[i-1]);
+    }
+    logDiag("7b_DISTANCIAS_V", distancias);
 
     if (lidar.lineasH.length < 2 || lidar.lineasV.length < 2) {
       log('⚠️ No se detectaron suficientes líneas');
@@ -212,8 +226,7 @@ function detectarCeldas(canvas) {
 }
 
 // ==============================================
-// DIBUJAR LÍNEAS NEGRAS EN LA IMAGEN
-// Restaura los bordes que WhatsApp difumina
+// DIBUJAR LÍNEAS NEGRAS
 // ==============================================
 function dibujarLineasNegras(canvas, lineasH, lineasV) {
   if (!LINEAS_NEGRAS_ACTIVAS) return;
@@ -228,7 +241,6 @@ function dibujarLineasNegras(canvas, lineasH, lineasV) {
   ctx.lineWidth = LINEAS_NEGRAS_GROSOR;
   ctx.lineCap = 'round';
 
-  // Líneas horizontales
   lineasH.forEach(y => {
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -236,7 +248,6 @@ function dibujarLineasNegras(canvas, lineasH, lineasV) {
     ctx.stroke();
   });
 
-  // Líneas verticales
   lineasV.forEach(x => {
     ctx.beginPath();
     ctx.moveTo(x, 0);
@@ -263,13 +274,11 @@ function asignarItemsACeldas(items, celdas, filas, columnas) {
   items.forEach(item => {
     const poly = item.poly;
 
-    // Bounding box del item
     const x1 = Math.min(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
     const y1 = Math.min(poly[0][1], poly[1][1], poly[2][1], poly[3][1]);
     const x2 = Math.max(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
     const y2 = Math.max(poly[0][1], poly[1][1], poly[2][1], poly[3][1]);
 
-    // Buscar la celda con mayor overlap
     let mejorCelda = null;
     let mejorArea = 0;
 
@@ -288,7 +297,6 @@ function asignarItemsACeldas(items, celdas, filas, columnas) {
       }
     }
 
-    // Si no hay overlap, buscar la celda más cercana por centroide
     if (!mejorCelda) {
       const cx = (x1 + x2) / 2;
       const cy = (y1 + y2) / 2;
@@ -460,7 +468,6 @@ async function runOCR(base64) {
 
     const deteccion = detectarCeldas(canvas);
 
-    // ⬛ NUEVO: dibujar líneas negras sobre la imagen
     if (deteccion) {
       setProgreso(58, 'Dibujando bordes negros...');
       dibujarLineasNegras(canvas, deteccion.lineasH, deteccion.lineasV);
@@ -500,7 +507,6 @@ async function runOCR(base64) {
       matriz = asignarItemsACeldas(items, deteccion.celdas, deteccion.filas, deteccion.columnas);
       logDiag("11_MATRIZ", { filas: deteccion.filas, columnas: deteccion.columnas });
     } else {
-      // Fallback: agrupar por filas
       items.sort((a, b) => {
         const ay = a.poly[0][1], by = b.poly[0][1];
         if (Math.abs(ay - by) < 10) return a.poly[0][0] - b.poly[0][0];
@@ -525,7 +531,6 @@ async function runOCR(base64) {
     setProgreso(100, 'Completado');
     mostrarTabla(matriz);
 
-    // Guardar último resultado
     try {
       localStorage.setItem('ocr_ultimo_resultado', JSON.stringify({
         matriz: matriz,
@@ -545,7 +550,6 @@ async function runOCR(base64) {
     console.error(error);
     mostrarBarra(false);
   } finally {
-    // Liberar memoria
     if (canvas) {
       try {
         const ctx = canvas.getContext('2d');
@@ -609,7 +613,6 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
-// Botón borrar último resultado
 const btnLimpiar = document.getElementById('btnLimpiarCache');
 if (btnLimpiar) {
   btnLimpiar.addEventListener('click', () => {
@@ -648,7 +651,6 @@ if (btnZM) btnZM.addEventListener('click', () => setZoom(zoomTabla - ZOOM_PASO))
 if (btnZP) btnZP.addEventListener('click', () => setZoom(zoomTabla + ZOOM_PASO));
 if (btnZR) btnZR.addEventListener('click', () => setZoom(1));
 
-// Pinch-to-zoom
 const tablaCont = document.getElementById('tablaContenedor');
 if (tablaCont) {
   let distanciaPinch = 0;
