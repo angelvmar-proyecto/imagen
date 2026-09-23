@@ -21,7 +21,7 @@ export default defineConfig({
           src: resolve(__dirname, 'www/models/*'),
           dest: 'models'
         },
-        // Scripts clásicos (NO procesados por Vite, hay que copiarlos)
+        // Scripts clásicos
         {
           src: resolve(__dirname, 'www/js/config-deteccion.js'),
           dest: 'js'
