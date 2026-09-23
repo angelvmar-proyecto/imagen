@@ -1,8 +1,7 @@
 // ==============================================
-// OCR Timeshare — app.js con caché + memoria
-// A) Modelo cacheado en IndexedDB
-// B) Último resultado en localStorage
-// C) Liberación de memoria post-OCR
+// OCR Timeshare — app.js CORREGIDO
+// Mantiene: preprocesamiento + detección + PaddleOCR
+// Añade: B) último resultado + C) liberación de memoria
 // ==============================================
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -36,6 +35,14 @@ function logError(msg) {
     debug.textContent += `[app.js] ${msg}\n`;
   }
 }
+function logDiag(nombre, valor) {
+  const msg = `[DIAG ${nombre}] ${JSON.stringify(valor)}`;
+  console.log(msg);
+  if (debug) {
+    debug.style.display = 'block';
+    debug.textContent += msg + '\n';
+  }
+}
 function limpiarDebug() {
   if (debug) { debug.textContent = ''; debug.style.display = 'none'; }
 }
@@ -51,33 +58,25 @@ function setProgreso(p, t) {
 }
 
 // ==============================================
-// INIT OCR CON CACHÉ (A)
+// INIT OCR (con URL como antes — funcionaba)
 // ==============================================
 async function initOCR() {
   if (ocr) return;
   if (ocrCache) { ocr = ocrCache; log('Modelo en caché de memoria'); return; }
 
-  log('Cargando modelo OCR...');
+  log('Cargando modelo OCR (~20s la primera vez)...');
   mostrarBarra(true);
   setProgreso(0, 'Cargando detector...');
-
   try {
-    // Cargar modelos con caché IndexedDB
-    const detBuffer = await cargarModeloConCache('/models/my_det_model.tar', 'my_det_model.tar');
-    const recBuffer = await cargarModeloConCache('/models/my_rec_model.tar', 'my_rec_model.tar');
-
-    setProgreso(3, 'Creando sesión ONNX...');
-
     ocr = await PaddleOCR.create({
       textDetectionModelName: "my_det_model",
-      textDetectionModelAsset: { buffer: detBuffer },
+      textDetectionModelAsset: { url: "/models/my_det_model.tar" },
       textRecognitionModelName: "my_rec_model",
-      textRecognitionModelAsset: { buffer: recBuffer },
+      textRecognitionModelAsset: { url: "/models/my_rec_model.tar" },
       ortOptions: { backend: "wasm" }
     });
-
     ocrCache = ocr;
-    setProgreso(5, 'Modelo listo');
+    logDiag("INIT", "OK");
     log('Modelo cargado.');
   } catch (error) {
     logError(`Error al cargar: ${error.message}`);
@@ -102,6 +101,8 @@ async function prepararImagen(base64) {
   let ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(img, 0, 0);
 
+  logDiag("1_ORIGINAL", { w: img.width, h: img.height });
+
   const MAX = 1200;
   if (canvas.width > MAX || canvas.height > MAX) {
     const escala = Math.min(MAX / canvas.width, MAX / canvas.height);
@@ -115,6 +116,7 @@ async function prepararImagen(base64) {
     ctxEsc.imageSmoothingQuality = 'high';
     ctxEsc.drawImage(canvas, 0, 0, w, h);
     canvas = canvasEsc;
+    logDiag("2_REDIMENSIONADA", { w, h });
   }
 
   log('🔧 Preprocesando...');
@@ -123,6 +125,12 @@ async function prepararImagen(base64) {
     if (typeof preprocesarCanvasCompleto === 'function') {
       const pre = preprocesarCanvasCompleto(canvas);
       canvas = pre.canvas;
+      const detalles = [];
+      if (pre.stats.aplicoCRR) detalles.push('CRR');
+      if (pre.stats.aplicoBS) detalles.push('BS');
+      if (pre.stats.aplicoContraste) detalles.push('Contraste');
+      if (pre.stats.aplicoEscalado) detalles.push('Escalado ' + pre.stats.factorEscalado + 'x');
+      logDiag("3_PREPROC", detalles.join(' + ') || 'ninguno');
     }
   } catch (e) { logError(`Error preproc: ${e.message}`); }
 
@@ -130,6 +138,7 @@ async function prepararImagen(base64) {
     if (typeof aplicarRetinaGlobal === 'function' && window.PREPROC && window.PREPROC.RETINA_GLOBAL_ACTIVO) {
       setProgreso(15, 'Retina global...');
       aplicarRetinaGlobal(canvas);
+      logDiag("4_RETINA", "aplicada");
     }
   } catch (e) { logError(`Error retina: ${e.message}`); }
 
@@ -141,15 +150,27 @@ async function prepararImagen(base64) {
 // ==============================================
 function detectarCeldas(canvas) {
   try {
+    log('🔬 Detectando líneas...');
     setProgreso(20, 'Detectando líneas...');
+
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const brillo = calcularBrillo(imageData);
     const ancho = canvas.width;
     const alto = canvas.height;
 
+    logDiag("5_BRILLO", { ancho, alto });
+
     setProgreso(30, 'Óptica + A3 + Ecografía...');
     const det = ejecutarDeteccion(brillo, ancho, alto);
+    logDiag("6_DETECCION", {
+      opticaH: det.optica.lineasH.length,
+      opticaV: det.optica.lineasV.length,
+      a3H: det.a3.lineasH.length,
+      a3V: det.a3.lineasV.length,
+      ecoH: det.ecografia.lineasH.length,
+      ecoV: det.ecografia.lineasV.length
+    });
 
     setProgreso(45, 'LIDAR...');
     const lidar = ejecutarLidar(
@@ -158,11 +179,20 @@ function detectarCeldas(canvas) {
       det.a3.lineasH, det.a3.lineasV,
       brillo, ancho, alto
     );
+    logDiag("7_LIDAR", { lineasH: lidar.lineasH.length, lineasV: lidar.lineasV.length });
 
-    if (lidar.lineasH.length < 2 || lidar.lineasV.length < 2) return null;
+    if (lidar.lineasH.length < 2 || lidar.lineasV.length < 2) {
+      log('⚠️ No se detectaron suficientes líneas');
+      return null;
+    }
 
     setProgreso(55, 'Recortando celdas...');
     const celdas = recortarCeldas(lidar.lineasH, lidar.lineasV);
+    logDiag("8_CELDAS", {
+      filas: lidar.lineasH.length - 1,
+      columnas: lidar.lineasV.length - 1,
+      totalCeldas: celdas.length
+    });
 
     return {
       celdas: celdas,
@@ -171,6 +201,7 @@ function detectarCeldas(canvas) {
     };
   } catch (e) {
     logError(`Error en detección: ${e.message}`);
+    console.error(e);
     return null;
   }
 }
@@ -238,23 +269,15 @@ function mostrarTabla(matriz) {
 
 function mostrarBotonesExportacion(textoTSV) {
   let contenedor = document.getElementById('botonesExportar');
-  if (!contenedor) {
-    contenedor = document.createElement('div');
-    contenedor.id = 'botonesExportar';
-    contenedor.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;';
-
-    const btnCopiar = document.createElement('button');
-    btnCopiar.textContent = '📋 Copiar';
-    btnCopiar.style.cssText = 'background:#3b82f6;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
-    btnCopiar.onclick = async () => {
+  if (contenedor) {
+    contenedor.style.display = 'grid';
+    // Actualizar handlers con el nuevo texto
+    const btns = contenedor.querySelectorAll('button');
+    if (btns[0]) btns[0].onclick = async () => {
       try { await navigator.clipboard.writeText(textoTSV); log('✅ Copiado'); }
       catch (e) { logError(`Error: ${e.message}`); }
     };
-
-    const btnCSV = document.createElement('button');
-    btnCSV.textContent = '📊 CSV';
-    btnCSV.style.cssText = 'background:#f39c12;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
-    btnCSV.onclick = async () => {
+    if (btns[1]) btns[1].onclick = async () => {
       try {
         const csv = '\uFEFF' + textoTSV.split('\n').map(l =>
           l.split('\t').map(c => '"' + c.replace(/"/g, '""') + '"').join(',')
@@ -267,11 +290,7 @@ function mostrarBotonesExportacion(textoTSV) {
         log('✅ CSV: ' + nombre);
       } catch (e) { logError(`Error CSV: ${e.message}`); }
     };
-
-    const btnExcel = document.createElement('button');
-    btnExcel.textContent = '📈 Excel';
-    btnExcel.style.cssText = 'background:#217346;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
-    btnExcel.onclick = async () => {
+    if (btns[2]) btns[2].onclick = async () => {
       try {
         const filas = textoTSV.split('\n').map(l =>
           '<tr>' + l.split('\t').map(c => '<td>' + c + '</td>').join('') + '</tr>'
@@ -285,13 +304,60 @@ function mostrarBotonesExportacion(textoTSV) {
         log('✅ Excel: ' + nombre);
       } catch (e) { logError(`Error Excel: ${e.message}`); }
     };
-
-    contenedor.appendChild(btnCopiar);
-    contenedor.appendChild(btnCSV);
-    contenedor.appendChild(btnExcel);
-    tablaContenedor.parentNode.insertBefore(contenedor, tablaContenedor.nextSibling);
+    return;
   }
-  contenedor.style.display = 'grid';
+
+  contenedor = document.createElement('div');
+  contenedor.id = 'botonesExportar';
+  contenedor.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:10px;';
+
+  const btnCopiar = document.createElement('button');
+  btnCopiar.textContent = '📋 Copiar';
+  btnCopiar.style.cssText = 'background:#3b82f6;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnCopiar.onclick = async () => {
+    try { await navigator.clipboard.writeText(textoTSV); log('✅ Copiado'); }
+    catch (e) { logError(`Error: ${e.message}`); }
+  };
+
+  const btnCSV = document.createElement('button');
+  btnCSV.textContent = '📊 CSV';
+  btnCSV.style.cssText = 'background:#f39c12;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnCSV.onclick = async () => {
+    try {
+      const csv = '\uFEFF' + textoTSV.split('\n').map(l =>
+        l.split('\t').map(c => '"' + c.replace(/"/g, '""') + '"').join(',')
+      ).join('\n');
+      const nombre = 'ocr_' + Date.now() + '.csv';
+      await Filesystem.writeFile({
+        path: nombre, data: btoa(unescape(encodeURIComponent(csv))),
+        directory: Directory.Documents
+      });
+      log('✅ CSV: ' + nombre);
+    } catch (e) { logError(`Error CSV: ${e.message}`); }
+  };
+
+  const btnExcel = document.createElement('button');
+  btnExcel.textContent = '📈 Excel';
+  btnExcel.style.cssText = 'background:#217346;color:white;border:none;border-radius:8px;padding:10px;font-size:0.8rem;cursor:pointer;';
+  btnExcel.onclick = async () => {
+    try {
+      const filas = textoTSV.split('\n').map(l =>
+        '<tr>' + l.split('\t').map(c => '<td>' + c + '</td>').join('') + '</tr>'
+      ).join('');
+      const html = '<html><head><meta charset="utf-8"></head><body><table>' + filas + '</table></body></html>';
+      const nombre = 'ocr_' + Date.now() + '.xls';
+      await Filesystem.writeFile({
+        path: nombre, data: btoa(unescape(encodeURIComponent(html))),
+        directory: Directory.Documents
+      });
+      log('✅ Excel: ' + nombre);
+    } catch (e) { logError(`Error Excel: ${e.message}`); }
+  };
+
+  contenedor.appendChild(btnCopiar);
+  contenedor.appendChild(btnCSV);
+  contenedor.appendChild(btnExcel);
+  tablaContenedor.parentNode.insertBefore(contenedor, tablaContenedor.nextSibling);
 }
 
 // ==============================================
@@ -317,6 +383,8 @@ async function runOCR(base64) {
       canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
     });
 
+    logDiag("9_BLOB", { kb: Math.round(blob.size / 1024) });
+
     const inicio = Date.now();
     const intervalId = setInterval(() => {
       const seg = Math.floor((Date.now() - inicio) / 1000);
@@ -336,12 +404,15 @@ async function runOCR(base64) {
       items = resultadoCrudo.items;
     }
 
+    logDiag("10_ITEMS", { cantidad: items.length });
+
     let matriz;
     if (deteccion && items.length > 0) {
       setProgreso(95, 'Asignando a celdas...');
       matriz = asignarItemsACeldas(items, deteccion.celdas, deteccion.filas, deteccion.columnas);
+      logDiag("11_MATRIZ", { filas: deteccion.filas, columnas: deteccion.columnas });
     } else {
-      // Fallback: agrupar por Y
+      // Fallback
       items.sort((a, b) => {
         const ay = a.poly[0][1], by = b.poly[0][1];
         if (Math.abs(ay - by) < 10) return a.poly[0][0] - b.poly[0][0];
@@ -367,11 +438,17 @@ async function runOCR(base64) {
     mostrarTabla(matriz);
 
     // B) Guardar último resultado
-    guardarUltimoResultado({
-      matriz: matriz,
-      filas: matriz.length,
-      columnas: matriz[0] ? matriz[0].length : 0
-    });
+    try {
+      localStorage.setItem('ocr_ultimo_resultado', JSON.stringify({
+        matriz: matriz,
+        filas: matriz.length,
+        columnas: matriz[0] ? matriz[0].length : 0,
+        fecha: new Date().toISOString()
+      }));
+      console.log('💾 Último resultado guardado');
+    } catch (e) {
+      console.warn('⚠️ No se pudo guardar el resultado:', e);
+    }
 
     setTimeout(() => mostrarBarra(false), 3000);
 
@@ -382,10 +459,12 @@ async function runOCR(base64) {
   } finally {
     // C) Liberar memoria
     if (canvas) {
-      const ctx = canvas.getContext('2d');
-      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-      canvas.width = 0;
-      canvas.height = 0;
+      try {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.width = 0;
+        canvas.height = 0;
+      } catch (e) {}
       canvas = null;
     }
     blob = null;
@@ -393,17 +472,26 @@ async function runOCR(base64) {
 }
 
 // ==============================================
-// RECUPERAR ÚLTIMO RESULTADO (B)
+// B) RECUPERAR ÚLTIMO RESULTADO
 // ==============================================
 function recuperarUltimoResultado() {
-  const guardado = leerUltimoResultado();
-  if (!guardado || !guardado.matriz || guardado.matriz.length === 0) {
+  try {
+    const raw = localStorage.getItem('ocr_ultimo_resultado');
+    if (!raw) {
+      log('Listo. Pulsa un botón.');
+      return;
+    }
+    const guardado = JSON.parse(raw);
+    if (!guardado.matriz || guardado.matriz.length === 0) {
+      log('Listo. Pulsa un botón.');
+      return;
+    }
+    mostrarTabla(guardado.matriz);
+    avisoResultado.style.display = 'block';
+    log(`Mostrando resultado anterior (${guardado.filas}×${guardado.columnas})`);
+  } catch (e) {
     log('Listo. Pulsa un botón.');
-    return;
   }
-  mostrarTabla(guardado.matriz);
-  avisoResultado.style.display = 'block';
-  log(`Mostrando resultado anterior (${guardado.filas}×${guardado.columnas})`);
 }
 
 // ==============================================
@@ -433,17 +521,20 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
-document.getElementById('btnLimpiarCache').addEventListener('click', async () => {
-  if (!confirm('¿Borrar la caché de modelos? Se descargarán de nuevo la próxima vez.')) return;
-  await limpiarCacheModelos();
-  limpiarUltimoResultado();
-  ocrCache = null;
-  ocr = null;
-  alert('✅ Caché borrada. Reinicia la app.');
-});
+// Botón borrar caché (opcional, ahora solo limpia localStorage)
+const btnLimpiar = document.getElementById('btnLimpiarCache');
+if (btnLimpiar) {
+  btnLimpiar.addEventListener('click', () => {
+    if (!confirm('¿Borrar el último resultado guardado?')) return;
+    localStorage.removeItem('ocr_ultimo_resultado');
+    ocrCache = null;
+    ocr = null;
+    alert('✅ Limpiado. Reinicia la app.');
+  });
+}
 
 // ==============================================
 // INICIO
 // ==============================================
 recuperarUltimoResultado();
-console.log('✅ app.js con caché cargado');
+console.log('✅ app.js cargado');
