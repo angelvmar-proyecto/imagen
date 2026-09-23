@@ -11,13 +11,40 @@ export default defineConfig({
   plugins: [
     viteStaticCopy({
       targets: [
+        // WASM de ONNX
         {
           src: resolve(__dirname, 'node_modules/onnxruntime-web/dist/*.wasm'),
           dest: '.'
         },
+        // Modelos .tar
         {
           src: resolve(__dirname, 'www/models/*'),
           dest: 'models'
+        },
+        // Scripts clásicos (NO procesados por Vite, hay que copiarlos)
+        {
+          src: resolve(__dirname, 'www/js/config-deteccion.js'),
+          dest: 'js'
+        },
+        {
+          src: resolve(__dirname, 'www/js/utilidades.js'),
+          dest: 'js'
+        },
+        {
+          src: resolve(__dirname, 'www/js/preprocesamiento.js'),
+          dest: 'js'
+        },
+        {
+          src: resolve(__dirname, 'www/js/deteccion.js'),
+          dest: 'js'
+        },
+        {
+          src: resolve(__dirname, 'www/js/lidar.js'),
+          dest: 'js'
+        },
+        {
+          src: resolve(__dirname, 'www/js/retina.js'),
+          dest: 'js'
         }
       ]
     })
