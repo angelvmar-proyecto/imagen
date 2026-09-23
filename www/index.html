@@ -31,6 +31,16 @@
       display: flex; align-items: center; justify-content: center;
       color: white; font-size: 12px; font-weight: bold;
     }
+
+    /* Animación CSS: corre en el compositor aunque JS esté bloqueado */
+    @keyframes progresoOCR {
+      from { width: 60%; }
+      to { width: 95%; }
+    }
+    #barraProgreso.animando {
+      animation: progresoOCR 300s linear forwards;
+    }
+
     #barraTexto { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 5px; min-height: 16px; }
 
     #avisoResultado {
@@ -39,61 +49,38 @@
       font-size: 12px; color: #67e8f9; display: none;
     }
 
-    /* ============================================
-       BARRA DE ZOOM
-       ============================================ */
+    /* Barra de zoom */
     #barraZoom {
-      display: none;
-      margin-top: 12px;
-      padding: 6px 8px;
-      background: #1e293b;
-      border-radius: 8px;
-      align-items: center;
-      gap: 8px;
+      display: none; margin-top: 12px; padding: 6px 8px;
+      background: #1e293b; border-radius: 8px;
+      align-items: center; gap: 8px;
       border: 1px solid #334155;
     }
     #barraZoom.visible { display: flex; }
     #barraZoom button {
-      padding: 6px 12px;
-      font-size: 14px;
-      width: auto;
-      margin: 0;
-      background: #334155;
-      color: #f1f5f9;
+      padding: 6px 12px; font-size: 14px; width: auto;
+      margin: 0; background: #334155; color: #f1f5f9;
       border-radius: 6px;
     }
     #barraZoom button:active { background: #475569; }
     #zoomNivel {
-      font-size: 12px;
-      color: #94a3b8;
-      min-width: 45px;
-      text-align: center;
-      font-weight: 600;
+      font-size: 12px; color: #94a3b8;
+      min-width: 45px; text-align: center; font-weight: 600;
     }
-    #zoomInfo {
-      margin-left: auto;
-      font-size: 10px;
-      color: #64748b;
-    }
+    #zoomInfo { margin-left: auto; font-size: 10px; color: #64748b; }
 
-    /* ============================================
-       MINI EXCEL con zoom
-       ============================================ */
+    /* Mini Excel */
     #tablaContenedor {
-      margin-top: 8px;
-      overflow: auto;
-      border: 2px solid #38bdf8;
-      border-radius: 6px;
-      max-height: 65vh;
-      display: none;
+      margin-top: 8px; overflow: auto;
+      border: 2px solid #38bdf8; border-radius: 6px;
+      max-height: 65vh; display: none;
       background: #0f172a;
       box-shadow: 0 2px 12px rgba(56,189,248,0.2);
       -webkit-overflow-scrolling: touch;
       touch-action: pan-x pan-y pinch-zoom;
     }
     #tablaResultado {
-      border-collapse: collapse;
-      font-size: 14px;
+      border-collapse: collapse; font-size: 14px;
       font-family: 'Roboto Mono', 'Courier New', monospace;
       table-layout: auto;
       transform-origin: top left;
@@ -101,15 +88,10 @@
     }
     #tablaResultado th,
     #tablaResultado td {
-      border: 1px solid #334155;
-      padding: 5px 7px;
-      vertical-align: top;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      overflow: hidden;
-      max-width: 250px;
-      line-height: 1.4;
-      min-width: 60px;
+      border: 1px solid #334155; padding: 5px 7px;
+      vertical-align: top; white-space: nowrap;
+      text-overflow: ellipsis; overflow: hidden;
+      max-width: 250px; line-height: 1.4; min-width: 60px;
     }
     #tablaResultado td:not(:empty) {
       background: #ffffff; color: #000000; font-weight: 600;
@@ -160,7 +142,6 @@
     📋 Mostrando resultado anterior. Pulsa <b>Tomar Foto</b> o <b>Galería</b> para escanear de nuevo.
   </div>
 
-  <!-- Barra de zoom -->
   <div id="barraZoom">
     <button id="btnZoomMenos">➖ A-</button>
     <span id="zoomNivel">100%</span>

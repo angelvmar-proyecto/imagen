@@ -1,7 +1,7 @@
 // ==============================================
 // OCR Timeshare — app.js
-// LIDAR → líneas negras + asignación por overlap
-// + LOG temporal de líneas V
+// LIDAR → líneas negras + filtro V + asignación overlap
+// Barra animada CSS + zoom de tabla
 // ==============================================
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -21,8 +21,10 @@ const avisoResultado = document.getElementById('avisoResultado');
 let ocr = null;
 let ocrCache = null;
 
+// Configuración
 const LINEAS_NEGRAS_ACTIVAS = true;
 const LINEAS_NEGRAS_GROSOR = 2;
+const MIN_DIST_V = 30;   // Distancia mínima entre líneas V (para eliminar fantasma)
 
 // ==============================================
 // LOGS
@@ -56,7 +58,7 @@ function limpiarDebug() {
 function mostrarBarra(v) { barraContenedor.style.display = v ? 'block' : 'none'; }
 function setProgreso(p, t) {
   barraProgreso.style.width = p + '%';
-  barraProgreso.textContent = p + '%';
+  barraProgreso.textContent = Math.round(p) + '%';
   if (t) barraTexto.textContent = t;
 }
 
@@ -149,7 +151,7 @@ async function prepararImagen(base64) {
 }
 
 // ==============================================
-// DETECCIÓN DE CELDAS
+// DETECCIÓN DE CELDAS (con filtro V)
 // ==============================================
 function detectarCeldas(canvas) {
   try {
@@ -175,7 +177,6 @@ function detectarCeldas(canvas) {
       ecoV: det.ecografia.lineasV.length
     });
 
-    // 🔍 LOG: líneas V de cada algoritmo
     logDiag("6a_OPTICA_V", det.optica.lineasV);
     logDiag("6b_A3_V", det.a3.lineasV);
     logDiag("6c_ECO_V", det.ecografia.lineasV);
@@ -188,8 +189,6 @@ function detectarCeldas(canvas) {
       brillo, ancho, alto
     );
     logDiag("7_LIDAR", { lineasH: lidar.lineasH.length, lineasV: lidar.lineasV.length });
-
-    // 🔍 LOG: líneas V finales de LIDAR + distancias entre ellas
     logDiag("7a_LINEAS_V_FINALES", lidar.lineasV);
 
     const distancias = [];
@@ -197,6 +196,21 @@ function detectarCeldas(canvas) {
       distancias.push(lidar.lineasV[i] - lidar.lineasV[i-1]);
     }
     logDiag("7b_DISTANCIAS_V", distancias);
+
+    // 🔧 FILTRO: eliminar líneas V demasiado cercanas
+    const lineasVFiltradas = [lidar.lineasV[0]];
+    for (let i = 1; i < lidar.lineasV.length; i++) {
+      if (lidar.lineasV[i] - lineasVFiltradas[lineasVFiltradas.length - 1] >= MIN_DIST_V) {
+        lineasVFiltradas.push(lidar.lineasV[i]);
+      }
+    }
+    logDiag("7c_FILTRO_V", {
+      original: lidar.lineasV.length,
+      filtrado: lineasVFiltradas.length,
+      eliminadas: lidar.lineasV.length - lineasVFiltradas.length,
+      minDist: MIN_DIST_V
+    });
+    lidar.lineasV = lineasVFiltradas;
 
     if (lidar.lineasH.length < 2 || lidar.lineasV.length < 2) {
       log('⚠️ No se detectaron suficientes líneas');
@@ -273,7 +287,6 @@ function asignarItemsACeldas(items, celdas, filas, columnas) {
 
   items.forEach(item => {
     const poly = item.poly;
-
     const x1 = Math.min(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
     const y1 = Math.min(poly[0][1], poly[1][1], poly[2][1], poly[3][1]);
     const x2 = Math.max(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
@@ -451,6 +464,40 @@ function mostrarBotonesExportacion(textoTSV) {
 }
 
 // ==============================================
+// PROGRESO ANIMADO (CSS)
+// ==============================================
+function iniciarProgresoOCR() {
+  const barra = document.getElementById('barraProgreso');
+  if (barra) {
+    barra.classList.add('animando');
+    barra.style.width = '';
+  }
+
+  const inicio = Date.now();
+  let puntos = 0;
+
+  const intervalId = setInterval(() => {
+    const seg = Math.floor((Date.now() - inicio) / 1000);
+    puntos = (puntos + 1) % 4;
+    const puntosStr = '.'.repeat(puntos);
+    if (barraTexto) barraTexto.textContent = `⏳ Ejecutando OCR${puntosStr} ${seg}s`;
+    if (estado) estado.textContent = `Ejecutando OCR... ${seg}s`;
+  }, 800);
+
+  return {
+    detener: () => {
+      clearInterval(intervalId);
+      if (barra) {
+        barra.classList.remove('animando');
+        barra.style.animation = 'none';
+        barra.style.width = '100%';
+        barra.textContent = '100%';
+      }
+    }
+  };
+}
+
+// ==============================================
 // PIPELINE PRINCIPAL
 // ==============================================
 async function runOCR(base64) {
@@ -459,6 +506,7 @@ async function runOCR(base64) {
 
   let canvas = null;
   let blob = null;
+  let progresoCtrl = null;
 
   try {
     await initOCR();
@@ -480,16 +528,14 @@ async function runOCR(base64) {
 
     logDiag("9_BLOB", { kb: Math.round(blob.size / 1024) });
 
-    const inicio = Date.now();
-    const intervalId = setInterval(() => {
-      const seg = Math.floor((Date.now() - inicio) / 1000);
-      setProgreso(Math.min(90, 60 + seg * 2), `OCR... ${seg}s`);
-    }, 1000);
+    progresoCtrl = iniciarProgresoOCR();
+    const inicioReal = Date.now();
 
     const resultadoCrudo = await ocr.predict(blob);
-    clearInterval(intervalId);
 
-    const segundos = Math.round((Date.now() - inicio) / 1000);
+    progresoCtrl.detener();
+    const segundos = Math.round((Date.now() - inicioReal) / 1000);
+    setProgreso(100, `✅ OCR completado en ${segundos}s`);
     log(`OCR completado en ${segundos}s`);
 
     let items = [];
@@ -503,7 +549,7 @@ async function runOCR(base64) {
 
     let matriz;
     if (deteccion && items.length > 0) {
-      setProgreso(95, 'Asignando a celdas...');
+      setProgreso(100, 'Asignando a celdas...');
       matriz = asignarItemsACeldas(items, deteccion.celdas, deteccion.filas, deteccion.columnas);
       logDiag("11_MATRIZ", { filas: deteccion.filas, columnas: deteccion.columnas });
     } else {
@@ -528,7 +574,6 @@ async function runOCR(base64) {
       matriz = filas.map(f => f.map(i => i.text));
     }
 
-    setProgreso(100, 'Completado');
     mostrarTabla(matriz);
 
     try {
@@ -546,6 +591,7 @@ async function runOCR(base64) {
     setTimeout(() => mostrarBarra(false), 3000);
 
   } catch (error) {
+    if (progresoCtrl) progresoCtrl.detener();
     logError(`Error OCR: ${error.message}`);
     console.error(error);
     mostrarBarra(false);
