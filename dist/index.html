@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   <title>OCR Timeshare</title>
   <style>
     * { box-sizing: border-box; }
@@ -17,9 +17,7 @@
     }
     #btnCamara { background: #3b82f6; color: white; }
     #btnGaleria { background: #8b5cf6; color: white; }
-    #btnLimpiarCache {
-      background: #dc2626; color: white; font-size: 12px; padding: 8px;
-    }
+    #btnLimpiarCache { background: #dc2626; color: white; font-size: 12px; padding: 8px; }
     #estado { color: #94a3b8; margin-top: 10px; font-size: 14px; min-height: 18px; }
 
     #barraContenedor {
@@ -33,39 +31,85 @@
       display: flex; align-items: center; justify-content: center;
       color: white; font-size: 12px; font-weight: bold;
     }
-    #barraTexto {
-      text-align: center; font-size: 12px; color: #94a3b8;
-      margin-top: 5px; min-height: 16px;
-    }
+    #barraTexto { text-align: center; font-size: 12px; color: #94a3b8; margin-top: 5px; min-height: 16px; }
 
     #avisoResultado {
-      margin-top: 10px;
-      padding: 8px 12px;
-      background: #164e63;
-      border-left: 4px solid #06b6d4;
-      border-radius: 4px;
-      font-size: 12px;
-      color: #67e8f9;
-      display: none;
+      margin-top: 10px; padding: 8px 12px; background: #164e63;
+      border-left: 4px solid #06b6d4; border-radius: 4px;
+      font-size: 12px; color: #67e8f9; display: none;
     }
 
+    /* ============================================
+       BARRA DE ZOOM
+       ============================================ */
+    #barraZoom {
+      display: none;
+      margin-top: 12px;
+      padding: 6px 8px;
+      background: #1e293b;
+      border-radius: 8px;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid #334155;
+    }
+    #barraZoom.visible { display: flex; }
+    #barraZoom button {
+      padding: 6px 12px;
+      font-size: 14px;
+      width: auto;
+      margin: 0;
+      background: #334155;
+      color: #f1f5f9;
+      border-radius: 6px;
+    }
+    #barraZoom button:active { background: #475569; }
+    #zoomNivel {
+      font-size: 12px;
+      color: #94a3b8;
+      min-width: 45px;
+      text-align: center;
+      font-weight: 600;
+    }
+    #zoomInfo {
+      margin-left: auto;
+      font-size: 10px;
+      color: #64748b;
+    }
+
+    /* ============================================
+       MINI EXCEL con zoom
+       ============================================ */
     #tablaContenedor {
-      margin-top: 20px; overflow: auto; border: 2px solid #38bdf8;
-      border-radius: 6px; max-height: 65vh; display: none;
+      margin-top: 8px;
+      overflow: auto;
+      border: 2px solid #38bdf8;
+      border-radius: 6px;
+      max-height: 65vh;
+      display: none;
       background: #0f172a;
       box-shadow: 0 2px 12px rgba(56,189,248,0.2);
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y pinch-zoom;
     }
     #tablaResultado {
-      border-collapse: collapse; font-size: 11px;
+      border-collapse: collapse;
+      font-size: 14px;
       font-family: 'Roboto Mono', 'Courier New', monospace;
       table-layout: auto;
+      transform-origin: top left;
+      will-change: transform;
     }
     #tablaResultado th,
     #tablaResultado td {
-      border: 1px solid #334155; padding: 3px 5px;
-      vertical-align: top; white-space: nowrap;
-      text-overflow: ellipsis; overflow: hidden;
-      max-width: 180px; line-height: 1.3;
+      border: 1px solid #334155;
+      padding: 5px 7px;
+      vertical-align: top;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      max-width: 250px;
+      line-height: 1.4;
+      min-width: 60px;
     }
     #tablaResultado td:not(:empty) {
       background: #ffffff; color: #000000; font-weight: 600;
@@ -77,9 +121,10 @@
     }
     #tablaResultado td.col-num {
       background: #fbbf24; color: #000000; text-align: center;
-      width: 28px; min-width: 28px; font-weight: 700;
+      width: 36px; min-width: 36px; font-weight: 700;
       position: sticky; left: 0; z-index: 2;
       border-right: 2px solid #f59e0b;
+      font-size: 15px;
     }
     #tablaResultado tr:nth-child(even) td:not(:empty) { background: #f1f5f9; }
     #tablaResultado tr:nth-child(even) td.col-num { background: #f59e0b; }
@@ -98,13 +143,13 @@
       font-family: monospace; color: #cbd5e1;
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-qpK9UP_S.js"></script>
+  <script type="module" crossorigin src="/assets/index-n7NaYFLx.js"></script>
 </head>
 <body>
   <h1>OCR Timeshare</h1>
   <button id="btnCamara">📷 Tomar Foto</button>
   <button id="btnGaleria">🖼️ Elegir de Galería</button>
-  <button id="btnLimpiarCache">🗑️ Borrar caché de modelos</button>
+  <button id="btnLimpiarCache">🗑️ Borrar último resultado</button>
   <div id="estado">Cargando...</div>
 
   <div id="barraContenedor">
@@ -114,6 +159,15 @@
 
   <div id="avisoResultado">
     📋 Mostrando resultado anterior. Pulsa <b>Tomar Foto</b> o <b>Galería</b> para escanear de nuevo.
+  </div>
+
+  <!-- Barra de zoom -->
+  <div id="barraZoom">
+    <button id="btnZoomMenos">➖ A-</button>
+    <span id="zoomNivel">100%</span>
+    <button id="btnZoomMas">➕ A+</button>
+    <button id="btnZoomReset">🔄 Reset</button>
+    <span id="zoomInfo">Pellizca con 2 dedos</span>
   </div>
 
   <div id="tablaContenedor">

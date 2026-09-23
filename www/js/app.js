@@ -474,6 +474,101 @@ async function runOCR(base64) {
 // ==============================================
 // B) RECUPERAR ÚLTIMO RESULTADO
 // ==============================================
+// ==============================================
+// ZOOM DE LA TABLA (pinch + botones)
+// ==============================================
+let zoomTabla = 1;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_PASO = 0.25;
+
+function aplicarZoom() {
+  const tabla = document.getElementById('tablaResultado');
+  const nivel = document.getElementById('zoomNivel');
+  if (tabla) tabla.style.transform = `scale(${zoomTabla})`;
+  if (nivel) nivel.textContent = Math.round(zoomTabla * 100) + '%';
+}
+
+function setZoom(nuevoZoom) {
+  zoomTabla = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nuevoZoom));
+  aplicarZoom();
+}
+
+// Botones de zoom
+document.getElementById('btnZoomMenos').addEventListener('click', () => {
+  setZoom(zoomTabla - ZOOM_PASO);
+});
+document.getElementById('btnZoomMas').addEventListener('click', () => {
+  setZoom(zoomTabla + ZOOM_PASO);
+});
+document.getElementById('btnZoomReset').addEventListener('click', () => {
+  setZoom(1);
+});
+
+// Pinch-to-zoom en la tabla
+const tablaCont = document.getElementById('tablaContenedor');
+let distanciaPinch = 0;
+let zoomInicialPinch = 1;
+
+tablaCont.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    distanciaPinch = Math.sqrt(dx * dx + dy * dy);
+    zoomInicialPinch = zoomTabla;
+  }
+}, { passive: true });
+
+tablaCont.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && distanciaPinch > 0) {
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const distanciaNueva = Math.sqrt(dx * dx + dy * dy);
+    const factor = distanciaNueva / distanciaPinch;
+    setZoom(zoomInicialPinch * factor);
+  }
+}, { passive: true });
+
+tablaCont.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    distanciaPinch = 0;
+  }
+}, { passive: true });
+
+// Doble toque para resetear zoom
+let ultimoToque = 0;
+tablaCont.addEventListener('touchend', (e) => {
+  if (e.changedTouches.length === 1) {
+    const ahora = Date.now();
+    if (ahora - ultimoToque < 300) {
+      setZoom(1);
+      ultimoToque = 0;
+    } else {
+      ultimoToque = ahora;
+    }
+  }
+});
+
+// Mostrar barra de zoom cuando haya tabla
+const observerTabla = new MutationObserver(() => {
+  const barraZoom = document.getElementById('barraZoom');
+  const tablaVisible = document.getElementById('tablaContenedor').style.display === 'block';
+  if (barraZoom) {
+    if (tablaVisible) barraZoom.classList.add('visible');
+    else barraZoom.classList.remove('visible');
+  }
+});
+
+// Observar cambios en el contenedor de tabla
+setTimeout(() => {
+  const contTabla = document.getElementById('tablaContenedor');
+  if (contTabla) {
+    observerTabla.observe(contTabla, { attributes: true, attributeFilter: ['style'] });
+  }
+}, 1000);
+
+console.log('✅ Zoom de tabla cargado');
+
 function recuperarUltimoResultado() {
   try {
     const raw = localStorage.getItem('ocr_ultimo_resultado');
