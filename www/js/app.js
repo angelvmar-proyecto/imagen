@@ -1,7 +1,6 @@
 // ==============================================
-// OCR Timeshare — app.js CORREGIDO
-// Mantiene: preprocesamiento + detección + PaddleOCR
-// Añade: B) último resultado + C) liberación de memoria
+// OCR Timeshare — app.js
+// LIDAR → líneas negras + asignación por overlap
 // ==============================================
 
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
@@ -20,6 +19,10 @@ const avisoResultado = document.getElementById('avisoResultado');
 
 let ocr = null;
 let ocrCache = null;
+
+// Configuración de las líneas negras
+const LINEAS_NEGRAS_ACTIVAS = true;
+const LINEAS_NEGRAS_GROSOR = 2;         // píxeles
 
 // ==============================================
 // LOGS
@@ -58,7 +61,7 @@ function setProgreso(p, t) {
 }
 
 // ==============================================
-// INIT OCR (con URL como antes — funcionaba)
+// INIT OCR
 // ==============================================
 async function initOCR() {
   if (ocr) return;
@@ -197,7 +200,9 @@ function detectarCeldas(canvas) {
     return {
       celdas: celdas,
       filas: lidar.lineasH.length - 1,
-      columnas: lidar.lineasV.length - 1
+      columnas: lidar.lineasV.length - 1,
+      lineasH: lidar.lineasH,
+      lineasV: lidar.lineasV
     };
   } catch (e) {
     logError(`Error en detección: ${e.message}`);
@@ -207,23 +212,101 @@ function detectarCeldas(canvas) {
 }
 
 // ==============================================
-// ASIGNAR ITEMS A CELDAS
+// DIBUJAR LÍNEAS NEGRAS EN LA IMAGEN
+// Restaura los bordes que WhatsApp difumina
+// ==============================================
+function dibujarLineasNegras(canvas, lineasH, lineasV) {
+  if (!LINEAS_NEGRAS_ACTIVAS) return;
+  if (!lineasH || !lineasV) return;
+
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ancho = canvas.width;
+  const alto = canvas.height;
+
+  ctx.save();
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = LINEAS_NEGRAS_GROSOR;
+  ctx.lineCap = 'round';
+
+  // Líneas horizontales
+  lineasH.forEach(y => {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(ancho, y);
+    ctx.stroke();
+  });
+
+  // Líneas verticales
+  lineasV.forEach(x => {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, alto);
+    ctx.stroke();
+  });
+
+  ctx.restore();
+
+  logDiag("LINEAS_NEGRAS", {
+    H: lineasH.length,
+    V: lineasV.length,
+    grosor: LINEAS_NEGRAS_GROSOR
+  });
+  console.log('⬛ Líneas negras dibujadas sobre la imagen');
+}
+
+// ==============================================
+// ASIGNAR ITEMS A CELDAS (por overlap)
 // ==============================================
 function asignarItemsACeldas(items, celdas, filas, columnas) {
   const matriz = Array(filas).fill(null).map(() => Array(columnas).fill(''));
 
   items.forEach(item => {
     const poly = item.poly;
-    const centroX = (poly[0][0] + poly[1][0] + poly[2][0] + poly[3][0]) / 4;
-    const centroY = (poly[0][1] + poly[1][1] + poly[2][1] + poly[3][1]) / 4;
+
+    // Bounding box del item
+    const x1 = Math.min(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
+    const y1 = Math.min(poly[0][1], poly[1][1], poly[2][1], poly[3][1]);
+    const x2 = Math.max(poly[0][0], poly[1][0], poly[2][0], poly[3][0]);
+    const y2 = Math.max(poly[0][1], poly[1][1], poly[2][1], poly[3][1]);
+
+    // Buscar la celda con mayor overlap
+    let mejorCelda = null;
+    let mejorArea = 0;
 
     for (const celda of celdas) {
-      if (centroX >= celda.x1 && centroX <= celda.x2 &&
-          centroY >= celda.y1 && centroY <= celda.y2) {
-        const actual = matriz[celda.fila][celda.col];
-        matriz[celda.fila][celda.col] = actual ? actual + ' ' + item.text : item.text;
-        break;
+      const ix1 = Math.max(x1, celda.x1);
+      const iy1 = Math.max(y1, celda.y1);
+      const ix2 = Math.min(x2, celda.x2);
+      const iy2 = Math.min(y2, celda.y2);
+
+      if (ix2 > ix1 && iy2 > iy1) {
+        const area = (ix2 - ix1) * (iy2 - iy1);
+        if (area > mejorArea) {
+          mejorArea = area;
+          mejorCelda = celda;
+        }
       }
+    }
+
+    // Si no hay overlap, buscar la celda más cercana por centroide
+    if (!mejorCelda) {
+      const cx = (x1 + x2) / 2;
+      const cy = (y1 + y2) / 2;
+      let menorDist = Infinity;
+      for (const celda of celdas) {
+        const ccx = (celda.x1 + celda.x2) / 2;
+        const ccy = (celda.y1 + celda.y2) / 2;
+        const dist = Math.sqrt((cx - ccx) ** 2 + (cy - ccy) ** 2);
+        if (dist < menorDist) {
+          menorDist = dist;
+          mejorCelda = celda;
+        }
+      }
+    }
+
+    if (mejorCelda) {
+      const actual = matriz[mejorCelda.fila][mejorCelda.col];
+      matriz[mejorCelda.fila][mejorCelda.col] = actual ? actual + ' ' + item.text : item.text;
     }
   });
 
@@ -271,7 +354,6 @@ function mostrarBotonesExportacion(textoTSV) {
   let contenedor = document.getElementById('botonesExportar');
   if (contenedor) {
     contenedor.style.display = 'grid';
-    // Actualizar handlers con el nuevo texto
     const btns = contenedor.querySelectorAll('button');
     if (btns[0]) btns[0].onclick = async () => {
       try { await navigator.clipboard.writeText(textoTSV); log('✅ Copiado'); }
@@ -378,9 +460,15 @@ async function runOCR(base64) {
 
     const deteccion = detectarCeldas(canvas);
 
+    // ⬛ NUEVO: dibujar líneas negras sobre la imagen
+    if (deteccion) {
+      setProgreso(58, 'Dibujando bordes negros...');
+      dibujarLineasNegras(canvas, deteccion.lineasH, deteccion.lineasV);
+    }
+
     setProgreso(60, 'Ejecutando PaddleOCR...');
     blob = await new Promise((resolve) => {
-      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.85);
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9);
     });
 
     logDiag("9_BLOB", { kb: Math.round(blob.size / 1024) });
@@ -412,7 +500,7 @@ async function runOCR(base64) {
       matriz = asignarItemsACeldas(items, deteccion.celdas, deteccion.filas, deteccion.columnas);
       logDiag("11_MATRIZ", { filas: deteccion.filas, columnas: deteccion.columnas });
     } else {
-      // Fallback
+      // Fallback: agrupar por filas
       items.sort((a, b) => {
         const ay = a.poly[0][1], by = b.poly[0][1];
         if (Math.abs(ay - by) < 10) return a.poly[0][0] - b.poly[0][0];
@@ -437,7 +525,7 @@ async function runOCR(base64) {
     setProgreso(100, 'Completado');
     mostrarTabla(matriz);
 
-    // B) Guardar último resultado
+    // Guardar último resultado
     try {
       localStorage.setItem('ocr_ultimo_resultado', JSON.stringify({
         matriz: matriz,
@@ -457,7 +545,7 @@ async function runOCR(base64) {
     console.error(error);
     mostrarBarra(false);
   } finally {
-    // C) Liberar memoria
+    // Liberar memoria
     if (canvas) {
       try {
         const ctx = canvas.getContext('2d');
@@ -472,103 +560,8 @@ async function runOCR(base64) {
 }
 
 // ==============================================
-// B) RECUPERAR ÚLTIMO RESULTADO
+// RECUPERAR ÚLTIMO RESULTADO
 // ==============================================
-// ==============================================
-// ZOOM DE LA TABLA (pinch + botones)
-// ==============================================
-let zoomTabla = 1;
-const ZOOM_MIN = 0.5;
-const ZOOM_MAX = 3;
-const ZOOM_PASO = 0.25;
-
-function aplicarZoom() {
-  const tabla = document.getElementById('tablaResultado');
-  const nivel = document.getElementById('zoomNivel');
-  if (tabla) tabla.style.transform = `scale(${zoomTabla})`;
-  if (nivel) nivel.textContent = Math.round(zoomTabla * 100) + '%';
-}
-
-function setZoom(nuevoZoom) {
-  zoomTabla = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nuevoZoom));
-  aplicarZoom();
-}
-
-// Botones de zoom
-document.getElementById('btnZoomMenos').addEventListener('click', () => {
-  setZoom(zoomTabla - ZOOM_PASO);
-});
-document.getElementById('btnZoomMas').addEventListener('click', () => {
-  setZoom(zoomTabla + ZOOM_PASO);
-});
-document.getElementById('btnZoomReset').addEventListener('click', () => {
-  setZoom(1);
-});
-
-// Pinch-to-zoom en la tabla
-const tablaCont = document.getElementById('tablaContenedor');
-let distanciaPinch = 0;
-let zoomInicialPinch = 1;
-
-tablaCont.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    distanciaPinch = Math.sqrt(dx * dx + dy * dy);
-    zoomInicialPinch = zoomTabla;
-  }
-}, { passive: true });
-
-tablaCont.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 2 && distanciaPinch > 0) {
-    const dx = e.touches[0].clientX - e.touches[1].clientX;
-    const dy = e.touches[0].clientY - e.touches[1].clientY;
-    const distanciaNueva = Math.sqrt(dx * dx + dy * dy);
-    const factor = distanciaNueva / distanciaPinch;
-    setZoom(zoomInicialPinch * factor);
-  }
-}, { passive: true });
-
-tablaCont.addEventListener('touchend', (e) => {
-  if (e.touches.length < 2) {
-    distanciaPinch = 0;
-  }
-}, { passive: true });
-
-// Doble toque para resetear zoom
-let ultimoToque = 0;
-tablaCont.addEventListener('touchend', (e) => {
-  if (e.changedTouches.length === 1) {
-    const ahora = Date.now();
-    if (ahora - ultimoToque < 300) {
-      setZoom(1);
-      ultimoToque = 0;
-    } else {
-      ultimoToque = ahora;
-    }
-  }
-});
-
-// Mostrar barra de zoom cuando haya tabla
-const observerTabla = new MutationObserver(() => {
-  const barraZoom = document.getElementById('barraZoom');
-  const tablaVisible = document.getElementById('tablaContenedor').style.display === 'block';
-  if (barraZoom) {
-    if (tablaVisible) barraZoom.classList.add('visible');
-    else barraZoom.classList.remove('visible');
-  }
-});
-
-// Observar cambios en el contenedor de tabla
-setTimeout(() => {
-  const contTabla = document.getElementById('tablaContenedor');
-  if (contTabla) {
-    observerTabla.observe(contTabla, { attributes: true, attributeFilter: ['style'] });
-  }
-}, 1000);
-
-console.log('✅ Zoom de tabla cargado');
-
 function recuperarUltimoResultado() {
   try {
     const raw = localStorage.getItem('ocr_ultimo_resultado');
@@ -616,7 +609,7 @@ document.getElementById('btnGaleria').addEventListener('click', async () => {
   } catch (error) { logError(`Error galería: ${error.message}`); }
 });
 
-// Botón borrar caché (opcional, ahora solo limpia localStorage)
+// Botón borrar último resultado
 const btnLimpiar = document.getElementById('btnLimpiarCache');
 if (btnLimpiar) {
   btnLimpiar.addEventListener('click', () => {
@@ -626,6 +619,82 @@ if (btnLimpiar) {
     ocr = null;
     alert('✅ Limpiado. Reinicia la app.');
   });
+}
+
+// ==============================================
+// ZOOM DE LA TABLA
+// ==============================================
+let zoomTabla = 1;
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 3;
+const ZOOM_PASO = 0.25;
+
+function aplicarZoom() {
+  const tabla = document.getElementById('tablaResultado');
+  const nivel = document.getElementById('zoomNivel');
+  if (tabla) tabla.style.transform = `scale(${zoomTabla})`;
+  if (nivel) nivel.textContent = Math.round(zoomTabla * 100) + '%';
+}
+
+function setZoom(nuevoZoom) {
+  zoomTabla = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, nuevoZoom));
+  aplicarZoom();
+}
+
+const btnZM = document.getElementById('btnZoomMenos');
+const btnZP = document.getElementById('btnZoomMas');
+const btnZR = document.getElementById('btnZoomReset');
+if (btnZM) btnZM.addEventListener('click', () => setZoom(zoomTabla - ZOOM_PASO));
+if (btnZP) btnZP.addEventListener('click', () => setZoom(zoomTabla + ZOOM_PASO));
+if (btnZR) btnZR.addEventListener('click', () => setZoom(1));
+
+// Pinch-to-zoom
+const tablaCont = document.getElementById('tablaContenedor');
+if (tablaCont) {
+  let distanciaPinch = 0;
+  let zoomInicialPinch = 1;
+
+  tablaCont.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      distanciaPinch = Math.sqrt(dx * dx + dy * dy);
+      zoomInicialPinch = zoomTabla;
+    }
+  }, { passive: true });
+
+  tablaCont.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && distanciaPinch > 0) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distanciaNueva = Math.sqrt(dx * dx + dy * dy);
+      const factor = distanciaNueva / distanciaPinch;
+      setZoom(zoomInicialPinch * factor);
+    }
+  }, { passive: true });
+
+  tablaCont.addEventListener('touchend', () => { distanciaPinch = 0; }, { passive: true });
+
+  let ultimoToque = 0;
+  tablaCont.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+      const ahora = Date.now();
+      if (ahora - ultimoToque < 300) { setZoom(1); ultimoToque = 0; }
+      else ultimoToque = ahora;
+    }
+  });
+
+  setTimeout(() => {
+    const observer = new MutationObserver(() => {
+      const barraZoom = document.getElementById('barraZoom');
+      const visible = tablaCont.style.display === 'block';
+      if (barraZoom) {
+        if (visible) barraZoom.classList.add('visible');
+        else barraZoom.classList.remove('visible');
+      }
+    });
+    observer.observe(tablaCont, { attributes: true, attributeFilter: ['style'] });
+  }, 1000);
 }
 
 // ==============================================
