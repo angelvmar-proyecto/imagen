@@ -9,16 +9,17 @@
     "open": "npx cap open android"
   },
   "dependencies": {
-    "@capacitor/core": "8.0.2",
-    "@capacitor/camera": "8.0.0",
-    "@capacitor/filesystem": "8.0.0",
     "@cantoo/capacitor-onnx": "3.2.3",
+    "@capacitor/camera": "8.0.0",
+    "@capacitor/core": "8.0.2",
+    "@capacitor/filesystem": "8.0.0",
     "@paddleocr/paddleocr-js": "^0.3.0",
-    "onnxruntime-web": "^1.20.0"
+    "onnxruntime-web": "^1.20.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@capacitor/cli": "8.0.2",
     "@capacitor/android": "8.0.2",
+    "@capacitor/cli": "8.0.2",
     "vite": "^5.4.0",
     "vite-plugin-static-copy": "^1.0.0"
   }
